@@ -3,7 +3,9 @@ This module contains all the functions related to wrapping NGSolve matrices to
 PETSc matrices using the petsc4py interface.
 '''
 from petsc4py import PETSc
+from ngsolve import MPI_Init
 import numpy as np
+from mpi4py import MPI
 
 class Mat(object):
     '''
@@ -18,7 +20,10 @@ class Mat(object):
     '''
     def __init__(self, ngsMat, freeDofs=None, matType="aij"):
         self.freeDofs = freeDofs
-        self.comm = None
+        if hasattr(ngsMat, 'row_paradofs'):
+            self.comm = ngsMat.paradofs.comm.mpi4py
+        else:
+            self.comm = MPI_Init().mpi4py
         localMat = ngsMat.local_mat
         entryHeight, entryWidth = localMat.entrysizes
         if entryHeight != entryWidth: raise RuntimeError ("Only square entries are allowed.")
@@ -29,7 +34,7 @@ class Mat(object):
                                                      entryWidth*localMat.width),
                                                bsize=entryHeight,
                                                csr=(indMat,colMat,valMat),
-                                               comm=self.comm)
+                                               comm=MPI.COMM_SELF)
         if self.freeDofs is not None:
             localMatFree = np.flatnonzero(self.freeDofs).astype(PETSc.IntType)
             isFreeLocal = PETSc.IS().createBlock(indices=localMatFree, bsize=entryHeight)

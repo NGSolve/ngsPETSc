@@ -7,6 +7,7 @@ import petsc4py
 from petsc4py import PETSc
 
 import ngsolve as ngs
+from netgen.geom2d import unit_square
 from ngsolve import x,y
 
 import ngsPETSc
@@ -27,7 +28,7 @@ def test_ngs():
     '''
     Testing that NGSolve can be imported correctly
     '''
-    mesh = ngs.Mesh(ngs.unit_square.GenerateMesh(maxh=0.1))
+    mesh = ngs.Mesh(unit_square.GenerateMesh(maxh=0.1))
     coefficientFunction = x*(1-y)
     mip = mesh(0.2, 0.2)
     coefficientFunction(mip)
