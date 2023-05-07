@@ -19,12 +19,12 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    package_dir = {"": "src"},
-    packages = setuptools.find_packages(where="src"),
+    packages=['ngsPETSc'],
     python_requires = ">=3.10",
     install_requires=[
         'ngsolve',
         'petsc4py',
+        'mpi4py',
         'pytest', #For testing
         'pylint', #For formatting
     ]

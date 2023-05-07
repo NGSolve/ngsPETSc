@@ -1,5 +1,5 @@
 '''
 ngsPETSc is a NGSolve/Netgen interface to PETSc
 '''
-from mat import *
-VERISON = "0.0.1"
+from ngsPETSc.mat import *
+VERSION = "0.0.1"
