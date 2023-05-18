@@ -17,4 +17,3 @@ def test_poisson_mat():
     u,v = fes.TnT()
     a = BilinearForm(grad(u)*grad(v)*dx).Assemble()
     Mat(a.mat, fes.FreeDofs())
-    
