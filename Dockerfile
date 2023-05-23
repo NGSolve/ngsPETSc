@@ -7,9 +7,9 @@ ENV PETSC_ARCH linux_debug
 ENV PYTHONPATH /root/petsc/linux_debug/lib
 #Installing dependencies using aptitude
 RUN apt-get update \
-    && apt-get -y install git libopenmpi-dev build-essential cmake
+    && apt-get -y install git libopenmpi-dev build-essential cmake python3 python3-distutils python3-tk libpython3-dev libxmu-dev tk-dev tcl-dev g++ libglu1-mesa-dev liblapacke-dev
 #Installing python dependencies using pip
-RUN pip install numpy cython
+RUN pip install numpy cython mpi4py
 #Configure PETSc
 RUN cd ~ && git clone https://gitlab.com/petsc/petsc.git
 RUN cd ~/petsc \
@@ -32,5 +32,15 @@ RUN cd ~/petsc \
     --with-shared-libraries=1 \
     --with-petsc4py=1 \
     && make 
-#Installing petsc4py
-#RUN cd ~/petsc/src/binding/petsc4py && pip install . \
+#Building ngsolve
+RUN export BASEDIR=~/ngsuite \
+           && mkdir -p $BASEDIR \
+           && cd $BASEDIR \
+           && git clone https://github.com/NGSolve/ngsolve.git ngsolve-src \
+           && cd $BASEDIR/ngsolve-src \
+           && git submodule update --init --recursive \
+           && mkdir $BASEDIR/ngsolve-build \
+           && mkdir $BASEDIR/ngsolve-install \
+           && cd $BASEDIR/ngsolve-build \
+           && cmake -DCMAKE_INSTALL_PREFIX=${BASEDIR}/ngsolve-install ${BASEDIR}/ngsolve-src -DUSE_MPI=ON \
+           && make && make install
