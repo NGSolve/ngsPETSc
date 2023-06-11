@@ -2,20 +2,22 @@
 This module contains all the functions related to wrapping NGSolve matrices to
 PETSc matrices using the petsc4py interface.
 '''
-from petsc4py import PETSc
-from ngsolve import MPI_Init
 import numpy as np
+
+from petsc4py import PETSc
 from mpi4py import MPI
+
+from ngsolve import MPI_Init
 
 class Mat(object):
     '''
     This calss creates a sparse PETSc Matrix
 
-    :arg ngsMat: The NGSolve matrix
+    :arg ngsMat: the NGSolve matrix
 
-    :arg freeDofs: Free DOFs of the FE space used to construct the matrix
+    :arg freeDofs: free DOFs of the FE space used to construct the matrix
 
-    :arg matType: Type of sparse matrix, i.e. PETSc, MKL or CUDA
+    :arg matType: type of sparse matrix, i.e. PETSc, MKL or CUDA
 
     '''
     def __init__(self, ngsMat, freeDofs=None, matType="aij"):

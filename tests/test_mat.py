@@ -1,6 +1,5 @@
 '''
-This module test that the environment is correctly been setup.
-In particular it will test for: petsc4py, PETSc, NGSolve, Netgen and ngsPETSc
+This module test that matrix class
 '''
 
 from ngsolve import Mesh, H1, BilinearForm, grad, dx
