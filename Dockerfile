@@ -9,7 +9,7 @@ ENV PYTHONPATH /root/petsc/linux_debug/lib
 RUN apt-get update \
     && apt-get -y install git libopenmpi-dev build-essential cmake python3 python3-distutils python3-tk libpython3-dev libxmu-dev tk-dev tcl-dev g++ libglu1-mesa-dev liblapacke-dev libblas-dev liblapack-dev
 #Installing python dependencies using pip
-RUN pip install numpy cython mpi4py
+RUN pip install numpy cython mpi4py pytest pytest-mpi
 #Configure PETSc
 RUN cd ~ && git clone https://gitlab.com/petsc/petsc.git
 RUN cd ~/petsc \
