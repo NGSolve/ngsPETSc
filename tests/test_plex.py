@@ -1,6 +1,7 @@
 '''
 This module test that plex class
 '''
+import pytest
 
 from ngsolve import Mesh, VOL
 from netgen.geom2d import unit_square
@@ -9,6 +10,8 @@ from netgen.csg import unit_cube
 from petsc4py import PETSc
 
 from ngsPETSc import MeshMapping
+
+@pytest.mark.mpi_skip()
 def test_ngs_plex_2d():
     '''
     Testing the conversion from NGSolve mesh to PETSc DMPlex
@@ -18,6 +21,7 @@ def test_ngs_plex_2d():
     meshMap = MeshMapping(mesh)
     assert meshMap.petscPlex.getHeightStratum(0)[1] == 2
 
+@pytest.mark.mpi_skip()
 def test_plex_ngs_2d():
     '''
     Testing the conversion from PETSc DMPlex to NGSolve mesh
@@ -34,6 +38,7 @@ def test_plex_ngs_2d():
     meshMap = MeshMapping(plex)
     assert Mesh(meshMap.ngsMesh).GetNE(VOL) == 8
 
+@pytest.mark.mpi_skip()
 def test_ngs_plex_3d():
     '''
     Testing the conversion from NGSolve mesh to PETSc DMPlex
@@ -43,6 +48,7 @@ def test_ngs_plex_3d():
     meshMap = MeshMapping(mesh)
     assert meshMap.petscPlex.getHeightStratum(0)[1] == 12
 
+@pytest.mark.mpi_skip()
 def test_plex_ngs_3d():
     '''
     Testing the conversion from PETSc DMPlex to NGSolve mesh
@@ -60,6 +66,7 @@ def test_plex_ngs_3d():
     meshMap = MeshMapping(plex)
     assert Mesh(meshMap.ngsMesh).GetNE(VOL) == 6
 
+@pytest.mark.mpi_skip()
 def test_plex_transform_alfeld_2d():
     '''
     Testing the use of the PETSc Alfeld transform 
@@ -75,6 +82,7 @@ def test_plex_transform_alfeld_2d():
     meshMap = MeshMapping(newplex)
     assert Mesh(meshMap.ngsMesh).GetNE(VOL) == 6
 
+@pytest.mark.mpi_skip()
 def test_plex_transform_alfeld_3d():
     '''
     Testing the use of the PETSc Alfeld transform 
@@ -90,6 +98,7 @@ def test_plex_transform_alfeld_3d():
     meshMap = MeshMapping(newplex)
     assert Mesh(meshMap.ngsMesh).GetNE(VOL) == 48
 
+@pytest.mark.mpi_skip()
 def test_plex_transform_box_2d():
     '''
     Testing the use of the PETSc Alfeld transform 
