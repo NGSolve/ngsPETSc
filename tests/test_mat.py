@@ -1,5 +1,5 @@
 '''
-This module test that matrix class
+This module test the matrix class
 '''
 from ngsolve import Mesh, H1, BilinearForm, grad, dx
 from netgen.geom2d import unit_square
