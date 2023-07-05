@@ -14,7 +14,7 @@ from ngsPETSc import KrylovSolver
 
 def test_ksp_cg_lu_mumps():
     '''
-    Testing the mapping from NGSolve Vec to PETSc Vec
+    Testing the mapping PETSc KSP using MUMPS
     '''
     if COMM_WORLD.rank == 0:
         mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
@@ -23,7 +23,8 @@ def test_ksp_cg_lu_mumps():
     fes = H1(mesh, order=3, dirichlet="left|right|top|bottom")
     u,v = fes.TnT()
     a = BilinearForm(grad(u)*grad(v)*dx).Assemble()
-    solver = KrylovSolver(a,fes, solver_parameters={'ksp_type': 'cg', 'pc_type': 'lu', 'pc_factor_mat_solver_type': 'mumps'})
+    solver = KrylovSolver(a,fes, solverParameters={'ksp_type': 'cg', 'pc_type': 'lu',
+                                'pc_factor_mat_solver_type': 'mumps'})
     f = LinearForm(fes)
     f += 32 * (y*(1-y)+x*(1-x)) * v * dx
     gfu = solver.solve(f)
@@ -31,38 +32,21 @@ def test_ksp_cg_lu_mumps():
     solver.view()
     assert sqrt(Integrate((gfu-exact)**2, mesh))<1e-4
 
-#def test_ksp_cg_chol():
-#    '''
-#    Testing the mapping from NGSolve Vec to PETSc Vec
-#    '''
-#    if COMM_WORLD.rank == 0:
-#        mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
-#    else:
-#        mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
-#    fes = H1(mesh, order=3, dirichlet="left|right|top|bottom")
-#    u,v = fes.TnT()
-#    a = BilinearForm(grad(u)*grad(v)*dx).Assemble()
-#    solver = KrylovSolver(a,fes, solver_parameters={'ksp_type': 'cg', 'pc_type': 'cholesky'})
-#    f = LinearForm(fes)
-#    f += 32 * (y*(1-y)+x*(1-x)) * v * dx
-#    gfu = solver.solve(f)
-#    exact = 16*x*(1-x)*y*(1-y)
-#    assert sqrt(Integrate((gfu-exact)**2, mesh))<1e-4
-#
-#def test_ksp_cg_gamg():
-#    '''
-#    Testing the mapping from NGSolve Vec to PETSc Vec
-#    '''
-#    if COMM_WORLD.rank == 0:
-#        mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
-#    else:
-#        mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
-#    fes = H1(mesh, order=3, dirichlet="left|right|top|bottom")
-#    u,v = fes.TnT()
-#    a = BilinearForm(grad(u)*grad(v)*dx).Assemble()
-#    solver = KrylovSolver(a,fes, solver_parameters={'ksp_type': 'cg', 'pc_type': 'gamg'})
-#    f = LinearForm(fes)
-#    f += 32 * (y*(1-y)+x*(1-x)) * v * dx
-#    gfu = solver.solve(f)
-#    exact = 16*x*(1-x)*y*(1-y)
-#    assert sqrt(Integrate((gfu-exact)**2, mesh))<1e-4
+def test_ksp_cg_gamg():
+    '''
+    Testing the mapping PETSc KSP using GAMG
+    '''
+    if COMM_WORLD.rank == 0:
+        mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
+    else:
+        mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
+    fes = H1(mesh, order=3, dirichlet="left|right|top|bottom")
+    u,v = fes.TnT()
+    a = BilinearForm(grad(u)*grad(v)*dx).Assemble()
+    solver = KrylovSolver(a,fes, solverParameters={'ksp_type': 'cg', 'pc_type': 'gamg'})
+    f = LinearForm(fes)
+    f += 32 * (y*(1-y)+x*(1-x)) * v * dx
+    gfu = solver.solve(f)
+    exact = 16*x*(1-x)*y*(1-y)
+    solver.view()
+    assert sqrt(Integrate((gfu-exact)**2, mesh))<1e-4

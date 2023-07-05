@@ -21,12 +21,12 @@ class KrylovSolver():
 
     :arg p: bilinear form to be used for preconditioning
 
-    :arg solver_parameters: parameters to be passed to the KSP solver
+    :arg solverParameters: parameters to be passed to the KSP solver
 
-    :arg options_prefix: special solver options prefix for this specific Krylov solver
+    :arg optionsPrefix: special solver options prefix for this specific Krylov solver
 
     """
-    def __init__(self, a, fes, p=None, solver_parameters=None,options_prefix=None):
+    def __init__(self, a, fes, p=None, solverParameters=None,optionsPrefix=None):
         self.fes = fes
         a.Assemble()
         Amat = a.mat
@@ -42,11 +42,12 @@ class KrylovSolver():
             raise TypeError("Provided preconditioner is a '%s', not an la.SparseMatrixd"
                             % type(Pmat).__name__)
 
-        self.solver_parameters = solver_parameters
-        self.options_prefix = options_prefix
+        self.solverParameters = solverParameters
+        self.optionsPrefix = optionsPrefix
         options_object = PETSc.Options()
-        for optName, optValue in self.solver_parameters.items():
-            options_object[optName] = optValue
+        if solverParameters is not None:
+            for optName, optValue in self.solverParameters.items():
+                options_object[optName] = optValue
 	#Creating the PETSc Matrix
         Asc = Mat(Amat, fes.FreeDofs()).mat
         self.A = Asc
@@ -58,8 +59,8 @@ class KrylovSolver():
         else:
             self.P = Asc
         #Setting options prefix
-        self.A.setOptionsPrefix(self.options_prefix)
-        self.P.setOptionsPrefix(self.options_prefix)
+        self.A.setOptionsPrefix(self.optionsPrefix)
+        self.P.setOptionsPrefix(self.optionsPrefix)
         self.A.setFromOptions()
         self.P.setFromOptions()
 
@@ -68,7 +69,7 @@ class KrylovSolver():
         # Operator setting must come after null space has been
         # applied
         self.ksp.setOperators(A=self.A, P=self.P)
-        self.ksp.setOptionsPrefix(self.options_prefix)
+        self.ksp.setOptionsPrefix(self.optionsPrefix)
         self.ksp.setFromOptions()
     def solve(self, f):
         '''
