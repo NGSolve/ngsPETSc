@@ -78,20 +78,14 @@ class MeshMapping:
                             cell = cell+[S[k][0]]
                         k = k+1
                     cells = cells + [cell]
-            #fd = self.ngmesh.Add(ngm.FaceDescriptor(bc=1))
             self.ngsMesh.Add(ngm.FaceDescriptor(bc=1))
             self.ngsMesh.AddElements(dim=2, index=1, data=np.asarray(cells, dtype=np.int32), base=0)
             for bcLabel in range(1,plex.getLabelSize(FACE_SETS_LABEL)+1):
                 bcIndices = plex.getStratumIS("Face Sets",bcLabel).indices
-                edge = []
                 for j in bcIndices:
                     bcIndex = plex.getCone(j)-vStart
                     if len(bcIndex) == 2:
-                        pt1 = ngm.Element0D(bcIndex[0],index=bcLabel)
-                        self.ngsMesh.Add(pt1)
-                        pt2 = ngm.Element0D(bcIndex[1],index=bcLabel)
-                        self.ngsMesh.Add(pt2)
-                        edge = ngm.Element1D(list(bcIndex),index=bcLabel)
+                        edge = ngm.Element1D([v+1 for v in bcIndex],index=bcLabel)
                         self.ngsMesh.Add(edge)
         elif plex.getDimension() == 3:
             coordinates = plex.getCoordinates().getArray().reshape([-1,3])
