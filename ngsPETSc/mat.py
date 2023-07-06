@@ -17,7 +17,8 @@ class Matrix(object):
 
     :arg freeDofs: free DOFs of the FE space used to construct the matrix
 
-    :arg matType: type of sparse matrix, i.e. PETSc, MKL or CUDA
+    :arg matType: type of sparse matrix, i.e. PETSc sparse: aij, 
+    MKL sparse: mklaij or CUDA: aijcusparse
 
     '''
     def __init__(self, ngsMat, freeDofs=None, matType="aij"):
@@ -43,7 +44,8 @@ class Matrix(object):
             petscLocalMat = petscLocalMat.createSubMatrices(isFreeLocal)[0]
 
         if self.comm.Get_size() > 1:
-            matTypes = {"aij":"mpiaij","aijcusparse":"mpiaijcusparse","aijmkl":"mpiaijmkl"}
+            matTypes = {"aij":"mpiaij", "aijcusparse":"mpiaijcusparse",
+                        "aijmkl":"mpiaijmkl", "dense":"dense"}
             parallelDofs = ngsMat.row_pardofs
             globalNums, numberGlobal = parallelDofs.EnumerateGlobally(self.freeDofs)
             if self.freeDofs is not None:
@@ -64,7 +66,14 @@ class Matrix(object):
             if self.freeDofs is not None:
                 mat = petscLocalMat
                 mat.assemble()
-                matTypes = {"aij":"seqaij","aijcusparse":"seqaijcusparse","aijmkl":"seqaijmkl"}
+                matTypes = {"aij":"seqaij", "aijcusparse":"seqaijcusparse",
+                            "aijmkl":"seqaijmkl", "dense":"dense"}
                 self.type = matTypes[matType]
                 mat.convert(self.type)
                 self.mat = mat
+    def view(self):
+        '''
+        This function display PETSc Mat info
+
+        '''
+        self.mat.view()
