@@ -9,7 +9,7 @@ from mpi4py import MPI
 
 from ngsolve import MPI_Init
 
-class Mat(object):
+class Matrix(object):
     '''
     This calss creates a sparse PETSc Matrix
 

@@ -29,7 +29,6 @@ def test_ksp_cg_lu_mumps():
     f += 32 * (y*(1-y)+x*(1-x)) * v * dx
     gfu = solver.solve(f)
     exact = 16*x*(1-x)*y*(1-y)
-    solver.view()
     assert sqrt(Integrate((gfu-exact)**2, mesh))<1e-4
 
 def test_ksp_cg_gamg():
@@ -48,5 +47,4 @@ def test_ksp_cg_gamg():
     f += 32 * (y*(1-y)+x*(1-x)) * v * dx
     gfu = solver.solve(f)
     exact = 16*x*(1-x)*y*(1-y)
-    solver.view()
     assert sqrt(Integrate((gfu-exact)**2, mesh))<1e-4

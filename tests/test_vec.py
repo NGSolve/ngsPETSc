@@ -7,7 +7,7 @@ import netgen.meshing as ngm
 
 from mpi4py.MPI import COMM_WORLD
 
-from ngsPETSc import Mat, VectorMapping
+from ngsPETSc import Matrix, VectorMapping
 
 def test_vec_map_ngs_petsc():
     '''
@@ -35,7 +35,7 @@ def test_vec_map_petsc_ngs():
     fes = H1(mesh, order=1, dirichlet="left|right|top|bottom")
     u,v = fes.TnT()
     m = BilinearForm(u*v*dx).Assemble()
-    M = Mat(m.mat, fes.FreeDofs())
+    M = Matrix(m.mat, fes.FreeDofs())
     petscVec = M.mat.createVecLeft()
     Map = VectorMapping(fes)
     Map.ngsVec(petscVec)

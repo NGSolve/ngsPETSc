@@ -8,7 +8,7 @@ from mpi4py import MPI
 
 from ngsolve import GridFunction
 
-from ngsPETSc import Mat, VectorMapping
+from ngsPETSc import Matrix, VectorMapping
 
 class Eigensolver():
     """
@@ -53,7 +53,7 @@ class Eigensolver():
         self.pencilFlags = []
         for a in pencil:
             self.pencilFlags += [a.flags.ToDict()]
-            self.pencilMats += [Mat(a.Assemble().mat, fes.FreeDofs()).mat]
+            self.pencilMats += [Matrix(a.Assemble().mat, fes.FreeDofs()).mat]
             self.pencilMats[-1].setOptionsPrefix(self.optionsPrefix)
             self.pencilMats[-1].setFromOptions()
         self.eps = None

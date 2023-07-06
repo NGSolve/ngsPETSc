@@ -7,7 +7,7 @@ from mpi4py import MPI
 
 from ngsolve import la, GridFunction
 
-from ngsPETSc import Mat, VectorMapping
+from ngsPETSc import Matrix, VectorMapping
 
 class KrylovSolver():
     """
@@ -49,12 +49,12 @@ class KrylovSolver():
             for optName, optValue in self.solverParameters.items():
                 options_object[optName] = optValue
 	#Creating the PETSc Matrix
-        Asc = Mat(Amat, fes.FreeDofs()).mat
+        Asc = Matrix(Amat, fes.FreeDofs()).mat
         self.A = Asc
         self.comm = MPI.COMM_WORLD
         #Setting up the preconditioner
         if Pmat is not None:
-            Psc = Mat(Pmat, fes.FreeDofs()).mat
+            Psc = Matrix(Pmat, fes.FreeDofs()).mat
             self.P = Psc
         else:
             self.P = Asc

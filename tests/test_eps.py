@@ -36,7 +36,7 @@ def test_eps_ghepi_eigvals():
                                           "st_pc_type": "lu"})
     solver.solve()
     assert solver.nconv >= len(exact)
-    for i in range(solver.nconv):
+    for i, _ in enumerate(exact):
         assert abs(solver.eigenValue(i)-exact[i]) < 1e-4
 
 @pytest.mark.mpi_skip()

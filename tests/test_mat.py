@@ -7,7 +7,7 @@ import netgen.meshing as ngm
 
 from mpi4py.MPI import COMM_WORLD
 
-from ngsPETSc import Mat
+from ngsPETSc import Matrix
 
 def test_poisson_mat():
     '''
@@ -20,4 +20,4 @@ def test_poisson_mat():
     fes = H1(mesh, order=1, dirichlet="left|right|top|bottom")
     u,v = fes.TnT()
     a = BilinearForm(grad(u)*grad(v)*dx).Assemble()
-    Mat(a.mat, fes.FreeDofs())
+    Matrix(a.mat, fes.FreeDofs())
