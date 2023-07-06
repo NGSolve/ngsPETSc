@@ -4,6 +4,8 @@ USER root
 #Setting up system variable
 ENV PETSC_DIR /root/petsc
 ENV PETSC_ARCH linux_debug
+ENV SLEPC_DIR /root/slepc
+ENV SLEPC_ARCH linux_debug
 ENV PYTHONPATH /root/petsc/linux_debug/lib
 #Installing dependencies using aptitude
 RUN apt-get update \
@@ -30,6 +32,12 @@ RUN cd ~/petsc \
     --with-fortran-bindings=0 \
     --with-shared-libraries=1 \
     --with-petsc4py=1 \
+    && make 
+#Configure SLEPc
+RUN cd ~ && git clone https://gitlab.com/slepc/slepc.git
+RUN cd ~/slepc \
+    && python configure --download-blopex \
+    --with-slepc4py=1 \
     && make 
 #Building ngsolve
 RUN mkdir -p ~/ngsuite \
