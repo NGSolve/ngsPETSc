@@ -20,7 +20,10 @@ jobs:
         run: |
           make lint
 
-      - name: Run test suite
+      - name: Run test suite in serial
         run: |
           make test
+
+      - name: Run test suite in parallel
+        run: |
           make test_mpi
