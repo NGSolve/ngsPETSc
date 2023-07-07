@@ -11,7 +11,7 @@ import netgen.meshing as ngm
 
 from mpi4py.MPI import COMM_WORLD
 
-from ngsPETSc import Eigensolver
+from ngsPETSc import EigenSolver
 
 def test_eps_ghepi_eigvals():
     '''
@@ -28,7 +28,7 @@ def test_eps_ghepi_eigvals():
     u,v = fes.TnT()
     a = BilinearForm(grad(u)*grad(v)*dx, symmetric=True).Assemble()
     m = BilinearForm(-1*u*v*dx, symmetric=True).Assemble()
-    solver = Eigensolver((m, a), fes, 4, solverParameters={"eps_type":"arnoldi",
+    solver = EigenSolver((m, a), fes, 4, solverParameters={"eps_type":"arnoldi",
                                           "eps_smallest_magnitude":None,
                                           "eps_tol": 1e-6,
                                           "eps_target": 2,
@@ -54,7 +54,7 @@ def test_eps_ghep_eigfuncs():
     u,v = fes.TnT()
     a = BilinearForm(grad(u)*grad(v)*dx, symmetric=True).Assemble()
     m = BilinearForm(-1*u*v*dx, symmetric=True).Assemble()
-    solver = Eigensolver((m,a), fes, 4, solverParameters={"eps_type":"arnoldi",
+    solver = EigenSolver((m,a), fes, 4, solverParameters={"eps_type":"arnoldi",
                                           "eps_smallest_magnitude":None,
                                           "eps_tol": 1e-6,
                                           "eps_target": 2,

@@ -10,7 +10,7 @@ from ngsolve import GridFunction
 
 from ngsPETSc import Matrix, VectorMapping
 
-class Eigensolver():
+class EigenSolver():
     """
     This calss creates a SLEPc Eigen Problem Solver (EPS/PEP) from NGSolve
     variational problem pencil, i.e.
