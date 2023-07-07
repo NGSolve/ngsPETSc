@@ -32,7 +32,8 @@ RUN cd ~/petsc \
     --with-fortran-bindings=0 \
     --with-shared-libraries=1 \
     --with-petsc4py=1 \
-    && make 
+    && make \ 
+    && ln -s "$(which mpiexec)" $PETSC_DIR/$PETSC_ARCH/bin/mpiexec
 #Configure SLEPc
 RUN cd ~ && git clone https://gitlab.com/slepc/slepc.git
 RUN cd ~/slepc \
