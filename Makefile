@@ -7,4 +7,5 @@ test:
 test_mpi:
 	$(MPI_EXEC) --allow-run-as-root -n 2 pytest --with-mpi tests/
 doc:
-	jupyter nbconvert --to rst docs/src/notebooks/*
+	rm docs/src/notebooks/*.rst
+	jupyter nbconvert --to rst docs/src/notebooks/*.ipynb
