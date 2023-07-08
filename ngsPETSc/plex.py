@@ -17,7 +17,7 @@ EDGE_SETS_LABEL = "Edge Sets"
 
 class MeshMapping:
     '''
-    This calss creates a mapping between Netgen/NGSolve meshes and PETSc DMPlex  
+    This class creates a mapping between Netgen/NGSolve meshes and PETSc DMPlex  
 
     :arg mesh: the mesh object, it can be either a Netgen/NGSolve mesh or a PETSc DMPlex
 

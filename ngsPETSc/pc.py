@@ -4,19 +4,36 @@ This module contains all the function and class needed to wrap a PETSc Precondit
 from petsc4py import PETSc
 from mpi4py import MPI
 
-from ngsolve import BaseMatrix
+from ngsolve import BaseMatrix, comp
 
 from ngsPETSc import Matrix, VectorMapping
 
 class PETScPreconditioner(BaseMatrix):
+    '''
+    This class creates a Netgen/NGSolve BaseMatrix corresponding to a PETSc PC  
+
+    :arg mat: NGSolve Matrix one would like to build the PETSc preconditioner for.
+
+    :arg freeDofs: not constrained degrees of freedom of the finite element space over
+    which the BilinearForm corresponding to the matrix is defined.
+
+    :arg solverParameters: parameters to be passed to the KSP solver
+
+    :arg optionsPrefix: special solver options prefix for this specific Krylov solver
+
+    :arg matType: type of sparse matrix, i.e. PETSc sparse: aij, 
+    MKL sparse: mklaij or CUDA: aijcusparse
+
+    '''
     def __init__(self,mat,freeDofs, solverParameters=None, optionsPrefix=None, matType="aij"):
         BaseMatrix.__init__(self)
         self.ngsMat = mat
         if MPI.COMM_WORLD.Get_size() > 1:
-            self.dofs = self.ngsMat.row_pardofs 
+            self.dofs = self.ngsMat.row_pardofs
             self.freeDofs = freeDofs
         else:
-            raise RuntimeError("PETSc PC implemented only in parallel.")
+            self.dofs = None
+            self.freeDofs = freeDofs
         self.vecMap = VectorMapping (None,parDofs=self.dofs,freeDofs=self.freeDofs)
         self.petscMat = Matrix(self.ngsMat, freeDofs, matType).mat
         self.petscPreconditioner = PETSc.PC().create()
@@ -33,25 +50,55 @@ class PETScPreconditioner(BaseMatrix):
         self.petscVecX, self.petscVecY = self.petscMat.createVecs()
 
     def Shape(self):
+        '''
+        Shape of the BaseMatrix
+
+        '''
         return self.ngsMat.shape
 
     def CreateVector(self,col):
+        '''
+        Create vector corresponding to the matrix
+
+        :arg col: True if one want a column vector
+
+        '''
         return self.ngsMat.CreateVector(not col)
-    
+
     def Mult(self,x,y):
+        '''
+        BaseMatrix multiplication Ax = y
+        :arg x: vector we are multiplying
+        :arg y: vector we are storeing the result in
+
+        '''
         self.vecMap.petscVec(x,self.petscVecX)
         self.petscPreconditioner.apply(self.petscVecX, self.petscVecY)
         self.vecMap.ngsVec(self.petscVecY, y)
-        
+
     def MultTrans(self,x,y):
+        '''
+        BaseMatrix multiplication A^T x = y
+        :arg x: vector we are multiplying
+        :arg y: vector we are storeing the result in
+
+        '''
         self.vecMap.petscVec(x,self.petscVecX)
         self.petscPreconditioner.applyTranspose(self.petscVecX, self.petscVecY)
         self.vecMap.ngsVec(self.petscVecY, y)
-        
 
 def createPETScPreconditioner(mat, freeDofs, solverParameters):
+    '''
+    Create PETSc PC that can be accessed by NGSolve.
+    :arg mat: NGSolve Matrix one would like to build the PETSc preconditioner for.
+
+    :arg freeDofs: not constrained degrees of freedom of the finite element space over
+    which the BilinearForm corresponding to the matrix is defined.
+
+    :arg solverParameters: parameters to be passed to the KSP solver
+
+    '''
     return PETScPreconditioner(mat, freeDofs, solverParameters)
 
 
-from ngsolve.comp import RegisterPreconditioner
-RegisterPreconditioner ("PETScPC", createPETScPreconditioner)
+comp.RegisterPreconditioner ("PETScPC", createPETScPreconditioner)

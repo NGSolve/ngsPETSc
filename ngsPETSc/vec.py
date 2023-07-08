@@ -7,7 +7,7 @@ import numpy as np
 from petsc4py import PETSc
 from mpi4py import MPI
 
-from ngsolve import la, GridFunction
+from ngsolve import la
 
 class VectorMapping:
     '''
@@ -26,9 +26,9 @@ class VectorMapping:
             self.dofs = parDofs
             self.freeDofs = freeDofs
         self.comm = comm
-        globnums, self.nglob = self.dofs.EnumerateGlobally(self.freeDofs)
-        self.es = self.dofs.entrysize
         if comm.Get_size() > 1:
+            globnums, self.nglob = self.dofs.EnumerateGlobally(self.freeDofs)
+            self.es = self.dofs.entrysize
             if self.freeDofs is not None:
                 globnums = np.array(globnums, dtype=PETSc.IntType)[self.freeDofs]
                 self.locfree = np.flatnonzero(self.freeDofs).astype(PETSc.IntType)
@@ -36,6 +36,7 @@ class VectorMapping:
                                                           bsize=self.es, comm=comm)
             else:
                 self.isetlocfree = None
+                globnums = list(range(len(self.freeDofs)))
             self.iset = PETSc.IS().createBlock(indices=globnums, bsize=self.es, comm=comm)
 
     def petscVec(self, ngsVec, petscVec=None):
@@ -87,7 +88,10 @@ class VectorMapping:
             self.petscToNgsScat.scatter(petscVec, locvec, addv=PETSc.InsertMode.INSERT)
         else:
             if ngsVec is None:
-                ngsVec = la.CreateParallelVector(self.dofs, la.PARALLEL_STATUS.CUMULATED)
+                if self.comm.Get_size() > 1:
+                    ngsVec = la.CreateParallelVector(self.dofs, la.PARALLEL_STATUS.CUMULATED)
+                else:
+                    ngsVec = la.BaseVector(len(self.freeDofs),False) #Only work for real vector
             freeIndeces = np.flatnonzero(self.freeDofs).astype(PETSc.IntType)
             ngsVec.FV().NumPy()[freeIndeces] = petscVec.getArray()
         return ngsVec
