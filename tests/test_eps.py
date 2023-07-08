@@ -14,6 +14,11 @@ from mpi4py.MPI import COMM_WORLD
 from ngsPETSc import EigenSolver
 
 def test_eps_ghepi_eigvals():
+    try:
+        from slepc4py import SLEPc
+    except ImportError:
+        pytest.skip(msg="SLEPc unavailable, skipping eigenvalue test")
+
     '''
     Testing the mapping PETSc KSP using MUMPS
     '''
@@ -41,6 +46,11 @@ def test_eps_ghepi_eigvals():
 
 @pytest.mark.mpi_skip()
 def test_eps_ghep_eigfuncs():
+    try:
+        from slepc4py import SLEPc
+    except ImportError:
+        pytest.skip(msg="SLEPc unavailable, skipping eigenvalue test")
+
     '''
     Testing the mapping PETSc KSP using MUMPS
     '''
