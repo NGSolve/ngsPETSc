@@ -17,10 +17,14 @@ class VectorMapping:
     :arg fes: the finite element space for the vector we want to map
 
     '''
-    def __init__(self, fes, comm=MPI.COMM_WORLD):
-        self.fes = fes
-        self.dofs = self.fes.ParallelDofs()
-        self.freeDofs = self.fes.FreeDofs()
+    def __init__(self, fes, parDofs=None, freeDofs=None, comm=MPI.COMM_WORLD):
+        if fes is not None:
+            self.fes = fes
+            self.dofs = self.fes.ParallelDofs()
+            self.freeDofs = self.fes.FreeDofs()
+        else:
+            self.dofs = parDofs
+            self.freeDofs = freeDofs
         self.comm = comm
         globnums, self.nglob = self.dofs.EnumerateGlobally(self.freeDofs)
         self.es = self.dofs.entrysize
@@ -34,7 +38,7 @@ class VectorMapping:
                 self.isetlocfree = None
             self.iset = PETSc.IS().createBlock(indices=globnums, bsize=self.es, comm=comm)
 
-    def petscVec (self, ngsVec, petscVec=None):
+    def petscVec(self, ngsVec, petscVec=None):
         '''
         This function generate a PETSc vector from a NGSolve vector
 
@@ -83,7 +87,7 @@ class VectorMapping:
             self.petscToNgsScat.scatter(petscVec, locvec, addv=PETSc.InsertMode.INSERT)
         else:
             if ngsVec is None:
-                ngsVec = GridFunction(self.fes).vec.CreateVector()
+                ngsVec = la.CreateParallelVector(self.dofs, la.PARALLEL_STATUS.CUMULATED)
             freeIndeces = np.flatnonzero(self.freeDofs).astype(PETSc.IntType)
             ngsVec.FV().NumPy()[freeIndeces] = petscVec.getArray()
         return ngsVec

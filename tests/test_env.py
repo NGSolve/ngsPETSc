@@ -38,4 +38,4 @@ def test_ngsPETSc():
     '''
     Testing that ngsPETSc can be imported correctly
     '''
-    assert ngsPETSc.VERSION == "0.0.1"
+    assert ngsPETSc.VERSION == "0.0.2"
