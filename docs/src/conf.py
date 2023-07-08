@@ -20,12 +20,45 @@ release = '0.0.1'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ['sphinx.ext.autodoc', 'sphinx_autodoc_typehints', 'jupyter_sphinx.execute']
+extensions = ['sphinx.ext.autodoc', 'sphinx_autodoc_typehints', 'jupyter_sphinx.execute',"sphinx.ext.mathjax","sphinx.ext.todo",
+              "IPython.sphinxext.ipython_console_highlighting", "IPython.sphinxext.ipython_directive",
+              "nbsphinx"]
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
+html_sourcelink_suffix = ''
+nbsphinx_prolog = r"""
+{% set docname = env.doc2path(env.docname, base='').replace('i-tutorials/', '') %}
 
+.. raw:: html
+
+    <style>
+        .p-Widget {
+            height: 400px;
+        }
+        .dg.main {
+            margin-left: 0px;
+        }
+        div.p-Widget div div div div.dg ul li {
+            list-style: none;
+            margin-left: 0px;
+        }
+        div.p-Widget div div div div.dg ul li div.dg {
+            margin-bottom: 0px;
+        }
+    </style>
+
+.. only:: html
+    .. role:: raw-html(raw)
+        :format: html
+
+    .. nbinfo::
+
+        This page was generated from `{{ docname }}`__.
+
+    __ ../../jupyter-files/{{docname}}
+"""
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

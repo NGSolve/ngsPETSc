@@ -6,3 +6,4 @@ How to use ngsPETSc
    :caption: Contents:
    
    notebooks/Vectors and Matrices
+   notebooks/Meshes

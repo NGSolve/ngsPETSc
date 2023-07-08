@@ -24,7 +24,12 @@ size of the ``COMM_WORLD``.
 .. parsed-literal::
 
     Starting 1 engines with <class 'ipyparallel.cluster.launcher.LocalEngineSetLauncher'>
-    100%|██████████| 1/1 [00:05<00:00,  5.70s/engine]
+
+
+
+.. parsed-literal::
+
+      0%|          | 0/1 [00:00<?, ?engine/s]
 
 
 .. code:: ipython3
