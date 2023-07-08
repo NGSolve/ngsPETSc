@@ -14,14 +14,14 @@ from mpi4py.MPI import COMM_WORLD
 from ngsPETSc import EigenSolver
 
 def test_eps_ghepi_eigvals():
+    '''
+    Testing the mapping PETSc KSP using MUMPS
+    '''
     try:
         from slepc4py import SLEPc
     except ImportError:
         pytest.skip(msg="SLEPc unavailable, skipping eigenvalue test")
 
-    '''
-    Testing the mapping PETSc KSP using MUMPS
-    '''
     exact = [2,5,5,8]
     if COMM_WORLD.rank == 0:
         geo = SplineGeometry()
@@ -33,7 +33,7 @@ def test_eps_ghepi_eigvals():
     u,v = fes.TnT()
     a = BilinearForm(grad(u)*grad(v)*dx, symmetric=True).Assemble()
     m = BilinearForm(-1*u*v*dx, symmetric=True).Assemble()
-    solver = EigenSolver((m, a), fes, 4, solverParameters={"eps_type":"arnoldi",
+    solver = EigenSolver((m, a), fes, 4, solverParameters={"eps_type":SLEPc.EPS.Type.ARNOLDI,
                                           "eps_smallest_magnitude":None,
                                           "eps_tol": 1e-6,
                                           "eps_target": 2,
@@ -46,14 +46,14 @@ def test_eps_ghepi_eigvals():
 
 @pytest.mark.mpi_skip()
 def test_eps_ghep_eigfuncs():
+    '''
+    Testing the mapping PETSc KSP using MUMPS
+    '''
     try:
         from slepc4py import SLEPc
     except ImportError:
         pytest.skip(msg="SLEPc unavailable, skipping eigenvalue test")
 
-    '''
-    Testing the mapping PETSc KSP using MUMPS
-    '''
     if COMM_WORLD.rank == 0:
         geo = SplineGeometry()
         geo.AddRectangle((0,0),(pi,pi),bc="bnd")
@@ -64,7 +64,7 @@ def test_eps_ghep_eigfuncs():
     u,v = fes.TnT()
     a = BilinearForm(grad(u)*grad(v)*dx, symmetric=True).Assemble()
     m = BilinearForm(-1*u*v*dx, symmetric=True).Assemble()
-    solver = EigenSolver((m,a), fes, 4, solverParameters={"eps_type":"arnoldi",
+    solver = EigenSolver((m,a), fes, 4, solverParameters={"eps_type":SLEPc.EPS.Type.ARNOLDI,
                                           "eps_smallest_magnitude":None,
                                           "eps_tol": 1e-6,
                                           "eps_target": 2,

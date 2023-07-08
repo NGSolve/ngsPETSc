@@ -36,7 +36,7 @@ def test_plex_ngs_2d():
                                              cooridinates,
                                              comm=PETSc.COMM_WORLD)
     meshMap = MeshMapping(plex)
-    assert Mesh(meshMap.ngsMesh).GetNE(VOL) == 8
+    assert Mesh(meshMap.ngMesh).GetNE(VOL) == 8
 
 @pytest.mark.mpi_skip()
 def test_ngs_plex_3d():
@@ -64,7 +64,7 @@ def test_plex_ngs_3d():
                                              cooridinates,
                                              comm=PETSc.COMM_WORLD)
     meshMap = MeshMapping(plex)
-    assert Mesh(meshMap.ngsMesh).GetNE(VOL) == 6
+    assert Mesh(meshMap.ngMesh).GetNE(VOL) == 6
 
 @pytest.mark.mpi_skip()
 def test_plex_transform_alfeld_2d():
@@ -80,7 +80,7 @@ def test_plex_transform_alfeld_2d():
     tr.setUp()
     newplex = tr.apply(meshMap.petscPlex)
     meshMap = MeshMapping(newplex)
-    assert Mesh(meshMap.ngsMesh).GetNE(VOL) == 6
+    assert Mesh(meshMap.ngMesh).GetNE(VOL) == 6
 
 @pytest.mark.mpi_skip()
 def test_plex_transform_alfeld_3d():
@@ -96,7 +96,7 @@ def test_plex_transform_alfeld_3d():
     tr.setUp()
     newplex = tr.apply(meshMap.petscPlex)
     meshMap = MeshMapping(newplex)
-    assert Mesh(meshMap.ngsMesh).GetNE(VOL) == 48
+    assert Mesh(meshMap.ngMesh).GetNE(VOL) == 48
 
 @pytest.mark.mpi_skip()
 def test_plex_transform_box_2d():
@@ -112,4 +112,4 @@ def test_plex_transform_box_2d():
     tr.setUp()
     newplex = tr.apply(meshMap.petscPlex)
     meshMap = MeshMapping(newplex)
-    assert Mesh(meshMap.ngsMesh).GetNE(VOL) == 6
+    assert Mesh(meshMap.ngMesh).GetNE(VOL) == 6

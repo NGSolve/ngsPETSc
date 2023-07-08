@@ -42,12 +42,12 @@ class MeshMapping:
 
         '''
         self.petscPlex = plex
-        ngsMesh = ngm.Mesh(dim=plex.getCoordinateDim())
-        self.ngsMesh = ngsMesh
+        ngMesh = ngm.Mesh(dim=plex.getCoordinateDim())
+        self.ngMesh = ngMesh
 
         if plex.getDimension() == 2:
             coordinates = plex.getCoordinates().getArray().reshape([-1,2])
-            self.ngsMesh.AddPoints(coordinates)
+            self.ngMesh.AddPoints(coordinates)
             cStart,cEnd = plex.getHeightStratum(0)
             vStart, _ = plex.getHeightStratum(2)
             cells = []
@@ -78,18 +78,18 @@ class MeshMapping:
                             cell = cell+[S[k][0]]
                         k = k+1
                     cells = cells + [cell]
-            self.ngsMesh.Add(ngm.FaceDescriptor(bc=1))
-            self.ngsMesh.AddElements(dim=2, index=1, data=np.asarray(cells, dtype=np.int32), base=0)
+            self.ngMesh.Add(ngm.FaceDescriptor(bc=1))
+            self.ngMesh.AddElements(dim=2, index=1, data=np.asarray(cells, dtype=np.int32), base=0)
             for bcLabel in range(1,plex.getLabelSize(FACE_SETS_LABEL)+1):
                 bcIndices = plex.getStratumIS("Face Sets",bcLabel).indices
                 for j in bcIndices:
                     bcIndex = plex.getCone(j)-vStart
                     if len(bcIndex) == 2:
                         edge = ngm.Element1D([v+1 for v in bcIndex],index=bcLabel)
-                        self.ngsMesh.Add(edge)
+                        self.ngMesh.Add(edge)
         elif plex.getDimension() == 3:
             coordinates = plex.getCoordinates().getArray().reshape([-1,3])
-            self.ngsMesh.AddPoints(coordinates)
+            self.ngMesh.AddPoints(coordinates)
             cStart, cEnd = plex.getHeightStratum(0)
             vStart, _ = plex.getHeightStratum(3)
             cells = []
@@ -110,8 +110,8 @@ class MeshMapping:
                     else:
                         cells = cells + [[cell[0],cell[1],cell[3],cell[2]]]
             #fd = self.ngmesh.Add(ngm.FaceDescriptor(bc=plex.getLabelSize(FACE_SETS_LABEL)+1))
-            self.ngsMesh.Add(ngm.FaceDescriptor(bc=plex.getLabelSize(FACE_SETS_LABEL)+1))
-            self.ngsMesh.AddElements(dim=3, index=plex.getLabelSize(FACE_SETS_LABEL)+1,
+            self.ngMesh.Add(ngm.FaceDescriptor(bc=plex.getLabelSize(FACE_SETS_LABEL)+1))
+            self.ngMesh.AddElements(dim=3, index=plex.getLabelSize(FACE_SETS_LABEL)+1,
                                     data=np.asarray(cells,dtype=np.int32), base=0)
             for bcLabel in range(1,plex.getLabelSize(FACE_SETS_LABEL)+1):
                 faces = []
@@ -131,8 +131,8 @@ class MeshMapping:
                         else:
                             faces = faces + [[face[0],face[2],face[1]]]
                 #fd = self.ngmesh.Add(ngm.FaceDescriptor(bc=bcLabel))
-                self.ngsMesh.Add(ngm.FaceDescriptor(bc=bcLabel))
-                self.ngsMesh.AddElements(dim=2, index=bcLabel,
+                self.ngMesh.Add(ngm.FaceDescriptor(bc=bcLabel))
+                self.ngMesh.AddElements(dim=2, index=bcLabel,
                                         data=np.asarray(faces,dtype=np.int32), base=0)
         else:
             raise NotImplementedError("No implementation for dimension greater than 3.")
@@ -146,32 +146,32 @@ class MeshMapping:
 
         '''
         if isinstance(mesh,ngs.comp.Mesh):
-            self.ngsMesh = mesh.ngmesh
+            self.ngMesh = mesh.ngmesh
         else:
-            self.ngsMesh = mesh
+            self.ngMesh = mesh
         comm = mesh.comm
-        if self.ngsMesh.dim == 3:
+        if self.ngMesh.dim == 3:
             if comm.rank == 0:
-                V = self.ngsMesh.Coordinates()
-                T = self.ngsMesh.Elements3D().NumPy()["nodes"]
+                V = self.ngMesh.Coordinates()
+                T = self.ngMesh.Elements3D().NumPy()["nodes"]
                 T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
                 surfMesh, dim = False, 3
                 if len(T) == 0:
                     surfMesh, dim = True, 2
-                    T = self.ngsMesh.Elements2D().NumPy()["nodes"]
+                    T = self.ngMesh.Elements2D().NumPy()["nodes"]
                     T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
                 plex = PETSc.DMPlex().createFromCellList(dim, T, V)
                 plex.setName(self.name)
                 vStart, _ = plex.getDepthStratum(0)
                 if surfMesh:
-                    for e in self.ngsMesh.Elements1D():
+                    for e in self.ngMesh.Elements1D():
                         join = plex.getJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.surfaces[1]))
                 else:
-                    for e in self.ngsMesh.Elements2D():
+                    for e in self.ngMesh.Elements2D():
                         join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.index))
-                    for e in self.ngsMesh.Elements1D():
+                    for e in self.ngMesh.Elements1D():
                         join = plex.getJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(EDGE_SETS_LABEL, join[0], int(e.index))
                 self.petscPlex = plex
@@ -180,19 +180,19 @@ class MeshMapping:
                                                         np.zeros((0, 4), dtype=np.int32),
                                                         np.zeros((0, 3), dtype=np.double))
                 self.petscPlex = plex
-        elif self.ngsMesh.dim == 2:
+        elif self.ngMesh.dim == 2:
             if comm.rank == 0:
-                V = self.ngsMesh.Coordinates()
-                T = self.ngsMesh.Elements2D().NumPy()["nodes"]
+                V = self.ngMesh.Coordinates()
+                T = self.ngMesh.Elements2D().NumPy()["nodes"]
                 T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
                 plex = PETSc.DMPlex().createFromCellList(2, T, V)
                 plex.setName(self.name)
                 vStart, _ = plex.getDepthStratum(0)   # vertices
-                for e in self.ngsMesh.Elements1D():
+                for e in self.ngMesh.Elements1D():
                     join = plex.getJoin([vStart+v.nr-1 for v in e.vertices])
                     plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.index))
-                if not (1 == self.ngsMesh.Elements2D().NumPy()["index"]).all():
-                    for e in self.ngsMesh.Elements2D():
+                if not (1 == self.ngMesh.Elements2D().NumPy()["index"]).all():
+                    for e in self.ngMesh.Elements2D():
                         join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(CELL_SETS_LABEL, join[0], int(e.index))
 
