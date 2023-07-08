@@ -39,9 +39,9 @@ We now install PETSc from scratch in a home installation folder, with OpenMPI, H
     --with-shared-libraries=1 \
     --with-petsc4py=1 \
 To build PETSc you need to run the Makefile as suggested at the end of the configuration script.
-We now need to set in the `.bashrc` (for MacOS user `.bash_profile`) file the `PETSC_DIR`, `PETSC_ARCH` system variable as they appear when we finish build PETSc.
-You also need to add to your `PYTHONPATH` the `PYTHONPATH` appear when we finished building PETSc.
-We also suggest adding the following line to you `.bashrc` the following lines:
+We now need to set in the ``.bashrc`` (for MacOS user ``.bash_profile``) file the ``PETSC_DIR``, ``PETSC_ARCH`` system variable as they appear when we finish build PETSc.
+You also need to add to your ``PYTHONPATH`` the ``PYTHONPATH`` appear when we finished building PETSc.
+We also suggest adding the following line to you ``.bashrc`` the following lines:
 ::
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PETSC_DIR/$PETSC_ARCH/lib
     export PATH=$PATH:$PETSC_DIR/$PETSC_ARCH/bin 
@@ -52,8 +52,8 @@ We now install SLEPc from source once again in the home installation folder
     cd slepc
     python configure --download-blopex --with-slepc4py=1
 To build SLEPc you need to run the Makefile as suggested at the end of the configuration script.
-We now need to set in the `.bashrc` (for MacOS user `.bash_profile`) file the `SLEPC_DIR` system variable as they appear when we finish build PETSc.
-You also need to add to your `PYTHONPATH` the `PYTHONPATH` appear when we finished building SLEPc.
+We now need to set in the ``.bashrc`` (for MacOS user ``.bash_profile``) file the ``SLEPC_DIR`` system variable as they appear when we finish build PETSc.
+You also need to add to your ``PYTHONPATH`` the ``PYTHONPATH`` appear when we finished building SLEPc.
 We now build mpi4py form source (once again in our home installation folder) in order to have a mpi4py installation that uses PETSc's local MPI installation.
 ::
     git clone https://github.com/mpi4py/mpi4py.git
@@ -74,12 +74,14 @@ Now we are left building NGSolve from sources, once again in the home installati
     cmake -DCMAKE_INSTALL_PREFIX=${BASEDIR}/ngsolve-install ${BASEDIR}/ngsolve-src -DUSE_MPI=ON
     make
     make install
-
-We suggest you adding following lines to your `.bashrc`:
+You should add to your ``.bashrc`` the ``BASEDIR`` system variable:
+::
+  echo "export $BASEDIR=${BASEDIR}" >> ~/.bashrc  
+We suggest you adding following lines to your ``.bashrc``:
 ::
     export NETGENDIR="${BASEDIR}/ngsolve-install/bin"
     export PATH=$NETGENDIR:$PATH
-    export PYTHONPATH=$NETGENDIR/../`python3 -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(1,0,''))"`
+    export PYTHONPATH=$PYHONPATH:$NETGENDIR/../`python3 -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(1,0,''))"`
 
 
 Authors

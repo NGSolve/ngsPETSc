@@ -3,9 +3,9 @@ This module contains all the functions related to the SLEPc eigenvalue
 solver (EPS/PEP) interface for NGSolve
 '''
 from petsc4py import PETSc
-try: 
+try:
     from slepc4py import SLEPc
-except:
+except ImportError:
     import warnings
     warnings.warn("Import Warning: it was not possible to import SLEPc")
     SLEPc = None
