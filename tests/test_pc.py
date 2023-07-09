@@ -2,7 +2,6 @@
 This module test the pc class
 '''
 from math import sqrt
-import pytest
 
 from ngsolve import Mesh, H1, BilinearForm, LinearForm, grad, Integrate
 from ngsolve import x, y, dx, Preconditioner, GridFunction
