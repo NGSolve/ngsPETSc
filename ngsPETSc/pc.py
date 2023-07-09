@@ -32,9 +32,10 @@ class PETScPreconditioner(BaseMatrix):
             self.dofs = self.ngsMat.row_pardofs
             self.freeDofs = freeDofs
         else:
-            raise RuntimeError("PETSc PC only implemented in parallel")
+            self.dofs = None
+            self.freeDofs = freeDofs
         self.vecMap = VectorMapping (None,parDofs=self.dofs,freeDofs=self.freeDofs)
-        self.petscMat = Matrix(self.ngsMat, freeDofs, matType).mat
+        self.petscMat = Matrix(self.ngsMat, self.freeDofs, matType).mat
         self.petscPreconditioner = PETSc.PC().create()
         self.petscPreconditioner.setOperators(self.petscMat)
         self.petscPreconditioner.setFromOptions()
@@ -82,6 +83,7 @@ class PETScPreconditioner(BaseMatrix):
         :arg y: vector we are storeing the result in
 
         '''
+        print("Mult Trans")
         self.vecMap.petscVec(x,self.petscVecX)
         self.petscPreconditioner.applyTranspose(self.petscVecX, self.petscVecY)
         self.vecMap.ngsVec(self.petscVecY, y)
