@@ -32,6 +32,7 @@ class PETScPreconditioner(BaseMatrix):
             self.dofs = self.ngsMat.row_pardofs
             self.freeDofs = freeDofs
         else:
+            raise RuntimeError("PETSc PC only implemented in parallel")
             self.dofs = None
             self.freeDofs = freeDofs
         self.vecMap = VectorMapping (None,parDofs=self.dofs,freeDofs=self.freeDofs)
