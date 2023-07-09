@@ -20,7 +20,6 @@ def test_pc():
     '''
     assert hasattr(pc,"createPETScPreconditioner")
 
-@pytest.mark.mpi
 def test_pc_cg_lu():
     '''
     Testing the MUMPS PETSc PC

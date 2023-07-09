@@ -83,7 +83,6 @@ class PETScPreconditioner(BaseMatrix):
         :arg y: vector we are storeing the result in
 
         '''
-        print("Mult Trans")
         self.vecMap.petscVec(x,self.petscVecX)
         self.petscPreconditioner.applyTranspose(self.petscVecX, self.petscVecY)
         self.vecMap.ngsVec(self.petscVecY, y)
