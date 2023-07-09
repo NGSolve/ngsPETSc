@@ -87,7 +87,7 @@ We suggest you adding following lines to your ``.bashrc``:
 Authors
 ----------
 
-Umberto Zerbinati
+Stefano Zampini, Umberto Zerbinati
 
 License
 ---------------
