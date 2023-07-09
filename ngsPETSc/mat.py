@@ -7,8 +7,6 @@ import numpy as np
 from petsc4py import PETSc
 from mpi4py import MPI
 
-from ngsolve import MPI_Init
-
 class Matrix(object):
     '''
     This class creates a PETSc Matrix
@@ -31,7 +29,7 @@ class Matrix(object):
         if hasattr(ngsMat, 'row_paradofs'):
             self.comm = ngsMat.paradofs.comm.mpi4py
         else:
-            self.comm = MPI_Init().mpi4py
+            self.comm = MPI.COMM_WORLD
 
         localMat = ngsMat.local_mat
         entryHeight, entryWidth = localMat.entrysizes
@@ -55,11 +53,13 @@ class Matrix(object):
             rowIsFreeLocal = None
             if self.freeDofs[0] is not None:
                 rowLocalMatFree = np.flatnonzero(self.freeDofs[0]).astype(PETSc.IntType)
-                rowIsFreeLocal = PETSc.IS().createBlock(indices=rowLocalMatFree, bsize=entryHeight,comm=PETSc.COMM_SELF)
+                rowIsFreeLocal = PETSc.IS().createBlock(indices=rowLocalMatFree,
+                                                        bsize=entryHeight,comm=PETSc.COMM_SELF)
             colIsFreeLocal = rowIsFreeLocal
             if self.freeDofs[1] is not None and not samerc:
                 colLocalMatFree = np.flatnonzero(self.freeDofs[1]).astype(PETSc.IntType)
-                colIsFreeLocal = PETSc.IS().createBlock(indices=colLocalMatFree, bsize=entryHeight,comm=PETSc.COMM_SELF)
+                colIsFreeLocal = PETSc.IS().createBlock(indices=colLocalMatFree,
+                                                        bsize=entryHeight,comm=PETSc.COMM_SELF)
             petscLocalMat = petscLocalMat.createSubMatrices(rowIsFreeLocal, colIsFreeLocal)[0]
 
         if self.comm.Get_size() > 1:
@@ -87,7 +87,8 @@ class Matrix(object):
                 cnumberGlobal = rnumberGlobal
 
             mat = PETSc.Mat().create(comm=self.comm)
-            mat.setSizes(size=(rnumberGlobal*entryHeight, cnumberGlobal*entryHeight), bsize=entryHeight)
+            mat.setSizes(size=(rnumberGlobal*entryHeight,
+                               cnumberGlobal*entryHeight), bsize=entryHeight)
             mat.setType(PETSc.Mat.Type.IS)
             mat.setLGMap(rlocalGlobalMap, clocalGlobalMap)
             mat.setISLocalMat(petscLocalMat)

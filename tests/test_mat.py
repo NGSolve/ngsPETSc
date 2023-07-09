@@ -1,13 +1,13 @@
 '''
 This module test the matrix class
 '''
-from ngsolve import Mesh, H1, VectorH1, BilinearForm, grad, div, dx, VOL
+from ngsolve import Mesh, H1, VectorH1, BilinearForm, grad, div, dx
 from netgen.geom2d import unit_square
 import netgen.meshing as ngm
 
 from mpi4py.MPI import COMM_WORLD
+
 from ngsPETSc import Matrix
-from petsc4py import PETSc
 
 def test_poisson_mat():
     '''
