@@ -81,7 +81,14 @@ We suggest you adding following lines to your ``.bashrc``:
 ::
     export NETGENDIR="${BASEDIR}/ngsolve-install/bin"
     export PATH=$NETGENDIR:$PATH
-    export PYTHONPATH=$PYHONPATH:$NETGENDIR/../`python3 -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(1,0,''))"`
+    export PYTHONPATH=$PYTHONPATH:$NETGENDIR/../`python3 -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(1,0,''))"`
+
+We are now fianlly ready to install ngsPETSc:
+
+:: 
+    git clone https://github.com/UZerbinati/ngsPETSc.git
+    cd ngsPETSc
+    NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
 
 
 Authors
