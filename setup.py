@@ -3,8 +3,15 @@ import setuptools, os
 with open("README.md", "r", encoding = "utf-8") as fh:
     long_description = fh.read()
 
-if 'NGSPETSC_NO_INSTALL_REQUIRES' in os.environ:
+if 'NGSPETSC_NO_INSTALL_REQUIRED' in os.environ:
     install_requires = []
+elif 'NGS_FROM_SOURCE' in os.environ:
+    install_requires = [
+        'petsc4py',
+        'mpi4py',
+        'pytest', #For testing
+        'pylint', #For formatting
+        ]
 else:
     install_requires=[
         'ngsolve',
