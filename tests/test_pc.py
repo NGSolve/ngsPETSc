@@ -5,7 +5,7 @@ from math import sqrt
 import pytest
 
 from ngsolve import Mesh, H1, BilinearForm, LinearForm, grad, Integrate
-from ngsolve import x, y, dx, Preconditioner, GridFunction, CGSolver
+from ngsolve import x, y, dx, Preconditioner, GridFunction
 from ngsolve.solvers import CG
 from netgen.geom2d import unit_square
 import netgen.meshing as ngm
@@ -13,9 +13,11 @@ import netgen.meshing as ngm
 from mpi4py.MPI import COMM_WORLD
 
 from ngsPETSc import pc
-#import ngsolve.ngs2petsc as n2p
 
 def test_pc():
+    '''
+    Testing the pc has registered function to register preconditioners
+    '''
     assert hasattr(pc,"createPETScPreconditioner")
 
 @pytest.mark.mpi
