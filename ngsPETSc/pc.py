@@ -25,29 +25,30 @@ class PETScPreconditioner(BaseMatrix):
     MKL sparse: mklaij or CUDA: aijcusparse
 
     '''
-    def __init__(self,mat,freeDofs, solverParameters=None, optionsPrefix=None, matType="aij"):
+    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix=None, matType="aij"):
         BaseMatrix.__init__(self)
         self.ngsMat = mat
-        if MPI.COMM_WORLD.Get_size() > 1:
-            self.dofs = self.ngsMat.row_pardofs
-            self.freeDofs = freeDofs
+        if hasattr(self.ngsMat, "row_pardofs"):
+            dofs = self.ngsMat.row_pardofs
+            freeDofs = freeDofs
         else:
-            self.dofs = None
-            self.freeDofs = freeDofs
-        self.vecMap = VectorMapping (None,parDofs=self.dofs,freeDofs=self.freeDofs)
-        self.petscMat = Matrix(self.ngsMat, self.freeDofs, matType).mat
-        self.petscPreconditioner = PETSc.PC().create()
-        self.petscPreconditioner.setOperators(self.petscMat)
-        self.petscPreconditioner.setFromOptions()
-        self.solverParameters = solverParameters.ToDict()
-        self.optionsPrefix = optionsPrefix
+            dofs = None
+            freeDofs = freeDofs
+        self.vecMap = VectorMapping((dofs,freeDofs))
+        petscMat = Matrix(self.ngsMat, freeDofs, matType).mat
+        exit()
+        self.petscPreconditioner = PETSc.PC().create(comm=petscMat.getComm())
+        self.petscPreconditioner.setOperators(petscMat)
+        solverParameters = solverParameters.ToDict() # ??????
         options_object = PETSc.Options()
         if solverParameters is not None:
-            for optName, optValue in self.solverParameters.items():
+            for optName, optValue in solverParameters.items():
                 options_object[optName] = optValue
 
+        self.petscPreconditioner.setFromOptions()
         self.petscPreconditioner.setUp()
-        self.petscVecX, self.petscVecY = self.petscMat.createVecs()
+        self.petscPreconditioner.view()
+        self.petscVecX, self.petscVecY = petscMat.createVecs()
 
     def Shape(self):
         '''
