@@ -11,7 +11,7 @@ import netgen.meshing as ngm
 
 from mpi4py.MPI import COMM_WORLD
 
-from ngsPETSc import pc
+from ngsPETSc import pc #, PETScPreconditioner
 
 def test_pc():
     '''
@@ -19,9 +19,9 @@ def test_pc():
     '''
     assert hasattr(pc,"createPETScPreconditioner")
 
-def test_pc_lu():
+def test_pc_gamg():
     '''
-    Testing the PETSc LU solver
+    Testing the PETSc GAMG solver
     '''
     if COMM_WORLD.rank == 0:
         mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
@@ -31,9 +31,8 @@ def test_pc_lu():
     u,v = fes.TnT()
     a = BilinearForm(grad(u)*grad(v)*dx)
     a.Assemble()
-    # This is so wrong, it misses the communicator
-    # Also, the test says LU and you use GAMG
     pre = Preconditioner(a, "PETScPC", pc_type="gamg")
+    # pre = PETScPreconditioner(a.mat, fes.FreeDofs(), solverParameters={'pc_type': 'gamg'})
     f = LinearForm(fes)
     f += 32 * (y*(1-y)+x*(1-x)) * v * dx
     f.Assemble()
@@ -44,4 +43,4 @@ def test_pc_lu():
 
 if __name__ == '__main__':
     test_pc()
-    test_pc_lu()
+    test_pc_gamg()

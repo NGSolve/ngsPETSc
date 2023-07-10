@@ -2,7 +2,6 @@
 This module contains all the function and class needed to wrap a PETSc Preconditioner in NGSolve
 '''
 from petsc4py import PETSc
-from mpi4py import MPI
 
 from ngsolve import BaseMatrix, comp
 
@@ -30,24 +29,22 @@ class PETScPreconditioner(BaseMatrix):
         self.ngsMat = mat
         if hasattr(self.ngsMat, "row_pardofs"):
             dofs = self.ngsMat.row_pardofs
-            freeDofs = freeDofs
         else:
             dofs = None
-            freeDofs = freeDofs
         self.vecMap = VectorMapping((dofs,freeDofs))
         petscMat = Matrix(self.ngsMat, freeDofs, matType).mat
-        exit()
         self.petscPreconditioner = PETSc.PC().create(comm=petscMat.getComm())
         self.petscPreconditioner.setOperators(petscMat)
-        solverParameters = solverParameters.ToDict() # ??????
+        if hasattr(solverParameters, "ToDict"):
+            solverParameters = solverParameters.ToDict()
         options_object = PETSc.Options()
         if solverParameters is not None:
             for optName, optValue in solverParameters.items():
                 options_object[optName] = optValue
 
+        self.petscPreconditioner.setOptionsPrefix(optionsPrefix)
         self.petscPreconditioner.setFromOptions()
         self.petscPreconditioner.setUp()
-        self.petscPreconditioner.view()
         self.petscVecX, self.petscVecY = petscMat.createVecs()
 
     def Shape(self):
