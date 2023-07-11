@@ -8,3 +8,4 @@ How to use ngsPETSc
    notebooks/Vectors and Matrices
    notebooks/Meshes
    notebooks/Krylov Solver and Preconditioners
+   notebooks/Eigenvalue Problems
