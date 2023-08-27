@@ -22,7 +22,7 @@ jobs:
 
       - name: Run test suite in serial
         run: |
-          make test
+          pytest -v tests/
 
       - name: Run test suite in parallel
         run: |
