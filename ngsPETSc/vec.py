@@ -23,12 +23,13 @@ class VectorMapping:
             freeDofs = parDescr.FreeDofs()
             comm = dofs.comm.mpi4py
         else:
-            dofs, freeDofs = parDescr
+            dofs, freeDofs, dofsInfo = parDescr
             if dofs is not None:
                 comm = dofs.comm.mpi4py
             else:
                 ### create suitable dofs
                 comm = PETSc.COMM_SELF
+                dofs = type('', (object,), {'entrysize':dofsInfo["bsize"][0]})()
 
         self.dofs = dofs
         bsize = dofs.entrysize
