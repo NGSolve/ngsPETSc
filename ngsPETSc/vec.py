@@ -28,13 +28,13 @@ class VectorMapping:
                 comm = dofs.comm.mpi4py
             else:
                 ### create suitable dofs
-                comm = PETSc.COMM_SELF
+                comm = PETSc.COMM_WORLD
                 dofs = type('', (object,), {'entrysize':dofsInfo["bsize"][0]})()
 
         self.dofs = dofs
         bsize = dofs.entrysize
         locfree = np.flatnonzero(freeDofs).astype(PETSc.IntType)
-        isetlocfree = PETSc.IS().createBlock(indices=locfree,
+        self.isetlocfree = PETSc.IS().createBlock(indices=locfree,
                                              bsize=bsize, comm=PETSc.COMM_SELF)
         nloc = len(freeDofs)
 
@@ -42,9 +42,9 @@ class VectorMapping:
         if comm.Get_size() > 1:
             globnums, nglob = dofs.EnumerateGlobally(freeDofs)
             globnums = np.array(globnums, dtype=PETSc.IntType)[freeDofs]
-            iset = PETSc.IS().createBlock(indices=globnums, bsize=bsize, comm=comm)
+            self.iset = PETSc.IS().createBlock(indices=globnums, bsize=bsize, comm=comm)
         else:
-            iset = PETSc.IS().createBlock(indices=np.arange(nglob,dtype=PETSc.IntType),
+            self.iset = PETSc.IS().createBlock(indices=np.arange(nglob,dtype=PETSc.IntType),
                                           bsize=bsize, comm=comm)
 
         self.sVec = PETSc.Vec().create(comm=PETSc.COMM_SELF)
@@ -58,8 +58,8 @@ class VectorMapping:
         self.pVec.setOptionsPrefix(prefix)
         self.pVec.setFromOptions()
 
-        self.ngsToPETScScat = PETSc.Scatter().create(self.sVec, isetlocfree,
-                                                     self.pVec, iset)
+        self.ngsToPETScScat = PETSc.Scatter().create(self.sVec, self.isetlocfree,
+                                                     self.pVec, self.iset)
 
     def petscVec(self, ngsVec, petscVec=None):
         '''
@@ -93,7 +93,8 @@ class VectorMapping:
             ngsVec = la.CreateParallelVector(self.dofs,la.PARALLEL_STATUS.CUMULATED)
         ngsVec[:] = 0
         self.sVec.placeArray(ngsVec.FV().NumPy())
-        self.ngsToPETScScat.scatter(petscVec, self.sVec, addv=PETSc.InsertMode.INSERT,
-                                    mode=PETSc.ScatterMode.REVERSE)
+        self.PETScToNGSScat = PETSc.Scatter().create(petscVec, self.iset,
+                                                     self.sVec, self.isetlocfree)
+        self.PETScToNGSScat.scatter(petscVec, self.sVec, addv=PETSc.InsertMode.INSERT)
         self.sVec.resetArray()
         return ngsVec
