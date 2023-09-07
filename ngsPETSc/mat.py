@@ -28,7 +28,7 @@ class Matrix(object):
         if hasattr(ngsMat, 'row_paradofs'):
             comm = ngsMat.paradofs.comm.mpi4py
         else:
-            comm = PETSc.COMM_SELF
+            comm = PETSc.COMM_WORLD
 
         localMat = ngsMat.local_mat
         entryHeight, entryWidth = localMat.entrysizes

@@ -26,4 +26,4 @@ jobs:
 
       - name: Run test suite in parallel
         run: |
-          make test_mpi
+          mpirun -n 2 pytest -v tests/

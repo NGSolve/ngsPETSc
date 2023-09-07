@@ -31,7 +31,7 @@ class PETScPreconditioner(BaseMatrix):
             dofs = self.ngsMat.row_pardofs
         else:
             dofs = None
-        self.vecMap = VectorMapping((dofs,freeDofs,{"bsize":self.ngsMat.entrysizes}))
+        self.vecMap = VectorMapping((dofs,freeDofs,{"bsize":self.ngsMat.local_mat.entrysizes}))
         petscMat = Matrix(self.ngsMat, freeDofs, matType).mat
         self.petscPreconditioner = PETSc.PC().create(comm=petscMat.getComm())
         self.petscPreconditioner.setOperators(petscMat)
