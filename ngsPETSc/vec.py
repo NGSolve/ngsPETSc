@@ -39,6 +39,9 @@ class VectorMapping:
                 self.isetlocfree = None
                 globnums = list(range(len(self.freeDofs)))
             self.iset = PETSc.IS().createBlock(indices=globnums, bsize=self.es, comm=comm)
+            self.isetlocfree.view()
+            self.iset.view()
+        
 
     def petscVec(self, ngsVec, petscVec=None):
         '''
