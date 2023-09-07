@@ -11,7 +11,7 @@ import netgen.meshing as ngm
 
 from mpi4py.MPI import COMM_WORLD
 
-from ngsPETSc import pc
+from ngsPETSc import pc #, PETScPreconditioner
 
 def test_pc():
     '''
@@ -19,9 +19,9 @@ def test_pc():
     '''
     assert hasattr(pc,"createPETScPreconditioner")
 
-def test_pc_cg_lu():
+def test_pc_gamg():
     '''
-    Testing the MUMPS PETSc PC
+    Testing the PETSc GAMG solver
     '''
     if COMM_WORLD.rank == 0:
         mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
@@ -32,6 +32,7 @@ def test_pc_cg_lu():
     a = BilinearForm(grad(u)*grad(v)*dx)
     a.Assemble()
     pre = Preconditioner(a, "PETScPC", pc_type="gamg")
+    # pre = PETScPreconditioner(a.mat, fes.FreeDofs(), solverParameters={'pc_type': 'gamg'})
     f = LinearForm(fes)
     f += 32 * (y*(1-y)+x*(1-x)) * v * dx
     f.Assemble()
@@ -39,3 +40,7 @@ def test_pc_cg_lu():
     gfu.vec.data = CG(a.mat, rhs=f.vec, pre=pre, printrates=mesh.comm.rank==0)
     exact = 16*x*(1-x)*y*(1-y)
     assert sqrt(Integrate((gfu-exact)**2, mesh))<1e-4
+
+if __name__ == '__main__':
+    test_pc()
+    test_pc_gamg()

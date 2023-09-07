@@ -5,7 +5,6 @@ PETSc matrices using the petsc4py interface.
 import numpy as np
 
 from petsc4py import PETSc
-from mpi4py import MPI
 
 class Matrix(object):
     '''
@@ -27,9 +26,9 @@ class Matrix(object):
             samerc = False
             self.freeDofs = freeDofs
         if hasattr(ngsMat, 'row_paradofs'):
-            self.comm = ngsMat.paradofs.comm.mpi4py
+            comm = ngsMat.paradofs.comm.mpi4py
         else:
-            self.comm = MPI.COMM_WORLD
+            comm = PETSc.COMM_WORLD
 
         localMat = ngsMat.local_mat
         entryHeight, entryWidth = localMat.entrysizes
@@ -62,7 +61,7 @@ class Matrix(object):
                                                         bsize=entryHeight,comm=PETSc.COMM_SELF)
             petscLocalMat = petscLocalMat.createSubMatrices(rowIsFreeLocal, colIsFreeLocal)[0]
 
-        if self.comm.Get_size() > 1:
+        if comm.Get_size() > 1:
             # is this a BUG in the bindings?
             #rparallelDofs = ngsMat.row_pardofs
             rparallelDofs = ngsMat.col_pardofs
@@ -71,7 +70,7 @@ class Matrix(object):
                 rglobalNums = np.array(rglobalNums, dtype=PETSc.IntType)[self.freeDofs[0]]
             rlocalGlobalMap = PETSc.LGMap().create(indices=rglobalNums,
                                                    bsize=entryHeight,
-                                                   comm=self.comm)
+                                                   comm=comm)
             if not samerc:
                 # is this a BUG in the bindings?
                 #cparallelDofs = ngsMat.col_pardofs
@@ -81,23 +80,26 @@ class Matrix(object):
                     cglobalNums = np.array(cglobalNums, dtype=PETSc.IntType)[self.freeDofs[1]]
                 clocalGlobalMap = PETSc.LGMap().create(indices=cglobalNums,
                                                        bsize=entryWidth,
-                                                       comm=self.comm)
+                                                       comm=comm)
             else:
                 clocalGlobalMap = rlocalGlobalMap
                 cnumberGlobal = rnumberGlobal
 
-            mat = PETSc.Mat().create(comm=self.comm)
+            mat = PETSc.Mat().create(comm=comm)
             mat.setSizes(size=(rnumberGlobal*entryHeight,
                                cnumberGlobal*entryHeight), bsize=entryHeight)
             mat.setType(PETSc.Mat.Type.IS)
             mat.setLGMap(rlocalGlobalMap, clocalGlobalMap)
             mat.setISLocalMat(petscLocalMat)
             mat.assemble()
-            mat.convert(matType)
+            if matType != 'is':
+                mat.convert(matType)
             self.mat = mat
         else:
             mat = petscLocalMat
             mat.convert(matType)
+            if matType != 'is':
+                mat.convert(matType)
             self.mat = mat
 
     def view(self):

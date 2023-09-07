@@ -1,47 +1,65 @@
 '''
-This module contains all the functions related to the NGSolve vector - 
+This module contains all the functions related to the NGSolve vector -
 PETSc vector mapping using the petsc4py interface.
 '''
 import numpy as np
 
 from petsc4py import PETSc
-from mpi4py import MPI
 
-from ngsolve import la
+from ngsolve import la, FESpace
 
 class VectorMapping:
     '''
-    This calss creates a mapping between a PETSc vector and NGSolve
+    This class creates a mapping between a PETSc vector and NGSolve
     vectors
 
-    :arg fes: the finite element space for the vector we want to map
+    :arg parDescr: the finite element space for the vector or tuple (dofs, freeDofs)
+    :arg prefix: prefix for PETSc options
 
     '''
-    def __init__(self, fes, parDofs=None, freeDofs=None, comm=MPI.COMM_WORLD):
-        if fes is not None:
-            self.fes = fes
-            self.dofs = self.fes.ParallelDofs()
-            self.freeDofs = self.fes.FreeDofs()
+    def __init__(self, parDescr, prefix='ngs_'):
+        if isinstance(parDescr, FESpace):
+            dofs = parDescr.ParallelDofs()
+            freeDofs = parDescr.FreeDofs()
+            comm = dofs.comm.mpi4py
         else:
-            self.dofs = parDofs
-            self.freeDofs = freeDofs
-        self.comm = comm
-        print("dofs",self.dofs)
-        if comm.Get_size() > 1:
-            globnums, self.nglob = self.dofs.EnumerateGlobally(self.freeDofs)
-            self.es = self.dofs.entrysize
-            if self.freeDofs is not None:
-                globnums = np.array(globnums, dtype=PETSc.IntType)[self.freeDofs]
-                self.locfree = np.flatnonzero(self.freeDofs).astype(PETSc.IntType)
-                self.isetlocfree = PETSc.IS().createBlock(indices=self.locfree,
-                                                          bsize=self.es, comm=comm)
+            dofs, freeDofs, dofsInfo = parDescr
+            if dofs is not None:
+                comm = dofs.comm.mpi4py
             else:
-                self.isetlocfree = None
-                globnums = list(range(len(self.freeDofs)))
-            self.iset = PETSc.IS().createBlock(indices=globnums, bsize=self.es, comm=comm)
-            self.isetlocfree.view()
-            self.iset.view()
-        
+                ### create suitable dofs
+                comm = PETSc.COMM_SELF
+                dofs = type('', (object,), {'entrysize':dofsInfo["bsize"][0]})()
+
+        self.dofs = dofs
+        bsize = dofs.entrysize
+        locfree = np.flatnonzero(freeDofs).astype(PETSc.IntType)
+        isetlocfree = PETSc.IS().createBlock(indices=locfree,
+                                             bsize=bsize, comm=comm)
+        nloc = len(freeDofs)
+
+        nglob = len(locfree)
+        if comm.Get_size() > 1:
+            globnums, nglob = dofs.EnumerateGlobally(freeDofs)
+            globnums = np.array(globnums, dtype=PETSc.IntType)[freeDofs]
+            iset = PETSc.IS().createBlock(indices=globnums, bsize=bsize, comm=comm)
+        else:
+            iset = PETSc.IS().createBlock(indices=np.arange(nglob,dtype=PETSc.IntType),
+                                          bsize=bsize, comm=comm)
+
+        self.sVec = PETSc.Vec().create(comm=PETSc.COMM_SELF)
+        self.sVec.setSizes(nloc*bsize,bsize=bsize)
+        self.sVec.setOptionsPrefix(prefix)
+        self.sVec.setFromOptions()
+
+        self.pVec = PETSc.Vec().create(comm=comm)
+        self.pVec.setSizes(nglob*bsize,bsize=bsize)
+        self.pVec.setBlockSize(bsize)
+        self.pVec.setOptionsPrefix(prefix)
+        self.pVec.setFromOptions()
+
+        self.ngsToPETScScat = PETSc.Scatter().create(self.sVec, isetlocfree,
+                                                     self.pVec, iset)
 
     def petscVec(self, ngsVec, petscVec=None):
         '''
@@ -52,24 +70,14 @@ class VectorMapping:
         vector, if None new PETSc vector is generated, by deafault None.
 
         '''
+        if petscVec is None:
+            petscVec = self.pVec.duplicate()
         ngsVec.Distribute()
-        if self.comm.Get_size() > 1:
-            if petscVec is None:
-                petscVec = PETSc.Vec().createMPI(self.nglob*self.es, bsize=self.es, comm=self.comm)
-            locvec = PETSc.Vec().createWithArray(ngsVec.FV().NumPy(), comm=MPI.COMM_SELF)
-            if "ngsTopetscScat" not in self.__dict__:
-                self.ngsToPETScScat = PETSc.Scatter().create(locvec, self.isetlocfree,
-                                                            petscVec, self.iset)
-            petscVec.set(0)
-            self.ngsToPETScScat.scatter(locvec, petscVec, addv=PETSc.InsertMode.ADD)
-        else:
-            if petscVec is None:
-                petscVec = PETSc.Vec().createWithArray(ngsVec.FV().NumPy(), comm=self.comm)
-            else:
-                freeIndeces = np.flatnonzero(self.freeDofs).astype(PETSc.IntType)
-                petscVec.set(0)
-                petscVec.setArray(ngsVec.FV().NumPy()[freeIndeces])
-
+        self.sVec.placeArray(ngsVec.FV().NumPy())
+        petscVec.set(0)
+        self.ngsToPETScScat.scatter(self.sVec, petscVec, addv=PETSc.InsertMode.ADD,
+                                    mode=PETSc.ScatterMode.FORWARD)
+        self.sVec.resetArray()
         return petscVec
 
     def ngsVec(self, petscVec, ngsVec=None):
@@ -81,20 +89,12 @@ class VectorMapping:
         vector, if None new PETSc vector is generated, by deafault None.
 
         '''
-        print("PETSc Vec", petscVec.size)
-        if self.comm.Get_size() > 1:
-            if ngsVec is None:
-                ngsVec = la.CreateParallelVector(self.dofs,la.PARALLEL_STATUS.CUMULATED)
-            ngsVec[:] = 0.0
-            locvec = PETSc.Vec().createWithArray(ngsVec.FV().NumPy(), comm=MPI.COMM_SELF)
-            if "petscToNgsScat" not in self.__dict__:
-                self.petscToNgsScat = PETSc.Scatter().create(petscVec, self.iset,
-                                                             locvec, self.isetlocfree)
-            self.petscToNgsScat.scatter(petscVec, locvec, addv=PETSc.InsertMode.INSERT)
-        else:
-            if ngsVec is None:
-                ngsVec = la.BaseVector(len(self.freeDofs),False) #Only work for real vector
-            ngsVec[:] = 0.0
-            freeIndeces = np.flatnonzero(self.freeDofs).astype(PETSc.IntType)
-            ngsVec.FV().NumPy()[freeIndeces] = petscVec.getArray()
+        if ngsVec is None:
+            ngsVec = la.CreateParallelVector(self.dofs,la.PARALLEL_STATUS.CUMULATED)
+        ngsVec[:] = 0
+        petscVec.copy(self.pVec)
+        self.sVec.placeArray(ngsVec.FV().NumPy())
+        self.ngsToPETScScat.scatter(self.pVec, self.sVec, addv=PETSc.InsertMode.INSERT,
+                                    mode=PETSc.ScatterMode.REVERSE)
+        self.sVec.resetArray()
         return ngsVec

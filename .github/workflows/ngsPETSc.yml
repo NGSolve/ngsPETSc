@@ -22,8 +22,8 @@ jobs:
 
       - name: Run test suite in serial
         run: |
-          make test
+          pytest -v tests/
 
       - name: Run test suite in parallel
         run: |
-          make test_mpi
+          mpirun -n 2 pytest -v tests/
