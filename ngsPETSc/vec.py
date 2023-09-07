@@ -81,6 +81,7 @@ class VectorMapping:
         vector, if None new PETSc vector is generated, by deafault None.
 
         '''
+        print("PETSc Vec", petscVec.size)
         if self.comm.Get_size() > 1:
             if ngsVec is None:
                 ngsVec = la.CreateParallelVector(self.dofs,la.PARALLEL_STATUS.CUMULATED)
