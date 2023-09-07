@@ -26,4 +26,4 @@ jobs:
 
       - name: Run test suite in parallel
         run: |
-          mpirun -n 2 pytest -v tests/
+          mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/
