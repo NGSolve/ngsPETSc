@@ -3,14 +3,15 @@ This module contains all the functions related to wrapping NGSolve meshes to Fir
 '''
 try:
     import firedrake as fd
+    import ufl
 except ImportError:
     fd = None
+    ufl = None
 
 from ngsPETSc import MeshMapping
 from petsc4py import PETSc
 import ngsolve as ngs
 import netgen.meshing as ngm
-import ufl
 import numpy as np
 
 def refineMarkedElements(self, mark):
