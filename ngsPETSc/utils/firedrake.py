@@ -14,7 +14,7 @@ import ufl
 import numpy as np
 
 def refineMarkedElements(self, mark):
-    if mesh.geometric_dimension() == 2:
+    if self.geometric_dimension() == 2:
         with mark.dat.vec as marked:
             marked0 = marked
             getIdx = self._cell_numbering.getOffset
@@ -37,19 +37,26 @@ def refineMarkedElements(self, mark):
     else:
         raise NotImplementedError("No implementation for dimension other than 2.")
 
-DofDict = {("triangle",2): np.array([(0.0,0.0),(0.0,1.0),(1.0,0.0),(0.5,0.5),(0.5,0.0),(0.0,0.5)])}
-
 def curveField(self, order):
     functionCoordinates = self.coordinates
     newFunctionCoordinates = fd.interpolate(functionCoordinates,
                                             fd.VectorFunctionSpace(self,"DG",order))
+    ref_element = functionCoordinates.function_space().finat_element.fiat_equivalent.ref_element
     getIdx = self._cell_numbering.getOffset
     if self.sfBCInv is not None:
         getIdx = lambda x: x
         _, marked0 = self.topology_dm.distributeField(self.sfBCInv,
                                                       self._cell_numbering,
                                                       marked)
-    refPts= DofDict[(str(newFunctionCoordinates.ufl_element().cell()),order)]
+    try:
+        refPts = []
+        for i in range(self.geometric_dimension()+1):
+            for j in range(len(ref_element.sub_entities)):
+                refPts = refPts+list(ref_element.make_points(i,j,order))
+        print(refPts)
+        refPts = np.array(refPts)
+    except KeyError:
+        raise NotImplementedError("The degrees of fredom you are looking for haven't been tabulated yet.")
     physPts = np.ndarray((len(self.netgen_mesh.Elements2D()), refPts.shape[0], 2))
     self.netgen_mesh.CalcElementMapping(refPts, physPts)
     cellMap = newFunctionCoordinates.cell_node_map()
