@@ -41,30 +41,34 @@ def curveField(self, order):
     functionCoordinates = self.coordinates
     newFunctionCoordinates = fd.interpolate(functionCoordinates,
                                             fd.VectorFunctionSpace(self,"DG",order))
-    ref_element = functionCoordinates.function_space().finat_element.fiat_equivalent.ref_element
+    ref_element = newFunctionCoordinates.function_space().finat_element.fiat_equivalent.ref_el
     getIdx = self._cell_numbering.getOffset
     if self.sfBCInv is not None:
         getIdx = lambda x: x
         _, marked0 = self.topology_dm.distributeField(self.sfBCInv,
                                                       self._cell_numbering,
                                                       marked)
-    try:
-        refPts = []
-        for i in range(self.geometric_dimension()+1):
-            for j in range(len(ref_element.sub_entities)):
-                refPts = refPts+list(ref_element.make_points(i,j,order))
-        print(refPts)
-        refPts = np.array(refPts)
-    except KeyError:
-        raise NotImplementedError("The degrees of fredom you are looking for haven't been tabulated yet.")
-    physPts = np.ndarray((len(self.netgen_mesh.Elements2D()), refPts.shape[0], 2))
-    self.netgen_mesh.CalcElementMapping(refPts, physPts)
-    cellMap = newFunctionCoordinates.cell_node_map()
-    print(physPts)
-    for i, el in enumerate(self.netgen_mesh.Elements2D()):
-        for j, datIdx in enumerate(cellMap.values[getIdx(i)]):
-            newFunctionCoordinates.sub(0).dat.data[datIdx] = physPts[i][j][0]
-            newFunctionCoordinates.sub(1).dat.data[datIdx] = physPts[i][j][1]
+    refPts = []
+    for (i,j) in ref_element.sub_entities[self.geometric_dimension()][0] :
+            refPts = refPts+list(ref_element.make_points(i,j,order))
+    refPts = np.array(refPts)
+    if self.geometric_dimension() == 2:
+        physPts = np.ndarray((len(self.netgen_mesh.Elements2D()), refPts.shape[0], 2))
+        self.netgen_mesh.CalcElementMapping(refPts, physPts)
+        cellMap = newFunctionCoordinates.cell_node_map()
+        for i, el in enumerate(self.netgen_mesh.Elements2D()):
+            for j, datIdx in enumerate(cellMap.values[getIdx(i)]):
+                newFunctionCoordinates.sub(0).dat.data[datIdx] = physPts[i][j][0]
+                newFunctionCoordinates.sub(1).dat.data[datIdx] = physPts[i][j][1]
+    if self.geometric_dimension() == 3:
+        physPts = np.ndarray((len(self.netgen_mesh.Elements3D()), refPts.shape[0], 3))
+        self.netgen_mesh.CalcElementMapping(refPts, physPts)
+        cellMap = newFunctionCoordinates.cell_node_map()
+        for i, el in enumerate(self.netgen_mesh.Elements3D()):
+            for j, datIdx in enumerate(cellMap.values[getIdx(i)]):
+                newFunctionCoordinates.sub(0).dat.data[datIdx] = physPts[i][j][0]
+                newFunctionCoordinates.sub(1).dat.data[datIdx] = physPts[i][j][1]
+                newFunctionCoordinates.sub(2).dat.data[datIdx] = physPts[i][j][2]
     return newFunctionCoordinates
 
 class FiredrakeMesh:
