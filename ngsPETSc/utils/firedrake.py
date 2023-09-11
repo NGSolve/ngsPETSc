@@ -40,7 +40,6 @@ def refineMarkedElements(self, mark):
         raise NotImplementedError("No implementation for dimension other than 2.")
 
 def curveField(self, order):
-    order= 3
     newFunctionCoordinates = fd.interpolate(self.coordinates,
                                             fd.VectorFunctionSpace(self,"DG",order))
     V = newFunctionCoordinates.dat.data
@@ -52,27 +51,44 @@ def curveField(self, order):
             if i < self.geometric_dimension():
                 refPts = refPts+list(ref_element.make_points(i,j,order))
     refPts = np.array(refPts)
-    print(refPts)
-    #Mapping to the physical domain
-    physPts = np.ndarray((len(self.netgen_mesh.Elements2D()), refPts.shape[0], 2))
-    self.netgen_mesh.CalcElementMapping(refPts, physPts)
-    #Cruving the mesh
-    self.netgen_mesh.Curve(order)
-    curvedPhysPts = np.ndarray((len(self.netgen_mesh.Elements2D()), refPts.shape[0], 2))
-    self.netgen_mesh.CalcElementMapping(refPts, curvedPhysPts)
     if self.geometric_dimension() == 2:
+        #Mapping to the physical domain
+        physPts = np.ndarray((len(self.netgen_mesh.Elements2D()), refPts.shape[0], self.geometric_dimension()))
+        self.netgen_mesh.CalcElementMapping(refPts, physPts)
+        #Cruving the mesh
+        self.netgen_mesh.Curve(order)
+        curvedPhysPts = np.ndarray((len(self.netgen_mesh.Elements2D()), refPts.shape[0], self.geometric_dimension()))
+        self.netgen_mesh.CalcElementMapping(refPts, curvedPhysPts)
         cellMap = newFunctionCoordinates.cell_node_map()
         for i, el in enumerate(self.netgen_mesh.Elements2D()):
-            print("El: ",i)
             if el.curved:
                 pts = [tuple(map(lambda x: round(x,8),pts)) for pts in physPts[i][0:refPts.shape[0]]]
                 dofMap = {k: v for v, k in enumerate(pts)}
-                print(dofMap)
                 p = [dofMap[tuple(map(lambda x: round(x,8),pts))] for pts in V[cellMap.values[getIdx(i)]][0:refPts.shape[0]]]
                 curvedPhysPts[i] = curvedPhysPts[i][p]
                 for j, datIdx in enumerate(cellMap.values[getIdx(i)][0:refPts.shape[0]]):
                     newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
                     newFunctionCoordinates.sub(1).dat.data[datIdx] = curvedPhysPts[i][j][1]
+
+    if self.geometric_dimension() == 3:
+        #Mapping to the physical domain
+        physPts = np.ndarray((len(self.netgen_mesh.Elements3D()), refPts.shape[0], self.geometric_dimension()))
+        self.netgen_mesh.CalcElementMapping(refPts, physPts)
+        #Cruving the mesh
+        self.netgen_mesh.Curve(order)
+        curvedPhysPts = np.ndarray((len(self.netgen_mesh.Elements3D()), refPts.shape[0], self.geometric_dimension()))
+        self.netgen_mesh.CalcElementMapping(refPts, curvedPhysPts)
+        cellMap = newFunctionCoordinates.cell_node_map()
+        for i, el in enumerate(self.netgen_mesh.Elements3D()):
+            if el.curved:
+                pts = [tuple(map(lambda x: round(x,8),pts)) for pts in physPts[i][0:refPts.shape[0]]]
+                dofMap = {k: v for v, k in enumerate(pts)}
+                p = [dofMap[tuple(map(lambda x: round(x,8),pts))] for pts in V[cellMap.values[getIdx(i)]][0:refPts.shape[0]]]
+                curvedPhysPts[i] = curvedPhysPts[i][p]
+                for j, datIdx in enumerate(cellMap.values[getIdx(i)][0:refPts.shape[0]]):
+                    newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
+                    newFunctionCoordinates.sub(1).dat.data[datIdx] = curvedPhysPts[i][j][1]
+                    newFunctionCoordinates.sub(2).dat.data[datIdx] = curvedPhysPts[i][j][2]
     return newFunctionCoordinates
 
 class FiredrakeMesh:
