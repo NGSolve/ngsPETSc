@@ -39,37 +39,57 @@ def refineMarkedElements(self, mark):
         raise NotImplementedError("No implementation for dimension other than 2.")
 
 def curveField(self, order):
-    functionCoordinates = self.coordinates
-    newFunctionCoordinates = fd.interpolate(functionCoordinates,
+    newFunctionCoordinates = fd.interpolate(self.coordinates,
                                             fd.VectorFunctionSpace(self,"DG",order))
+    V = newFunctionCoordinates.dat.data
+    #Computing reference points using ufl
     ref_element = newFunctionCoordinates.function_space().finat_element.fiat_equivalent.ref_el
     getIdx = self._cell_numbering.getOffset
-    if self.sfBCInv is not None:
-        getIdx = lambda x: x
-        _, marked0 = self.topology_dm.distributeField(self.sfBCInv,
-                                                      self._cell_numbering,
-                                                      marked)
     refPts = []
-    for (i,j) in ref_element.sub_entities[self.geometric_dimension()][0] :
+    print(ref_element.sub_entities[self.geometric_dimension()][0])
+    for (i,j) in ref_element.sub_entities[self.geometric_dimension()][0]:
             refPts = refPts+list(ref_element.make_points(i,j,order))
     refPts = np.array(refPts)
+    print(refPts)
+    refPts = []
+    for (i,j) in ref_element.sub_entities[self.geometric_dimension()][0][0:3]:
+            refPts = refPts+list(ref_element.make_points(i,j,order))
+    refPts = np.array(refPts)
+    #Mapping to the physical domain
+    physPts = np.ndarray((len(self.netgen_mesh.Elements2D()), refPts.shape[0], 2))
+    self.netgen_mesh.CalcElementMapping(refPts, physPts)
     if self.geometric_dimension() == 2:
-        physPts = np.ndarray((len(self.netgen_mesh.Elements2D()), refPts.shape[0], 2))
-        self.netgen_mesh.CalcElementMapping(refPts, physPts)
         cellMap = newFunctionCoordinates.cell_node_map()
         for i, el in enumerate(self.netgen_mesh.Elements2D()):
-            for j, datIdx in enumerate(cellMap.values[getIdx(i)]):
-                newFunctionCoordinates.sub(0).dat.data[datIdx] = physPts[i][j][0]
-                newFunctionCoordinates.sub(1).dat.data[datIdx] = physPts[i][j][1]
+            if True:
+                perm = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]
+                for pIndx,p in enumerate(perm):
+                    if (physPts[i][p] != V[cellMap.values[getIdx(i)][0:3]]).any() == 0:
+                        break
+                print(i,pIndx)
+                refPts = []
+                for (k,l) in ref_element.sub_entities[self.geometric_dimension()][0]:
+                    entityPts = list(ref_element.make_points(k,p[l],order))
+                    if p[l] == 0 or p[l] == 2:
+                        entityPts.reverse()
+                    refPts = refPts+entityPts
+                print(refPts)
+                refPts = np.array(refPts)
+                singlePhysPts = np.ndarray((len(self.netgen_mesh.Elements2D()), refPts.shape[0], 2))
+                self.netgen_mesh.CalcElementMapping(refPts, singlePhysPts)
+                for j, datIdx in enumerate(cellMap.values[getIdx(i)]):
+                    newFunctionCoordinates.sub(0).dat.data[datIdx] = singlePhysPts[i][j][0]
+                    newFunctionCoordinates.sub(1).dat.data[datIdx] = singlePhysPts[i][j][1]
     if self.geometric_dimension() == 3:
         physPts = np.ndarray((len(self.netgen_mesh.Elements3D()), refPts.shape[0], 3))
         self.netgen_mesh.CalcElementMapping(refPts, physPts)
         cellMap = newFunctionCoordinates.cell_node_map()
         for i, el in enumerate(self.netgen_mesh.Elements3D()):
-            for j, datIdx in enumerate(cellMap.values[getIdx(i)]):
-                newFunctionCoordinates.sub(0).dat.data[datIdx] = physPts[i][j][0]
-                newFunctionCoordinates.sub(1).dat.data[datIdx] = physPts[i][j][1]
-                newFunctionCoordinates.sub(2).dat.data[datIdx] = physPts[i][j][2]
+            if el.curved:
+                for j, datIdx in enumerate(cellMap.values[getIdx(i)]):
+                    newFunctionCoordinates.sub(0).dat.data[datIdx] = physPts[i][j][0]
+                    newFunctionCoordinates.sub(1).dat.data[datIdx] = physPts[i][j][1]
+                    newFunctionCoordinates.sub(2).dat.data[datIdx] = physPts[i][j][2]
     return newFunctionCoordinates
 
 class FiredrakeMesh:
