@@ -124,10 +124,14 @@ class FiredrakeMesh:
     def __init__(self, mesh, netgen_flags, user_comm=PETSc.COMM_WORLD):
         self.comm = user_comm
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
+            try:
+                if netgen_flags["purify_to_tets"]:
+                    mesh.Split2Tets()
+            except KeyError:
+                warnings.warn("No purify_to_tets flag found, mesh will not be purified to tets.")
             self.meshMap = MeshMapping(mesh)
         else:
             raise ValueError("Mesh format not recognised.")
-        self.meshMap.ngMesh.Split2Tets()
         try:
             if netgen_flags["quad"]:
                 transform = PETSc.DMPlexTransform().create(comm=PETSc.COMM_WORLD)
