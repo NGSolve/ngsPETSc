@@ -138,6 +138,15 @@ class FiredrakeMesh:
                 self.meshMap = MeshMapping(newplex)
         except KeyError:
             warnings.warn("No quad flag found, mesh will not be quadrilateralised.")
+        try:
+            if netgen_flags["transform"] is not None:
+                transform = netgen_flags["transform"]
+                transform.setDM(self.meshMap.petscPlex)
+                transform.setUp()
+                newplex = transform.apply(self.meshMap.petscPlex)
+                self.meshMap = MeshMapping(newplex)
+        except KeyError:
+            warnings.warn("No PETSc transform found, mesh will not be transformed.")
 
     def createFromTopology(self, topology, name):
         '''
