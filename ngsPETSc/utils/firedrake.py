@@ -13,6 +13,7 @@ import numpy as np
 import ngsolve as ngs
 import netgen
 import netgen.meshing as ngm
+import warnings
 
 from ngsPETSc import MeshMapping
 
@@ -117,14 +118,27 @@ class FiredrakeMesh:
     This class creates a Firedrake mesh from Netgen/NGSolve meshes.
 
     :arg mesh: the mesh object, it can be either a Netgen/NGSolve mesh or a PETSc DMPlex
-    :arg name: the name of to be assigned to the PETSc DMPlex, by default this is set to "Default"
+    :param netgen_flags: The dictionary of flags to be passed to ngsPETSc.
+    :arg comm: the MPI communicator.
     '''
-    def __init__(self, mesh, user_comm=PETSc.COMM_WORLD):
+    def __init__(self, mesh, netgen_flags, user_comm=PETSc.COMM_WORLD):
         self.comm = user_comm
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             self.meshMap = MeshMapping(mesh)
         else:
             raise ValueError("Mesh format not recognised.")
+        self.meshMap.ngMesh.Split2Tets()
+        try:
+            if netgen_flags["quad"]:
+                transform = PETSc.DMPlexTransform().create(comm=PETSc.COMM_WORLD)
+                transform.setType(PETSc.DMPlexTransformType.REFINETOBOX)
+                transform.setDM(self.meshMap.petscPlex)
+                transform.setUp()
+                newplex = transform.apply(self.meshMap.petscPlex)
+                self.meshMap = MeshMapping(newplex)
+        except KeyError:
+            warnings.warn("No quad flag found, mesh will not be quadrilateralised.")
+
     def createFromTopology(self, topology, name):
         '''
         Internal method to construct a mesh from a mesh topology, copied from Firedrake.
