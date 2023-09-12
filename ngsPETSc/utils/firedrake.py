@@ -8,12 +8,13 @@ except ImportError:
     fd = None
     ufl = None
 
-from petsc4py import PETSc
+import warnings
 import numpy as np
+from petsc4py import PETSc
 import ngsolve as ngs
 import netgen
 import netgen.meshing as ngm
-import warnings
+
 
 from ngsPETSc import MeshMapping
 
