@@ -10,6 +10,7 @@ from petsc4py import PETSc
 import ngsolve as ngs
 import netgen.meshing as ngm
 
+from mpi4py import MPI
 
 FACE_SETS_LABEL = "Face Sets"
 CELL_SETS_LABEL = "Cell Sets"
@@ -149,7 +150,7 @@ class MeshMapping:
             self.ngMesh = mesh.ngmesh
         else:
             self.ngMesh = mesh
-        comm = mesh.comm
+        comm = MPI.COMM_WORLD
         if self.ngMesh.dim == 3:
             if comm.rank == 0:
                 V = self.ngMesh.Coordinates()
