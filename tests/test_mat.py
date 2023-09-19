@@ -20,7 +20,7 @@ def test_poisson_mat():
     fes = H1(mesh, order=1, dirichlet="left|right|top|bottom")
     u,v = fes.TnT()
     a = BilinearForm(grad(u)*grad(v)*dx).Assemble()
-    Matrix(a.mat, fes.FreeDofs())
+    Matrix(a.mat, fes)
 
 def test_nonsquare_mat():
     '''
@@ -40,7 +40,7 @@ def test_nonsquare_mat():
     b = BilinearForm(trialspace=V, testspace=Q)
     b += div(u)*q*dx
     b.Assemble()
-    Matrix(b.mat, (Q.FreeDofs(), V.FreeDofs()))
+    Matrix(b.mat, (Q, V))
 
 if __name__ == '__main__':
     test_poisson_mat()

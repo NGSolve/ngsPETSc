@@ -98,7 +98,6 @@ class EigenSolver():
                     self.eps.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
                 self.pencilMats[0].scale(-1)
                 self.eps.setOperators(self.pencilMats[1], self.pencilMats[0])
-           
             self.eps.setDimensions(self.nev, self.ncv)
             self.eps.setOptionsPrefix(self.optionsPrefix)
             self.eps.setFromOptions()

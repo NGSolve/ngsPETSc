@@ -48,6 +48,7 @@ def test_eps_ghepi_eigvals():
 def test_eps_ghep_eigfuncs():
     '''
     Testing the mapping PETSc KSP using MUMPS
+    This test DOES NOT work in parallel
     '''
     try:
         from slepc4py import SLEPc
@@ -76,3 +77,6 @@ def test_eps_ghep_eigfuncs():
     point = mesh(pi/2, pi/2)
     eigenMode = (1/eigenMode(point))*eigenMode
     assert sqrt(Integrate((eigenMode-exactEigenMode)**2, mesh))<1e-4
+
+if __name__ == '__main__':
+    test_eps_ghepi_eigvals()

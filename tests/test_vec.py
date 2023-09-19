@@ -35,7 +35,7 @@ def test_vec_map_petsc_ngs():
     fes = H1(mesh, order=1, dirichlet="left|right|top|bottom")
     u,v = fes.TnT()
     m = BilinearForm(u*v*dx).Assemble()
-    M = Matrix(m.mat, fes.FreeDofs())
+    M = Matrix(m.mat, fes)
     petscVec = M.mat.createVecLeft()
     Map = VectorMapping(fes)
     Map.ngsVec(petscVec)
