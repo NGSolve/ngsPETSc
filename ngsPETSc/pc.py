@@ -32,7 +32,7 @@ class PETScPreconditioner(BaseMatrix):
         else:
             dofs = None
         self.vecMap = VectorMapping((dofs,freeDofs,{"bsize":self.ngsMat.local_mat.entrysizes}))
-        petscMat = Matrix(self.ngsMat, freeDofs, matType).mat
+        petscMat = Matrix(self.ngsMat, (dofs, freeDofs, None), matType).mat
         self.petscPreconditioner = PETSc.PC().create(comm=petscMat.getComm())
         self.petscPreconditioner.setOperators(petscMat)
         if hasattr(solverParameters, "ToDict"):

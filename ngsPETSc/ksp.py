@@ -46,12 +46,12 @@ class KrylovSolver():
                 options_object[optName] = optValue
 
 	#Creating the PETSc Matrix
-        A = Matrix(Amat, fes.FreeDofs()).mat
+        A = Matrix(Amat, fes).mat
         A.setOptionsPrefix(optionsPrefix)
         A.setFromOptions()
         P = A
         if Pmat is not None:
-            P = Matrix(Pmat, fes.FreeDofs()).mat
+            P = Matrix(Pmat, fes).mat
             P.setOptionsPrefix(optionsPrefix)
             P.setFromOptions()
 

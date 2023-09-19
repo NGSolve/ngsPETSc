@@ -35,7 +35,7 @@ class VectorMapping:
         bsize = dofs.entrysize
         locfree = np.flatnonzero(freeDofs).astype(PETSc.IntType)
         isetlocfree = PETSc.IS().createBlock(indices=locfree,
-                                             bsize=bsize, comm=comm)
+                                             bsize=bsize, comm=PETSc.COMM_SELF)
         nloc = len(freeDofs)
 
         nglob = len(locfree)
@@ -92,9 +92,8 @@ class VectorMapping:
         if ngsVec is None:
             ngsVec = la.CreateParallelVector(self.dofs,la.PARALLEL_STATUS.CUMULATED)
         ngsVec[:] = 0
-        petscVec.copy(self.pVec)
         self.sVec.placeArray(ngsVec.FV().NumPy())
-        self.ngsToPETScScat.scatter(self.pVec, self.sVec, addv=PETSc.InsertMode.INSERT,
+        self.ngsToPETScScat.scatter(petscVec, self.sVec, addv=PETSc.InsertMode.INSERT,
                                     mode=PETSc.ScatterMode.REVERSE)
         self.sVec.resetArray()
         return ngsVec

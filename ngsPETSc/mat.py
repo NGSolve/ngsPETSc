@@ -4,6 +4,7 @@ PETSc matrices using the petsc4py interface.
 '''
 import numpy as np
 
+from ngsolve import FESpace
 from petsc4py import PETSc
 
 class Matrix(object):
@@ -18,17 +19,45 @@ class Matrix(object):
     MKL sparse: aijmkl or CUDA: aijcusparse
 
     '''
-    def __init__(self, ngsMat, freeDofs=None, matType="aij"):
-        if not isinstance(freeDofs, (tuple, list)):
+    def __init__(self, ngsMat, parDescr, matType="aij"):
+        if not isinstance(parDescr, (tuple, list)):
             samerc = True
-            self.freeDofs = (freeDofs, freeDofs)
+            if isinstance(parDescr, FESpace):
+                dofs = parDescr.ParallelDofs()
+                self.freeDofs = (parDescr.FreeDofs(),parDescr.FreeDofs())
+                comm = dofs.comm.mpi4py
+            else:
+                dofs, freeDofs, dofsInfo = parDescr
+                self.freeDofs = (freeDofs,freeDofs)
+                if dofs is not None:
+                    comm = dofs.comm.mpi4py
+                else:
+                    ### create suitable dofs
+                    comm = PETSc.COMM_SELF
+                    dofs = type('', (object,), {'entrysize':dofsInfo["bsize"][0]})()
         else:
             samerc = False
-            self.freeDofs = freeDofs
-        if hasattr(ngsMat, 'row_paradofs'):
-            comm = ngsMat.paradofs.comm.mpi4py
-        else:
-            comm = PETSc.COMM_WORLD
+            if isinstance(parDescr[0], FESpace) and isinstance(parDescr[1], FESpace):
+                dofs = parDescr[0].ParallelDofs()
+                self.freeDofs = (parDescr[0].FreeDofs(),parDescr[1].FreeDofs())
+                comm = dofs.comm.mpi4py
+            elif isinstance(parDescr[0], (tuple, list)):
+                dofs = parDescr[0][0]
+                self.freeDofs = (parDescr[0][1], parDescr[1][1])
+                if dofs is not None:
+                    comm = dofs.comm.mpi4py
+                else:
+                    ### create suitable dofs
+                    comm = PETSc.COMM_SELF
+            else:
+                samerc = True
+                dofs = parDescr[0]
+                self.freeDofs = (parDescr[1], parDescr[1])
+                if dofs is not None:
+                    comm = dofs.comm.mpi4py
+                else:
+                    ### create suitable dofs
+                    comm = PETSc.COMM_SELF
 
         localMat = ngsMat.local_mat
         entryHeight, entryWidth = localMat.entrysizes

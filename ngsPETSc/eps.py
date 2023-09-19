@@ -58,7 +58,7 @@ class EigenSolver():
             self.pencilFlags = []
             for a in pencil:
                 self.pencilFlags += [a.flags.ToDict()]
-                self.pencilMats += [Matrix(a.Assemble().mat, fes.FreeDofs()).mat]
+                self.pencilMats += [Matrix(a.Assemble().mat, fes).mat]
                 self.pencilMats[-1].setOptionsPrefix(self.optionsPrefix)
                 self.pencilMats[-1].setFromOptions()
             self.eps = None
@@ -98,7 +98,7 @@ class EigenSolver():
                     self.eps.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
                 self.pencilMats[0].scale(-1)
                 self.eps.setOperators(self.pencilMats[1], self.pencilMats[0])
-
+           
             self.eps.setDimensions(self.nev, self.ncv)
             self.eps.setOptionsPrefix(self.optionsPrefix)
             self.eps.setFromOptions()
