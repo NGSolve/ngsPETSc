@@ -19,7 +19,7 @@ class Matrix(object):
     MKL sparse: aijmkl or CUDA: aijcusparse
 
     '''
-    def __init__(self, ngsMat, parDescr, matType="aij"):
+    def __init__(self, ngsMat, parDescr, matType="aij", petscMat=None):
         if not isinstance(parDescr, (tuple, list)):
             samerc = True
             if isinstance(parDescr, FESpace):
@@ -113,23 +113,26 @@ class Matrix(object):
             else:
                 clocalGlobalMap = rlocalGlobalMap
                 cnumberGlobal = rnumberGlobal
-
-            mat = PETSc.Mat().create(comm=comm)
-            mat.setSizes(size=(rnumberGlobal*entryHeight,
-                               cnumberGlobal*entryHeight), bsize=entryHeight)
-            mat.setType(PETSc.Mat.Type.IS)
-            mat.setLGMap(rlocalGlobalMap, clocalGlobalMap)
-            mat.setISLocalMat(petscLocalMat)
-            mat.assemble()
+            if petscMat is None:
+                petscMat = PETSc.Mat().create(comm=comm)
+                petscMat.setSizes(size=(rnumberGlobal*entryHeight,
+                                cnumberGlobal*entryHeight), bsize=entryHeight)
+                petscMat.setType(PETSc.Mat.Type.IS)
+            else:
+                petscMat.convert(PETSc.Mat.Type.IS)
+            petscMat.setLGMap(rlocalGlobalMap, clocalGlobalMap)
+            petscMat.setISLocalMat(petscLocalMat)
+            petscMat.assemble()
             if matType != 'is':
-                mat.convert(matType)
-            self.mat = mat
+                petscMat.convert(matType)
+            self.mat = petscMat
         else:
-            mat = petscLocalMat
-            mat.convert(matType)
+            if petscMat is None:
+                petscMat = petscLocalMat
+            petscMat.convert(matType)
             if matType != 'is':
-                mat.convert(matType)
-            self.mat = mat
+                petscMat.convert(matType)
+            self.mat = petscMat
 
     def view(self):
         '''
