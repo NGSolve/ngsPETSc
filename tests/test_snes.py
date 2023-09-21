@@ -23,7 +23,7 @@ def test_snes():
     a = BilinearForm(fes)
     a += (grad(u) * grad(v) + 1/3*u**3*v- 10 * v)*dx
     
-    solver = NonLinearSolver(fes, a=a, solverParameters={"snes_type": "qn", "snes_monitor": ""})
+    solver = NonLinearSolver(fes, a=a, solverParameters={"snes_type": "newtonls", "snes_monitor": ""})
     gfu0 = GridFunction(fes)
     gfu0.Set((x*(1-x))**4*(y*(1-y))**4) # initial guess
     solver.solve(gfu0)

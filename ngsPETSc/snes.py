@@ -7,7 +7,7 @@ from petsc4py import PETSc
 
 from ngsolve import GridFunction
 
-from ngsPETSc import VectorMapping
+from ngsPETSc import VectorMapping, Matrix
 
 
 class NonLinearSolver:
@@ -37,7 +37,10 @@ class NonLinearSolver:
         elif residual is not None: self.residual = residual
         
         if a is not None:
-            pass
+            def jacobian(x):
+                a.AssembleLinearization(x.vec)
+                return a.mat
+            self.jacobian = jacobian
         elif jacobian is not None: self.jacobian = jacobian
     def setup(self, x0):
         ngsGridFucntion = GridFunction(self.fes)
@@ -63,8 +66,11 @@ class NonLinearSolver:
     
     def petscJacobian(self,snes,x,J,P):
         ngsGridFuction = GridFunction(self.fes)
-        ngsGridFuction.vec = self.vectorMapping.ngsVec(x)
-    
-    def jacobian(self,x):
+        self.vectorMapping.ngsVec(x, ngsVec=ngsGridFuction.vec)
+        mat = self.jacobian(ngsGridFuction)
+        Matrix(mat,self.fes, petscMat=P)
+        Matrix(mat,self.fes, petscMat=J)
+
+    def jacobian(x):
         raise NotImplementedError("No Jacobian has been implemented yet.")
         return x
