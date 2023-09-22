@@ -1,8 +1,6 @@
 '''
 This module contains all the functions related to the PETSc SNES
 '''
-import numpy as np
-
 from petsc4py import PETSc
 
 from ngsolve import GridFunction
@@ -14,8 +12,20 @@ class NonLinearSolver:
     '''
     This class creates a PETSc Krylov Solver (SNES) from a callback to
     a NGSolve residual vector
+
+    :arg fes: the finite element space over which the non-linear problem
+              is defined
+
+    :arg a: the variational form reppresenting the non-linear problem
+
+    :arg residual: callback to the residual for the non-linear solver,
+                   this fuction is used only if the argument a is None.
+
+    :arg jacobian: callback to the Jacobian for the non-linear solver,
+                   this fuction is used only if the argument a is None.
     '''
-    def __init__(self, fes, a=None, residual=None, jacobian=None, solverParameters=None, optionsPrefix=None):
+    def __init__(self, fes, a=None, residual=None, jacobian=None,
+                 solverParameters=None, optionsPrefix=None):
         self.fes = fes
         dofs = fes.ParallelDofs()
         self.snes = PETSc.SNES().create(comm=dofs.comm.mpi4py)
@@ -27,50 +37,97 @@ class NonLinearSolver:
         self.snes.setOptionsPrefix(optionsPrefix)
         self.snes.setFromOptions()
         #Setting up utility for mappings
-        self.vectorMapping = VectorMapping(self.fes)   
+        self.vectorMapping = VectorMapping(self.fes)
         if a is not None:
-            def residual(x):
+            def residual(x):  #pylint: disable=E0102, E0213
                 res = GridFunction(fes)
                 a.Apply(x.vec, res.vec)
                 return res
             self.residual = residual
         elif residual is not None: self.residual = residual
-        
         if a is not None:
-            def jacobian(x):
+            def jacobian(x): #pylint: disable=E0102,E0213
                 a.AssembleLinearization(x.vec)
                 return a.mat
             self.jacobian = jacobian
         elif jacobian is not None: self.jacobian = jacobian
     def setup(self, x0):
+        '''
+        This is method is used to setup the PETSc SNES object
+
+        :arg x0: NGSolve grid function reppresenting the initial guess
+        '''
         ngsGridFucntion = GridFunction(self.fes)
         pVec = self.vectorMapping.petscVec(ngsGridFucntion.vec)
         self.snes.setFunction(self.petscResidual, pVec)
-        self.snes.view()
         self.pvec0 = self.vectorMapping.petscVec(x0.vec)
     def solve(self, x0):
+        '''
+        This is method solves the non-linear problem
+
+        :arg x0: NGSolve grid function reppresenting the initial guess
+        '''
         self.setup(x0)
         self.snes.solve(None,self.pvec0)
         self.solutionGridFucntion = GridFunction(self.fes)
         self.vectorMapping.ngsVec(self.pvec0,ngsVec=self.solutionGridFucntion.vec)
         return self.solutionGridFucntion
     def petscResidual(self,snes,x,f):
+        '''
+        This is method is used to wrap the callback to the resiudal in
+        a PETSc compatible way
+
+        :arg snes: PETSc SNES object reppresenting the non-linear solver
+        
+        :arg x: current guess of the solution as a PETSc Vec
+
+        :arg f: residual function as PETSc Vec
+        '''
+        
+        assert isinstance(snes,PETSc.SNES)
         ngsGridFuction = GridFunction(self.fes)
         self.vectorMapping.ngsVec(x,ngsVec=ngsGridFuction.vec)
         ngsGridFuction = self.residual(ngsGridFuction)
         self.vectorMapping.petscVec(ngsGridFuction.vec, petscVec=f)
+
+    def residual(x): #pylint: disable=E0102,E0213,E0202
+        '''
+        Callback to the residual of the non-linear problem
         
-    def residual(x):
+        :arg x: current guess of the solution as a PETSc Vec
+
+        :return: the residual as an NGSolve grid function
+        '''
+        
         raise NotImplementedError("No residual has been implemented yet.")
-        return x
-    
+
     def petscJacobian(self,snes,x,J,P):
+        '''
+        This is method is used to wrap the callback to the Jacobian in
+        a PETSc compatible way
+
+        :arg snes: PETSc SNES object reppresenting the non-linear solver
+        
+        :arg x: current guess of the solution as a PETSc Vec
+
+        :arg J: Jacobian computed at x as a PETSc Mat
+
+        :arg P: preconditioner for the Jacobian computed at x
+                as a PETSc Mat
+        '''
+        assert isinstance(snes,PETSc.SNES)
         ngsGridFuction = GridFunction(self.fes)
         self.vectorMapping.ngsVec(x, ngsVec=ngsGridFuction.vec)
         mat = self.jacobian(ngsGridFuction)
         Matrix(mat,self.fes, petscMat=P)
         Matrix(mat,self.fes, petscMat=J)
 
-    def jacobian(x):
+    def jacobian(x): #pylint: disable=E0102,E0213,E0202
+        '''
+        Callback to the Jacobian of the non-linear problem
+        
+        :arg x: current guess of the solution as a PETSc Vec
+
+        :return: the Jacobian as an NGSolve matrix
+        '''
         raise NotImplementedError("No Jacobian has been implemented yet.")
-        return x

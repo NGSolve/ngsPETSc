@@ -19,6 +19,7 @@ jobs:
       - name: Check formatting
         run: |
           make lint
+          make lint_test
 
       - name: Run test suite in serial
         run: |

@@ -8,6 +8,7 @@ from petsc4py import PETSc
 
 from ngsolve import la, FESpace
 
+
 class VectorMapping:
     '''
     This class creates a mapping between a PETSc vector and NGSolve
