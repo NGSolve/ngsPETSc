@@ -83,7 +83,6 @@ class NonLinearSolver:
 
         :arg f: residual function as PETSc Vec
         '''
-        
         assert isinstance(snes,PETSc.SNES)
         ngsGridFuction = GridFunction(self.fes)
         self.vectorMapping.ngsVec(x,ngsVec=ngsGridFuction.vec)
@@ -98,7 +97,6 @@ class NonLinearSolver:
 
         :return: the residual as an NGSolve grid function
         '''
-        
         raise NotImplementedError("No residual has been implemented yet.")
 
     def petscJacobian(self,snes,x,J,P):
