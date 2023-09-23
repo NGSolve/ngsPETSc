@@ -117,8 +117,8 @@ class NonLinearSolver:
         ngsGridFuction = GridFunction(self.fes)
         self.vectorMapping.ngsVec(x, ngsVec=ngsGridFuction.vec)
         mat = self.jacobian(ngsGridFuction)
-        Matrix(mat,self.fes, petscMat=P)
-        Matrix(mat,self.fes, petscMat=J)
+        Matrix(mat,self.fes, petscMat=P, matType="is")
+        Matrix(mat,self.fes, petscMat=J, matType="is")
 
     def jacobian(x): #pylint: disable=E0102,E0213,E0202
         '''

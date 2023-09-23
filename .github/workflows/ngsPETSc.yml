@@ -23,8 +23,22 @@ jobs:
 
       - name: Run test suite in serial
         run: |
-          pytest -v tests/
+          pytest -v tests/test_env.py
+          pytest -v tests/test_vec.py
+          pytest -v tests/test_mat.py
+          pytest -v tests/test_plex.py
+          pytest -v tests/test_ksp.py
+          pytest -v tests/test_pc.py
+          pytest -v tests/test_eps.py
+          pytest -v tests/test_snes.py
 
       - name: Run test suite in parallel
         run: |
-          mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/
+          mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_env.py
+          mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_vec.py
+          mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_mat.py
+          mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_plex.py
+          mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_ksp.py
+          mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_pc.py
+          mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_eps.py
+          mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_snes.py
