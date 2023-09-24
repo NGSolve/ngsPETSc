@@ -3,7 +3,7 @@ name: ngsPETSc
 on: push
 
 jobs:
-  test:
+  ngsolve tests:
     runs-on: ubuntu-latest
     container: urzerbinati/ngspetsc:latest
     timeout-minutes: 20

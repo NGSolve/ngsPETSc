@@ -9,6 +9,8 @@ import netgen.meshing as ngm
 
 from mpi4py.MPI import COMM_WORLD
 
+import pytest
+
 from ngsPETSc import NonLinearSolver
 
 def test_snes_toy_newtonls():
@@ -49,9 +51,12 @@ def test_snes_toy_lbfgs():
     solver.solve(gfu0)
     assert solver.snes.getConvergedReason() in [4,3,2]
 
+@pytest.mark.mpi_skip()
 def test_snes_elastic_beam_newtonls():
     '''
     Testing ngsPETSc SNES wrap for NeoHook energy minimisation, using newtonls
+    This test run only in serial becasue variational energy as objective only works
+    in serial, please use objective=False in parallel. 
     '''
     from netgen.occ import Rectangle, OCCGeometry, X, Y
     if COMM_WORLD.rank == 0:
@@ -87,7 +92,7 @@ def test_snes_elastic_beam_newtonls():
     a = BilinearForm(fes, symmetric=True)
     a += Variation(NeoHook (C).Compile() * dx
                     -factor * (InnerProduct(force,u) ).Compile() * dx)
-    solver = NonLinearSolver(fes, a=a,
+    solver = NonLinearSolver(fes, a=a, objective=False,
                              solverParameters={"snes_type": "newtonls",
                                                "snes_max_it": 10,
                                                "snes_monitor": ""})
