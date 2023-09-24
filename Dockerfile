@@ -41,6 +41,7 @@ RUN cd ~/slepc \
     --with-slepc4py=1 \
     && make 
 #Building ngsolve
+#ENV LD_LIBRARY_PATH /root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib
 RUN mkdir -p ~/ngsuite \
            && cd ~/ngsuite \
            && git clone https://github.com/NGSolve/ngsolve.git ngsolve-src \
@@ -49,7 +50,7 @@ RUN mkdir -p ~/ngsuite \
            && mkdir ~/ngsuite/ngsolve-build \
            && mkdir ~/ngsuite/ngsolve-install \
            && cd ~/ngsuite/ngsolve-build \
-           && cmake -DCMAKE_INSTALL_PREFIX=~/ngsuite/ngsolve-install ~/ngsuite/ngsolve-src -DUSE_MPI=ON -DUSE_MPI4PY=ON -DUSE_OCC=ON -DBUILD_OCC=ON\
+           && cmake -DCMAKE_INSTALL_PREFIX=~/ngsuite/ngsolve-install ~/ngsuite/ngsolve-src -DUSE_MPI=ON -DUSE_MPI4PY=ON\
            && make && make install
 #Adding NGS to PYTHONPATH
 ENV PYTHONPATH /root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib:/root/ngsuite/ngsolve-install/lib/python3.10/site-packages
