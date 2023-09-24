@@ -6,7 +6,6 @@ ENV PETSC_DIR /root/petsc
 ENV PETSC_ARCH linux_debug
 ENV SLEPC_DIR /root/slepc
 ENV SLEPC_ARCH linux_debug
-ENV PYTHONPATH /root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib
 #Installing dependencies using aptitude
 RUN apt-get update \
     && apt-get -y install git libopenmpi-dev build-essential cmake python3 python3-distutils python3-tk libpython3-dev libxmu-dev tk-dev tcl-dev g++ libglu1-mesa-dev liblapacke-dev libblas-dev liblapack-dev
@@ -21,6 +20,7 @@ RUN cd ~/petsc \
     --with-openmpi=1 \
     --download-hypre \
     --download-metis \
+    --download-parmetis \
     --download-ml \
     --download-mumps \
     --download-scalapack \
@@ -41,7 +41,7 @@ RUN cd ~/slepc \
     --with-slepc4py=1 \
     && make 
 #Building ngsolve
-#ENV LD_LIBRARY_PATH /root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib
+ENV LD_LIBRARY_PATH /root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib
 RUN mkdir -p ~/ngsuite \
            && cd ~/ngsuite \
            && git clone https://github.com/NGSolve/ngsolve.git ngsolve-src \
@@ -50,7 +50,7 @@ RUN mkdir -p ~/ngsuite \
            && mkdir ~/ngsuite/ngsolve-build \
            && mkdir ~/ngsuite/ngsolve-install \
            && cd ~/ngsuite/ngsolve-build \
-           && cmake -DCMAKE_INSTALL_PREFIX=~/ngsuite/ngsolve-install ~/ngsuite/ngsolve-src -DUSE_MPI=ON -DUSE_MPI4PY=ON\
-           && make && make install
+           && LD_LIBRARY_PATH=/root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib cmake -DCMAKE_INSTALL_PREFIX=~/ngsuite/ngsolve-install ~/ngsuite/ngsolve-src -DUSE_MPI=ON -DUSE_MPI4PY=ON\
+           && LD_LIBRARY_PATH=/root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib make && LD_LIBRARY_PATH=/root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib make install
 #Adding NGS to PYTHONPATH
 ENV PYTHONPATH /root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib:/root/ngsuite/ngsolve-install/lib/python3.10/site-packages
