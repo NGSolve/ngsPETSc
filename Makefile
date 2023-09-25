@@ -25,3 +25,11 @@ test_mpi:
 doc:
 	rm docs/src/notebooks/*.rst
 	jupyter nbconvert --to rst docs/src/notebooks/*.ipynb
+
+push: lint lint_test test test_mpi
+	git gui
+	git push 
+
+pushf: lint lint_test test test_mpi
+	git gui
+	git push -f

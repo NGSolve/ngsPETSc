@@ -11,13 +11,13 @@ from ngsolve import Preconditioner, GridFunction, ConvertOperator
 from ngsolve import COUPLING_TYPE, Compress, IntRange
 from ngsolve.solvers import CG
 from ngsolve.krylovspace import CGSolver
-from ngsolve.la import EigenValues_Preconditioner
+from ngsolve.la import EigenValues_Preconditioner #pylint: disable=E0401
 import netgen.meshing as ngm
 
 from mpi4py.MPI import COMM_WORLD
 import pytest
 
-from ngsPETSc import pc 
+from ngsPETSc import pc
 
 def test_pc():
     '''
@@ -93,7 +93,7 @@ def test_pc_hiptmaier_xu_sor():
     pre = transform @ preH1.mat @ transform.T + smoother.mat
     CG(mat=aDG.mat, rhs=fDG.vec, sol=gfuDG.vec, pre=pre, printrates = True, maxsteps=200)
     lam = EigenValues_Preconditioner(aDG.mat, pre)
-    assert (lam.NumPy()<3.0).all()        
+    assert (lam.NumPy()<3.0).all()
 
 def test_pc_hiptmaier_xu_bjacobi():
     '''
@@ -138,19 +138,21 @@ def test_pc_hiptmaier_xu_bjacobi():
     pre = transform @ preH1.mat @ transform.T + smoother.mat
     CG(mat=aDG.mat, rhs=fDG.vec, sol=gfuDG.vec, pre=pre, printrates = True, maxsteps=200)
     lam = EigenValues_Preconditioner(aDG.mat, pre)
-    assert (lam.NumPy()<3.0).all()        
+    assert (lam.NumPy()<3.0).all()
 
 @pytest.mark.skip()
 def test_pc_auxiliary_mcs():
+    '''
+    Testing Hiptmaier Xu preconditioner for MCs
+    '''
     from netgen.occ import X, Rectangle, OCCGeometry
-
     shape = Rectangle(2,0.41).Circle(0.2,0.2,0.05).Reverse().Face()
     shape.edges.name="wall"
     shape.edges.Min(X).name="inlet"
     shape.edges.Max(X).name="outlet"
 
     mesh = OCCGeometry(shape, dim=2).GenerateMesh(maxh=0.1, comm=COMM_WORLD)
-    for l in range(3):
+    for _ in range(3):
         mesh.Refine()
     mesh = Mesh(mesh)
     mesh.Curve(3)
@@ -162,18 +164,16 @@ def test_pc_auxiliary_mcs():
     V = HDiv(mesh, order=order, dirichlet=inflow+"|"+wall, RT=False)
     Vhat = TangentialFacetFESpace(mesh, order=order-1, dirichlet=inflow+"|"+wall+"|"+outflow)
     Sigma = HCurlDiv(mesh, order = order-1, orderinner=order, discontinuous=True)
-    S = L2(mesh, order=order-1)            
+    S = L2(mesh, order=order-1)
 
     Sigma.SetCouplingType(IntRange(0,Sigma.ndof), COUPLING_TYPE.HIDDEN_DOF)
     Sigma = Compress(Sigma)
     S.SetCouplingType(IntRange(0,S.ndof), COUPLING_TYPE.HIDDEN_DOF)
     S = Compress(S)
-            
     X = V*Vhat*Sigma*S
     for i in range(X.ndof):
         if X.CouplingType(i) == COUPLING_TYPE.WIREBASKET_DOF:
             X.SetCouplingType(i, COUPLING_TYPE.INTERFACE_DOF)
-            
     u, uhat, sigma, W  = X.TrialFunction()
     v, vhat, tau, R  = X.TestFunction()
 
@@ -195,11 +195,10 @@ def test_pc_auxiliary_mcs():
 
     uin=CF( (1.5*4*y*(0.41-y)/(0.41*0.41), 0) )
     gf0 = GridFunction(X)
-    gfu0,_,_,_ = gf0.components                   
+    gfu0,_,_,_ = gf0.components
     gfu0.Set(uin, definedon=mesh.Boundaries(inflow))
     gf0.components[0].vec.data = gfu0.vec
     from ngsolve import Draw
-    import netgen.gui
     gf = GridFunction(X)
     gf.vec.data = gf0.vec
     Xaux = VectorH1(mesh, order=order, dirichlet=inflow+"|"+wall)
