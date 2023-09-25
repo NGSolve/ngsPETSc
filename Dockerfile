@@ -17,7 +17,7 @@ RUN cd ~ && wget https://github.com/Kitware/CMake/releases/download/v3.27.6/cmak
     && make -j 2 \
     && make install
 #Installing python dependencies using pip
-RUN pip install numpy cython mpi4py pytest pytest-mpi
+RUN pip install numpy scipy cython mpi4py pytest pytest-mpi
 #Configure PETSc
 RUN cd ~ && git clone https://gitlab.com/petsc/petsc.git
 RUN cd ~/petsc \
