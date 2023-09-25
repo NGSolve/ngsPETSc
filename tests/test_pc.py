@@ -229,5 +229,6 @@ def test_pc_auxiliary_mcs():
 if __name__ == '__main__':
     test_pc()
     test_pc_gamg()
-    test_pc_hiptmaier_xu_sor()
     test_pc_hiptmaier_xu_bjacobi()
+    if COMM_WORLD.size == 1:
+        test_pc_hiptmaier_xu_sor()

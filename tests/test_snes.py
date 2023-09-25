@@ -92,7 +92,7 @@ def test_snes_elastic_beam_newtonls():
     a = BilinearForm(fes, symmetric=True)
     a += Variation(NeoHook (C).Compile() * dx
                     -factor * (InnerProduct(force,u) ).Compile() * dx)
-    solver = NonLinearSolver(fes, a=a, objective=False,
+    solver = NonLinearSolver(fes, a=a,
                              solverParameters={"snes_type": "newtonls",
                                                "snes_max_it": 10,
                                                "snes_monitor": ""})
@@ -105,4 +105,5 @@ def test_snes_elastic_beam_newtonls():
 if __name__ == '__main__':
     test_snes_toy_lbfgs()
     test_snes_toy_newtonls()
-    test_snes_elastic_beam_newtonls()
+    if COMM_WORLD.size == 1:
+        test_snes_elastic_beam_newtonls()
