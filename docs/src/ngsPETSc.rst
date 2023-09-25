@@ -27,6 +27,7 @@ We now install PETSc from scratch in a home installation folder, with OpenMPI, H
     --download-openmpi \
     --download-hypre \
     --download-metis \
+    --download-parmetis \
     --download-ml \
     --download-mumps \
     --download-scalapack \
