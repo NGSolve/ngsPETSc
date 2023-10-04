@@ -58,16 +58,13 @@ def test_snes_elastic_beam_newtonls():
     This test run only in serial becasue variational energy as objective only works
     in serial, please use objective=False in parallel. 
     '''
-    from netgen.occ import Rectangle, OCCGeometry, X, Y
+    from netgen.geom2d import SplineGeometry
     if COMM_WORLD.rank == 0:
-        shape = Rectangle(1,0.1).Face()
-        shape.edges.Min(X).name="left"
-        shape.edges.Min(X).maxh=0.01
-        shape.edges.Max(X).name="right"
-        shape.edges.Min(Y).name="bot"
-        shape.edges.Max(Y).name="top"
-        geom = OCCGeometry(shape, dim=2)
-        mesh = Mesh(geom.GenerateMesh(maxh=0.05).Distribute(COMM_WORLD))
+        geo = SplineGeometry()
+        pnums = [ geo.AddPoint (x,y,maxh=0.01) for x,y in [(0,0), (1,0), (1,0.1), (0,0.1)] ]
+        for p1,p2,bc in [(0,1,"bot"), (1,2,"right"), (2,3,"top"), (3,0,"left")]:
+            geo.Append(["line", pnums[p1], pnums[p2]], bc=bc)
+        mesh = Mesh(geo.GenerateMesh(maxh=0.05).Distribute(COMM_WORLD))
     else:
         mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
     # E module and poisson number:

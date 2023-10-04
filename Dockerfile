@@ -9,6 +9,8 @@ ENV SLEPC_ARCH linux_debug
 #Installing dependencies using aptitude
 RUN apt-get update \
     && apt-get -y install git libopenmpi-dev build-essential cmake wget libssl-dev python3 python3-distutils python3-tk libpython3-dev libxmu-dev tk-dev tcl-dev g++ libglu1-mesa-dev liblapacke-dev libblas-dev liblapack-dev
+#RUN apt-get update \
+#    && apt-get -y install libocct-data-exchange-dev libocct-draw-dev occt-misc
 #Building cmake
 RUN cd ~ && wget https://github.com/Kitware/CMake/releases/download/v3.27.6/cmake-3.27.6.tar.gz \
     && tar -zxvf cmake-3.27.6.tar.gz \
@@ -57,7 +59,7 @@ RUN mkdir -p ~/ngsuite \
            && mkdir ~/ngsuite/ngsolve-build \
            && mkdir ~/ngsuite/ngsolve-install \
            && cd ~/ngsuite/ngsolve-build \
-           && cmake -DCMAKE_INSTALL_PREFIX=~/ngsuite/ngsolve-install ~/ngsuite/ngsolve-src -DUSE_MPI=ON -DBUILD_OCC=ON\
+           && cmake -DCMAKE_INSTALL_PREFIX=~/ngsuite/ngsolve-install ~/ngsuite/ngsolve-src -DUSE_MPI=ON -DUSE_OCC=OFF \
            && make && make install
 #Adding NGS to PYTHONPATH
 ENV PYTHONPATH /root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib:/root/ngsuite/ngsolve-install/lib/python3.10/site-packages
