@@ -26,7 +26,8 @@ def test_snes_toy_newtonls():
     a = BilinearForm(fes)
     a += (grad(u) * grad(v) + 1/3*u**3*v- 10 * v)*dx
     solver = NonLinearSolver(fes, a=a, objective=False,
-                             solverParameters={"snes_type": "newtonls", "snes_monitor": "", "pc_type": "lu"})
+                             solverParameters={"snes_type": "newtonls", "snes_monitor": "",
+                                               "pc_type": "none"})
     gfu0 = GridFunction(fes)
     gfu0.Set((x*(1-x))**4*(y*(1-y))**4) # initial guess
     solver.solve(gfu0)
@@ -45,7 +46,8 @@ def test_snes_toy_lbfgs():
     a = BilinearForm(fes)
     a += (grad(u) * grad(v) + 1/3*u**3*v- 10 * v)*dx
     solver = NonLinearSolver(fes, a=a, objective=False,
-                             solverParameters={"snes_type": "qn", "snes_monitor": "", "pc_type": "lu"})
+                             solverParameters={"snes_type": "qn", "snes_monitor": "",
+                                               "pc_type": "lu"})
     gfu0 = GridFunction(fes)
     gfu0.Set((x*(1-x))**4*(y*(1-y))**4) # initial guess
     solver.solve(gfu0)
