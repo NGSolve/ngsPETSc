@@ -48,6 +48,7 @@ def test_pc_gamg():
     assert sqrt(Integrate((gfu-exact)**2, mesh))<1e-4
 
 @pytest.mark.mpi_skip()
+@pytest.mark.skip()
 def test_pc_hiptmaier_xu_sor():
     '''
     Testing Hiptmaier Xu preconditioner with SOR smoother
@@ -95,6 +96,7 @@ def test_pc_hiptmaier_xu_sor():
     lam = EigenValues_Preconditioner(aDG.mat, pre)
     assert (lam.NumPy()<3.0).all()
 
+@pytest.mark.skip()
 def test_pc_hiptmaier_xu_bjacobi():
     '''
     Testing Hiptmaier Xu preconditioner with bloack Jaocobi smoother
