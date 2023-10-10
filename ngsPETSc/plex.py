@@ -7,8 +7,15 @@ import numpy as np
 
 from petsc4py import PETSc
 
-import ngsolve as ngs
 import netgen.meshing as ngm
+try:
+    import ngsolve as ngs
+except ImportError:
+    class ngs:
+        "dummy class"
+        class comp:
+            "dummy class"
+            Mesh = type(None)
 
 from mpi4py import MPI
 
