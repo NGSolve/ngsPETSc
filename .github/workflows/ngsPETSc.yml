@@ -1,6 +1,8 @@
 # .github/workflows/app.yaml
 name: ngsPETSc
 on: push
+    schedule:
+    - cron:  '30 10 7,14,21,28 * *'
 
 jobs:
   ngsolve_tests:
