@@ -37,7 +37,7 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    packages=['ngsPETSc'],
+    packages=["ngsPETSc", "ngsPETSc.utils"],
     python_requires = ">=3.10",
     install_requires=install_requires
 
