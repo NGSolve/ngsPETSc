@@ -1,5 +1,7 @@
 '''
 This module contains all the functions related to wrapping NGSolve meshes to Firedrake
+We adopt the same docstring conventiona as the Firedrake project, since this part of
+the package will only be used in combination with Firedrake.
 '''
 try:
     import firedrake as fd

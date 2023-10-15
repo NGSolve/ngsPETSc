@@ -4,6 +4,7 @@ ngsPETSc is a NGSolve/Netgen interface to PETSc
 import warnings
 from ngsPETSc.plex import *
 from ngsPETSc.utils.firedrake import *
+from ngsPETSc.utils.fenicsx import *
 try:
     import ngsolve
 except ImportError:
