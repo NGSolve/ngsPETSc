@@ -3,10 +3,12 @@ This module contains all the functions related to wrapping NGSolve meshes to Fir
 '''
 try:
     import firedrake as fd
+    import firedrake.mg as mg
     import ufl
 except ImportError:
     fd = None
     ufl = None
+    mg = None
 
 import warnings
 import numpy as np
@@ -33,28 +35,7 @@ def refineMarkedElements(self, mark):
     :arg mark: the marking function which is a Firedrake DG0 function.
 
     '''
-    if self.geometric_dimension() == 2:
-        with mark.dat.vec as marked:
-            marked0 = marked
-            getIdx = self._cell_numbering.getOffset
-            if self.sfBCInv is not None:
-                getIdx = lambda x: x
-                _, marked0 = self.topology_dm.distributeField(self.sfBCInv,
-                                                              self._cell_numbering,
-                                                              marked)
-            if self.comm.Get_rank() == 0:
-                mark = marked0.getArray()
-                for i, el in enumerate(self.netgen_mesh.Elements2D()):
-                    if mark[getIdx(i)]:
-                        el.refine = True
-                    else:
-                        el.refine = False
-                self.netgen_mesh.Refine(adaptive=True)
-                return fd.Mesh(self.netgen_mesh)
-            return fd.Mesh(netgen.libngpy._meshing.Mesh(2))
-    else:
-        raise NotImplementedError("No implementation for dimension other than 2.")
-
+    return NetgenHierarchy.refineMarkedElements(self, mark)[0]
 def curveField(self, order):
     '''
     This method returns a curved mesh as a Firedrake funciton.
@@ -186,3 +167,37 @@ class FiredrakeMesh:
         self.firedrakeMesh.comm = self.comm
         setattr(fd.MeshGeometry, "refine_marked_elements", refineMarkedElements)
         setattr(fd.MeshGeometry, "curve_field", curveField)
+
+
+class NetgenHierarchy(mg.HierarchyBase):
+    
+    def refineMarkedElements(fdMesh, mark):
+        '''
+        This method is used to refine a mesh based on a marking function
+        which is a Firedrake DG0 function.
+
+        :arg mark: the marking function which is a Firedrake DG0 function.
+
+        '''
+        
+        if fdMesh.geometric_dimension() == 2:
+            with mark.dat.vec as marked:
+                marked0 = marked
+                getIdx = fdMesh._cell_numbering.getOffset
+                if fdMesh.sfBCInv is not None:
+                    getIdx = lambda x: x
+                    _, marked0 = fdMesh.topology_dm.distributeField(fdMesh.sfBCInv,
+                                                                fdMesh._cell_numbering,
+                                                                marked)
+                if fdMesh.comm.Get_rank() == 0:
+                    mark = marked0.getArray()
+                    for i, el in enumerate(fdMesh.netgen_mesh.Elements2D()):
+                        if mark[getIdx(i)]:
+                            el.refine = True
+                        else:
+                            el.refine = False
+                    fdMesh.netgen_mesh.Refine(adaptive=True)
+                    return fd.Mesh(fdMesh.netgen_mesh)
+                return (fd.Mesh(netgen.libngpy._meshing.Mesh(2)),0)
+        else:
+            raise NotImplementedError("No implementation for dimension other than 2.")
