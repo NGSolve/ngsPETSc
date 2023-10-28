@@ -1,13 +1,19 @@
+'''
+This module test the utils.fenicsx class
+'''
 import pytest
 
 def test_square_netgen():
+    '''
+    Testing FEniCSx interface with Netgen generating a square mesh
+    '''
+    from mpi4py import MPI
+    import ngsPETSc.utils.fenicsx as fx
+    from dolfinx.io import XDMFFile
     try:
-        from mpi4py import MPI
-        import ngsPETSc.utils.fenicsx as fx
-        from dolfinx.io import XDMFFile
+        pass
     except ImportError:
         pytest.skip(msg="DOLFINx unavailable, skipping FENICSx test")
-    import numpy as np
 
     from netgen.geom2d import SplineGeometry
     geo = SplineGeometry()

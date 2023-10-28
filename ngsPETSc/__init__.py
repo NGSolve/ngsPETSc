@@ -2,14 +2,34 @@
 ngsPETSc is a NGSolve/Netgen interface to PETSc
 '''
 import warnings
+
 from ngsPETSc.plex import *
-from ngsPETSc.utils.firedrake import *
-from ngsPETSc.utils.fenicsx import *
+
+#Firedrake
+try:
+    import firedrake
+except ImportError:
+    firedrake = None
+
+if firedrake:
+    from ngsPETSc.utils.firedrake import *
+
+#FEniCSx
+try:
+    import dolfinx
+except ImportError:
+    dolfinx = None
+
+if dolfinx:
+    from ngsPETSc.utils.fenicsx import *
+
+#Netgen
 try:
     import ngsolve
 except ImportError:
     warnings.warn("No NGSolve installed, only working with Netgen.")
     ngsolve = None
+
 if ngsolve:
     from ngsPETSc.mat import *
     from ngsPETSc.vec import *
@@ -18,6 +38,6 @@ if ngsolve:
     from ngsPETSc.eps import *
     from ngsPETSc.snes import *
 
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 
 __all__ = ["Matrix","VectorMapping","MeshMapping","KrylovSolver","EigenSolver","FiredrakeMesh"]

@@ -3,20 +3,9 @@ This module contains all the functions related to wrapping NGSolve meshes to FEn
 We adopt the same docstring conventiona as the FEniCSx project, since this part of
 the package will only be used in combination with FEniCSx.
 '''
-try:
-    import dolfinx
-    import basix
-    import ufl
-except ImportError:
-    dolfinx = None
-    basix = None
-    ufl = None
-
-import typing 
+import typing
+import dolfinx
 import numpy as np
-
-import netgen as ng
-import netgen.meshing as ngm
 
 from mpi4py import MPI as _MPI
 
@@ -33,15 +22,16 @@ class GeometricModel:
             comm: The MPI communicator to use for mesh creation
     """
     def __init__(self,geo, comm: _MPI.Comm):
-            self.geo = geo
-            self.comm = comm
-    
+        self.geo = geo
+        self.comm = comm
+
     def model_to_mesh(self, hmax: float, gdim: int = 2,
-                        partitioner: typing.Callable[
-            [_MPI.Comm, int, int, dolfinx.cpp.graph.AdjacencyList_int32], dolfinx.cpp.graph.AdjacencyList_int32] =
-            dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.none), transform: typing.Any = None,
-            routine: typing.Any = None) -> typing.Tuple[dolfinx.mesh.Mesh, dolfinx.cpp.mesh.MeshTags_int32,
-            dolfinx.cpp.mesh.MeshTags_int32]:
+        partitioner: typing.Callable[
+        [_MPI.Comm, int, int, dolfinx.cpp.graph.AdjacencyList_int32],
+        dolfinx.cpp.graph.AdjacencyList_int32] =
+        dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.none),
+        transform: typing.Any = None, routine: typing.Any = None) -> typing.Tuple[dolfinx.mesh.Mesh,
+        dolfinx.cpp.mesh.MeshTags_int32,dolfinx.cpp.mesh.MeshTags_int32]:
         """Given a NetGen model, take all physical entities of the highest
         topological dimension and create the corresponding DOLFINx mesh.
         
@@ -65,10 +55,10 @@ class GeometricModel:
         ngmesh = self.geo.GenerateMesh(maxh=hmax)
         # Apply any ngs routine post meshing
         if routine is not None:
-            ngmesh, geo = routine(ngmesh, geo)
+            ngmesh, self.geo = routine(ngmesh, self.geo)
         # Applying any PETSc Transform
         if transform is not None:
-            meshMap = MeshMapping(ngmesh) 
+            meshMap = MeshMapping(ngmesh)
             transform.setDM(meshMap.plex)
             transform.setUp()
             newplex = transform.apply(meshMap.plex)
@@ -84,8 +74,8 @@ class GeometricModel:
             T = ngmesh.Elements3D().NumPy()["nodes"]
             T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
         ufl_domain = dolfinx.io.gmshio.ufl_mesh(_ngs_to_cells[(gdim,T.shape[1])],gdim)
-        cell_perm = dolfinx.cpp.io.perm_gmsh(dolfinx.cpp.mesh.to_type(str(ufl_domain.ufl_cell())), T.shape[1])
+        cell_perm = dolfinx.cpp.io.perm_gmsh(dolfinx.cpp.mesh.to_type(str(ufl_domain.ufl_cell())),
+                                             T.shape[1])
         T = T[:, cell_perm]
         mesh = dolfinx.mesh.create_mesh(self.comm, T, V, ufl_domain, partitioner)
         return mesh
-
