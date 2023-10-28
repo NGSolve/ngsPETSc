@@ -74,3 +74,44 @@ jobs:
       - name: Run test suite in serial
         run: |
           pytest -v tests/test_fenicsx.py
+
+  firedrake:
+    runs-on: ubuntu-latest
+    container:
+      image: firedrakeproject/firedrake:latest
+    strategy:
+      # Don't immediately kill real if complex fails and vice versa.
+      fail-fast: false
+      matrix:
+        include:
+          - scalar-type: real
+            complex: ""
+            petsc_arch: default
+          - scalar-type: complex
+            complex: --complex
+            petsc_arch: complex
+    env:
+      # PETSC_DIR and MPICH_DIR are set inside the docker image
+      FIREDRAKE_CI_TESTS: 1
+      PETSC_ARCH: ${{ matrix.petsc_arch }}
+      OMP_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
+      COMPLEX: ${{ matrix.complex }}
+      RDMAV_FORK_SAFE: 1
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      - name: Install ngsPETSc
+        run: |
+          NGSPETSC_NO_INSTALL_REQUIRED=ON python -m pip install .
+
+      - name: Check formatting
+        run: |
+          make lint
+          make lint_test
+
+      - name: Run test suite in serial
+        run: |
+          pytest -v tests/test_firedrake.py
