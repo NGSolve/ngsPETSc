@@ -22,28 +22,8 @@ from mpi4py import MPI as _MPI
 
 from ngsPETSc import MeshMapping
 
-# Map from Netgen cell type (integer tuple) to DOLFINx cell type
-_ngs_to_cells = {(2,3): ("triangle", 1),
-                 (2,4): ("quadrilateral", 1),
-                 (3,4): ("tetrahedron", 1)}
-
-def ufl_mesh(ngs_cell: int, gdim: int) -> ufl.Mesh:
-    """Create a UFL mesh from a Netgen cell identifier and the geometric dimension.
-    Args:
-        ngs_cell: The netgen cell identifier
-        gdim: The geometric dimension of the mesh
-
-    Returns:
-        A ufl Mesh using Lagrange elements (equispaced) of the
-        corresponding DOLFINx cell
-    """
-    shape, degree = _ngs_to_cells[ngs_cell]
-    cell = ufl.Cell(shape, geometric_dimension=gdim)
-
-    element = basix.ufl.element(
-        basix.ElementFamily.P, cell.cellname(), degree, basix.LagrangeVariant.equispaced, shape=(gdim, ),
-        gdim=gdim)
-    return ufl.Mesh(element)
+# Map from Netgen cell type (integer tuple) to GMSH cell type
+_ngs_to_cells = {(2,3): 2, (2,4):3, (3,4): 4}
 
 class GeometricModel:
     """
@@ -103,7 +83,7 @@ class GeometricModel:
             V = ngmesh.Coordinates()
             T = ngmesh.Elements3D().NumPy()["nodes"]
             T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
-        ufl_domain = ufl_mesh((gdim,T.shape[1]),gdim)
+        ufl_domain = dolfinx.io.gmshio.ufl_mesh(_ngs_to_cells[(gdim,T.shape[1])],gdim)
         cell_perm = dolfinx.cpp.io.perm_gmsh(dolfinx.cpp.mesh.to_type(str(ufl_domain.ufl_cell())), T.shape[1])
         T = T[:, cell_perm]
         mesh = dolfinx.mesh.create_mesh(self.comm, T, V, ufl_domain, partitioner)
