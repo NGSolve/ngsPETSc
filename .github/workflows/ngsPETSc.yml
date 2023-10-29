@@ -1,5 +1,5 @@
 # .github/workflows/app.yaml
-name: ngsPETSc
+name: ngsPETSc tests
 on: 
     push:
       branches-ignore:    
@@ -9,10 +9,10 @@ on:
     - cron:  '30 10 7,14,21,28 * *'
 
 jobs:
-  ngsolve_tests:
+  ngsolve:
     runs-on: ubuntu-latest
     container: urzerbinati/ngspetsc:latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository code
@@ -48,3 +48,29 @@ jobs:
           mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_pc.py
           mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_eps.py
           mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_snes.py
+
+  fenicsx:
+    runs-on: ubuntu-latest
+    container: dolfinx/dolfinx:latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      - name: Install Netgen and ngsPETSc
+        run: |
+          pip3 install netgen-mesher \
+          && pip3 install pylint \
+          && export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.10/site-packages \
+          && echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV \
+          && NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
+
+      - name: Check formatting
+        run: |
+          make lint
+          make lint_test
+
+      - name: Run test suite in serial
+        run: |
+          pytest -v tests/test_fenicsx.py
