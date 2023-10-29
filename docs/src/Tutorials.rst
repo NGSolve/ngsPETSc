@@ -9,3 +9,4 @@ How to use ngsPETSc
    notebooks/Meshes
    notebooks/Krylov Solver and Preconditioners
    notebooks/Eigenvalue Problems
+   Firedrake-Netgen interface via ngsPETSc <https://www.firedrakeproject.org/demos/netgen_mesh.py.html>
