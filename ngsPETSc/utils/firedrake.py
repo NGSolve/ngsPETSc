@@ -12,6 +12,7 @@ except ImportError:
     ufl = None
     mg = None
 
+from fractions import Fraction
 import warnings
 import numpy as np
 from petsc4py import PETSc
@@ -37,7 +38,11 @@ def refineMarkedElements(self, mark):
     :arg mark: the marking function which is a Firedrake DG0 function.
 
     '''
-    return NetgenHierarchy.refineMarkedElements(self, mark)[0]
+    refMeshInfo = NetgenHierarchy.refineMarkedElements(self, mark)
+    print(refMeshInfo[1])
+    print(refMeshInfo[2])
+    return refMeshInfo[0]
+
 def curveField(self, order):
     '''
     This method returns a curved mesh as a Firedrake funciton.
@@ -208,8 +213,61 @@ class NetgenHierarchy(mg.HierarchyBase):
                             el.refine = True
                         else:
                             el.refine = False
+                    numberCoarseCells = len(fdMesh.netgen_mesh.Elements2D())
                     fdMesh.netgen_mesh.Refine(adaptive=True)
-                    return fd.Mesh(fdMesh.netgen_mesh)
-                return (fd.Mesh(netgen.libngpy._meshing.Mesh(2)),0)
+                    refMesh = fd.Mesh(fdMesh.netgen_mesh)
+                else:
+                    refMesh = fd.Mesh(netgen.libngpy._meshing.Mesh(2))
+                #We create dummy field to construct the _cell_numbering attribute
+                fd.Function(refMesh.coordinates.function_space())
+                getNewIdx = refMesh._cell_numbering.getOffset
+                if refMesh.sfBCInv is not None:
+                    getNewIdx = lambda x: x
+                    _, marked0 = refMesh.topology_dm.distributeField(refMesh.sfBCInv,
+                                                                refMesh._cell_numbering,
+                                                                marked)
+                coarse_to_fine_map = []
+                fine_to_coarse_map = []
+                if fdMesh.comm.Get_rank() == 0:
+                    numberFineCells = len(refMesh.netgen_mesh.Elements2D())
+                    coarse_to_fine_map = [[] for _ in range(numberCoarseCells)]
+                    fine_to_coarse_map = [[] for _ in range(numberFineCells)]
+                    parentMap = fdMesh.netgen_mesh.GetParentSurfaceElements()
+                    for i, el in enumerate(fdMesh.netgen_mesh.Elements2D()):
+                        if i < numberCoarseCells:
+                            coarse_to_fine_map[getIdx(i)] += [getNewIdx(i)]
+                            fine_to_coarse_map[getNewIdx(i)] += [getIdx(i)]
+                        else:
+                            j = (parentMap[i]+1)%numberCoarseCells
+                            coarse_to_fine_map[getIdx(j)] += [getNewIdx(i)]
+                            fine_to_coarse_map[getNewIdx(i)] += [getIdx(j)]
+                return (refMesh, coarse_to_fine_map, fine_to_coarse_map)
         else:
             raise NotImplementedError("No implementation for dimension other than 2.")
+    
+    def __init__(self,ngmesh, order, refs, comm=fd.COMM_WORLD):
+
+        self.ngmesh = ngmesh
+        self.comm = comm
+        msh = fd.Mesh(self.ngmesh)
+        self.mesh = [msh]
+        self.coarse_to_fine_cells = []
+        self.fine_to_coarse_cells = []
+        for k in range(refs):
+            mark = fd.Function(fd.FunctionSpace(self.mesh[-1],"DG",0))
+            mark.dat.data[:] = 1
+            newMsh, c2f, f2c = NetgenHierarchy.refineMarkedElements(self.mesh[-1], mark)
+            self.mesh += [newMsh]
+            self.coarse_to_fine_cells += [c2f]
+            self.fine_to_coarse_cells += [f2c]
+        coarse_to_fine_cells = dict((Fraction(i, 1), np.array(c2f, dtype=np.int32))
+                                for i, c2f in enumerate(self.coarse_to_fine_cells))
+        fine_to_coarse_cells = dict((Fraction(i+1, 1), np.array(f2c, dtype=np.int32))
+                                for i, f2c in enumerate(self.fine_to_coarse_cells))
+        fine_to_coarse_cells[Fraction(0, 1)] = None
+        self.mesh = [fd.Mesh(msh.curve_field(order)) for msh in self.mesh]
+        super().__init__(self.mesh, coarse_to_fine_cells, fine_to_coarse_cells, refinements_per_level=1, nested=False)
+
+        
+
+
