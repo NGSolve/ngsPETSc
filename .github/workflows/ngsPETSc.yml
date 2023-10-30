@@ -1,8 +1,8 @@
 # .github/workflows/app.yaml
 name: ngsPETSc tests
-on: 
+on:
     push:
-      branches-ignore:    
+      branches-ignore:
       - 'no-ci/*'
 
     schedule:
@@ -60,11 +60,11 @@ jobs:
 
       - name: Install Netgen and ngsPETSc
         run: |
-          pip3 install netgen-mesher \
-          && pip3 install pylint \
-          && export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.10/site-packages \
-          && echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV \
-          && NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
+          pip install netgen-mesher
+          pip install pylint
+          export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.10/site-packages
+          echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV
+          NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
 
       - name: Check formatting
         run: |
