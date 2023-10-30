@@ -16,6 +16,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Login to Docker Hub
+        if: github.repository == 'NGSolve/ngsPETSc'
         uses: docker/login-action@v1
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -24,6 +25,7 @@ jobs:
         run: |
           docker build -t ngspetsc:latest .
       - name: Push Docker image
+        if: github.repository == 'NGSolve/ngsPETSc'
         run: |
           docker tag ngspetsc:latest urzerbinati/ngspetsc:latest
           docker push urzerbinati/ngspetsc:latest
