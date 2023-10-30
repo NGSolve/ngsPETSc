@@ -5,9 +5,11 @@ the package will only be used in combination with Firedrake.
 '''
 try:
     import firedrake as fd
+    import FIAT
     import ufl
 except ImportError:
     fd = None
+    FIAT = None
     ufl = None
 
 import warnings
@@ -71,6 +73,8 @@ def curveField(self, order):
 
     #Computing reference points using fiat
     fiat_element = newFunctionCoordinates.function_space().finat_element.fiat_equivalent
+    if isinstance(fiat_element, FIAT.DiscontinuousElement):
+        fiat_element = fiat_element._element
     entity_ids = fiat_element.entity_dofs()
     nodes = fiat_element.dual_basis()
     refPts = []
