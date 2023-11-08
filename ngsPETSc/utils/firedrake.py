@@ -4,7 +4,6 @@ This module contains all the functions related to wrapping NGSolve meshes to Fir
 try:
     import firedrake as fd
     import ufl
-    import finat.ufl
 except ImportError:
     fd = None
     ufl = None
@@ -173,7 +172,7 @@ class FiredrakeMesh:
         cell = topology.ufl_cell()
         geometric_dim = topology.topology_dm.getCoordinateDim()
         cell = cell.reconstruct(geometric_dimension=geometric_dim)
-        element = firedrake.VectorElement("Lagrange", cell, 1)
+        element = fd.VectorElement("Lagrange", cell, 1)
         # Create mesh object
         self.firedrakeMesh = fd.MeshGeometry.__new__(fd.MeshGeometry, element)
         self.firedrakeMesh._init_topology(topology)
