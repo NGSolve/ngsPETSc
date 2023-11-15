@@ -66,7 +66,7 @@ def curveField(self, order):
     '''
     low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
     element = low_order_element.reconstruct(degree=order)
-    space = fd.VectorFunctionSpace(self, ufl.BrokenElement(element))
+    space = fd.VectorFunctionSpace(self, fd.BrokenElement(element))
     newFunctionCoordinates = fd.interpolate(self.coordinates, space)
 
     #Computing reference points using fiat
