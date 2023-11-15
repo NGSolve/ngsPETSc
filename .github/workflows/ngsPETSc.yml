@@ -51,7 +51,7 @@ jobs:
 
   fenicsx:
     runs-on: ubuntu-latest
-    container: dolfinx/dolfinx
+    container: dolfinx/dolfinx:nightly
     timeout-minutes: 50
 
     steps:
