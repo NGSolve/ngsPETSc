@@ -184,7 +184,7 @@ class FiredrakeMesh:
         cell = topology.ufl_cell()
         geometric_dim = topology.topology_dm.getCoordinateDim()
         cell = cell.reconstruct(geometric_dimension=geometric_dim)
-        element = ufl.VectorElement("Lagrange", cell, 1)
+        element = fd.VectorElement("Lagrange", cell, 1)
         # Create mesh object
         self.firedrakeMesh = fd.MeshGeometry.__new__(fd.MeshGeometry, element)
         self.firedrakeMesh._init_topology(topology)
