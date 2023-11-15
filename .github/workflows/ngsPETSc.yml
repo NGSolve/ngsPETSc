@@ -51,8 +51,8 @@ jobs:
 
   fenicsx:
     runs-on: ubuntu-latest
-    container: dolfinx/dolfinx:latest
-    timeout-minutes: 30
+    container: dolfinx/dolfinx
+    timeout-minutes: 50
 
     steps:
       - name: Check out repository code
