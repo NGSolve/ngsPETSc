@@ -59,12 +59,12 @@ def refineMarkedElements(self, mark):
 
 def curveField(self, order):
     '''
-    This method returns a curved mesh as a Firedrake funciton.
+    This method returns a curved mesh as a Firedrake function.
 
     :arg order: the order of the curved mesh
 
     '''
-    low_order_element = self.coordinates.function_space().ufl_element().sub_elements()[0]
+    low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
     element = low_order_element.reconstruct(degree=order)
     space = fd.VectorFunctionSpace(self, ufl.BrokenElement(element))
     newFunctionCoordinates = fd.interpolate(self.coordinates, space)
