@@ -5,10 +5,8 @@ the package will only be used in combination with Firedrake.
 '''
 try:
     import firedrake as fd
-    import ufl
 except ImportError:
     fd = None
-    ufl = None
 
 import warnings
 import numpy as np
