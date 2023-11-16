@@ -43,7 +43,7 @@ def test_poisson_netgen():
     geo.AddRectangle((0,0),(np.pi,np.pi))
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
     msh  = geoModel.model_to_mesh(hmax=0.1)
-    V = fem.FunctionSpace(msh, ("Lagrange", 2)) #pylint: disable=E1120
+    V = fem.functionspace(msh, ("Lagrange", 2)) #pylint: disable=E1120
     facetsLR = mesh.locate_entities_boundary(msh, dim=(msh.topology.dim - 1),
              marker=lambda x: np.logical_or(np.isclose(x[0], 0.0),
              np.isclose(x[0], np.pi)))
