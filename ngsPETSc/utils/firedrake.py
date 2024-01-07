@@ -11,6 +11,8 @@ except ImportError:
 import warnings
 import numpy as np
 from petsc4py import PETSc
+from fractions import Fraction
+from copy import deepcopy
 
 import netgen
 import netgen.meshing as ngm
@@ -216,3 +218,75 @@ class FiredrakeMesh:
         self.firedrakeMesh.comm = self.comm
         setattr(fd.MeshGeometry, "refine_marked_elements", refineMarkedElements)
         setattr(fd.MeshGeometry, "curve_field", curveField)
+
+def NetgenHierarchy(ngmesh, levs, order=1, comm=fd.COMM_WORLD):
+    '''
+    This function creates a Firedrake mesh hierarchy from Netgen/NGSolve meshes.
+
+    :arg mesh: the Netgen/NGSolve mesh
+    :arg levs: the number of levels in the hierarchy
+    '''
+    meshes = []
+    refinements_per_level = 1
+    coarse_to_fine_cells = []
+    fine_to_coarse_cells = [None]
+    #We construct the unrefined linear mesh
+    mesh = fd.Mesh(ngmesh, comm=comm)
+    if mesh.comm.size > 1 and mesh._grown_halos:
+        raise RuntimeError("Cannot refine parallel overlapped meshes ")
+    #Computing useful quantities
+    fd.FunctionSpace(mesh, "DG", 0)
+    coarse_index = mesh._cell_numbering.getOffset
+    if ngmesh.dim == 2:
+        number_coarse_cells = len(ngmesh.Elements2D())
+    elif ngmesh.dim == 3:
+        pass
+    #Curving linear mesh
+    mesh = fd.Mesh(mesh.curve_field(order=order))
+    meshes += [mesh]
+    for lv in range(levs):
+        #We refine the netgen mesh uniformly
+        ngmesh.Refine(adaptive=True)
+        #We construct the refined linear mesh and curve it
+        mesh = fd.Mesh(ngmesh, comm=comm)
+        fd.FunctionSpace(mesh, "DG", 0)
+        fine_index = lambda x: x
+        if ngmesh.dim == 2:
+            number_fine_cells = len(ngmesh.Elements2D())
+        elif ngmesh.dim == 3:
+            pass
+        mesh = fd.Mesh(mesh.curve_field(order=order))
+        meshes += [mesh]
+        #We populate the coarse to fine map
+        fine_cells_per_coarse_cell = number_fine_cells // number_coarse_cells
+        c2f = np.zeros((number_coarse_cells,fine_cells_per_coarse_cell),dtype=np.int32)
+        f2c = np.zeros((number_fine_cells,1),dtype=np.int32)
+        c2f_counter = [0]*number_coarse_cells
+        if ngmesh.dim == 2:
+            for i in range(len(ngmesh.parentsurfaceelements)):
+                if i < number_coarse_cells:
+                    f2c[fine_index(i)][0] = coarse_index(i)
+                    c2f[coarse_index(i)][0] = fine_index(i)
+                    c2f_counter[coarse_index(i)] += 1
+                else:
+                    k = (ngmesh.parentsurfaceelements[i]-1)%number_coarse_cells
+
+                    c2f[coarse_index(k)][c2f_counter[coarse_index(k)]] = fine_index(i)
+                    c2f_counter[coarse_index(k)] += 1
+                    f2c[fine_index(i)][0] = coarse_index(k)
+            coarse_to_fine_cells.append(c2f)
+            fine_to_coarse_cells.append(f2c)
+        coarse_index = fine_index
+        number_coarse_cells = number_fine_cells
+
+    coarse_to_fine_cells = dict((Fraction(i, refinements_per_level), c2f)
+                                for i, c2f in enumerate(coarse_to_fine_cells))
+    fine_to_coarse_cells = dict((Fraction(i, refinements_per_level), f2c)
+                            for i, f2c in enumerate(fine_to_coarse_cells))
+    
+    #return meshes, coarse_to_fine_cells, fine_to_coarse_cells
+    return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
+                         refinements_per_level, nested=False)
+
+
+
