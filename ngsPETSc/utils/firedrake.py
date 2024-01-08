@@ -246,11 +246,9 @@ def NetgenHierarchy(ngmesh, levs, order=1, comm=fd.COMM_WORLD):
     meshes += [mesh]
     for lv in range(levs):
         #We refine the netgen mesh uniformly
-        ngmesh.Refine(adaptive=True)
+        ngmesh.Refine(adaptive=False)
         #We construct the refined linear mesh and curve it
         mesh = fd.Mesh(ngmesh, comm=comm)
-        fd.FunctionSpace(mesh, "DG", 0)
-        fine_index = lambda x: x
         if ngmesh.dim == 2:
             number_fine_cells = len(ngmesh.Elements2D())
         elif ngmesh.dim == 3:
@@ -261,32 +259,24 @@ def NetgenHierarchy(ngmesh, levs, order=1, comm=fd.COMM_WORLD):
         fine_cells_per_coarse_cell = number_fine_cells // number_coarse_cells
         c2f = np.zeros((number_coarse_cells,fine_cells_per_coarse_cell),dtype=np.int32)
         f2c = np.zeros((number_fine_cells,1),dtype=np.int32)
-        c2f_counter = [0]*number_coarse_cells
+        coarse_counter = [0]*number_coarse_cells
         if ngmesh.dim == 2:
-            for i in range(len(ngmesh.parentsurfaceelements)):
-                if i < number_coarse_cells:
-                    f2c[fine_index(i)][0] = coarse_index(i)
-                    c2f[coarse_index(i)][0] = fine_index(i)
-                    c2f_counter[coarse_index(i)] += 1
-                else:
-                    k = (ngmesh.parentsurfaceelements[i]-1)%number_coarse_cells
-
-                    c2f[coarse_index(k)][c2f_counter[coarse_index(k)]] = fine_index(i)
-                    c2f_counter[coarse_index(k)] += 1
-                    f2c[fine_index(i)][0] = coarse_index(k)
+            V = ngmesh.Coordinates()
+            T = ngmesh.Elements2D().NumPy()["nodes"]
+            T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
+            for i in range(number_fine_cells):
+                coarse_index = meshes[-2].locate_cell(sum(V[T[i]])/3)
+                fine_index = meshes[-1].locate_cell(sum(V[T[i]])/3)
+                c2f[coarse_index][coarse_counter[coarse_index]] = fine_index
+                coarse_counter[coarse_index] += 1
+                f2c[fine_index][0] = coarse_index
             coarse_to_fine_cells.append(c2f)
             fine_to_coarse_cells.append(f2c)
-        coarse_index = fine_index
         number_coarse_cells = number_fine_cells
 
     coarse_to_fine_cells = dict((Fraction(i, refinements_per_level), c2f)
                                 for i, c2f in enumerate(coarse_to_fine_cells))
     fine_to_coarse_cells = dict((Fraction(i, refinements_per_level), f2c)
                             for i, f2c in enumerate(fine_to_coarse_cells))
-    
-    #return meshes, coarse_to_fine_cells, fine_to_coarse_cells
     return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
                          refinements_per_level, nested=False)
-
-
-
