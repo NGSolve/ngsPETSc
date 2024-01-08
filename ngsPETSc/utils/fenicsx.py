@@ -73,7 +73,8 @@ class GeometricModel:
             V = ngmesh.Coordinates()
             T = ngmesh.Elements3D().NumPy()["nodes"]
             T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
-        ufl_domain = dolfinx.io.gmshio.ufl_mesh(_ngs_to_cells[(gdim,T.shape[1])],gdim)
+        ufl_domain = dolfinx.io.gmshio.ufl_mesh(
+            _ngs_to_cells[(gdim,T.shape[1])], gdim, dolfinx.default_real_type)
         cell_perm = dolfinx.cpp.io.perm_gmsh(dolfinx.cpp.mesh.to_type(str(ufl_domain.ufl_cell())),
                                              T.shape[1])
         T = np.ascontiguousarray(T[:, cell_perm])
