@@ -8,11 +8,10 @@ try:
 except ImportError:
     fd = None
 
+from fractions import Fraction
 import warnings
 import numpy as np
 from petsc4py import PETSc
-from fractions import Fraction
-from copy import deepcopy
 
 import netgen
 import netgen.meshing as ngm
@@ -240,7 +239,7 @@ def NetgenHierarchy(ngmesh, levs, order=1, digits=8, adaptive=False, comm=fd.COM
     #Curving linear mesh
     mesh = fd.Mesh(mesh.curve_field(order=order, digits=digits))
     meshes += [mesh]
-    for lv in range(levs):
+    for _ in range(levs):
         #Streightening the mesh
         ngmesh.Curve(1)
         #We refine the netgen mesh uniformly
