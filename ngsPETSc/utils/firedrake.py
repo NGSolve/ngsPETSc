@@ -8,6 +8,7 @@ try:
 except ImportError:
     fd = None
 
+from fractions import Fraction
 import warnings
 import numpy as np
 from petsc4py import PETSc
@@ -75,7 +76,7 @@ def refineMarkedElements(self, mark):
     else:
         raise NotImplementedError("No implementation for dimension other than 2 and 3.")
 
-def curveField(self, order):
+def curveField(self, order, digits=8):
     '''
     This method returns a curved mesh as a Firedrake function.
 
@@ -102,7 +103,7 @@ def curveField(self, order):
     V = newFunctionCoordinates.dat.data
     getIdx = self._cell_numbering.getOffset
     refPts = np.array(refPts)
-    rnd = lambda x: round(x, 8)
+    rnd = lambda x: round(x, digits)
     if self.geometric_dimension() == 2:
         #Mapping to the physical domain
         physPts = np.ndarray((len(self.netgen_mesh.Elements2D()),
@@ -216,3 +217,59 @@ class FiredrakeMesh:
         self.firedrakeMesh.comm = self.comm
         setattr(fd.MeshGeometry, "refine_marked_elements", refineMarkedElements)
         setattr(fd.MeshGeometry, "curve_field", curveField)
+
+def NetgenHierarchy(ngmesh, levs, order=1, digits=8, adaptive=False, comm=fd.COMM_WORLD):
+    '''
+    This function creates a Firedrake mesh hierarchy from Netgen/NGSolve meshes.
+
+    :arg mesh: the Netgen/NGSolve mesh
+    :arg levs: the number of levels in the hierarchy
+    '''
+    meshes = []
+    refinements_per_level = 1
+    coarse_to_fine_cells = []
+    fine_to_coarse_cells = [None]
+    #We construct the unrefined linear mesh
+    mesh = fd.Mesh(ngmesh, comm=comm)
+    if mesh.comm.size > 1 and mesh._grown_halos:
+        raise RuntimeError("Cannot refine parallel overlapped meshes ")
+    #Computing useful quantities
+    ngElements = {2: ngmesh.Elements2D, 3: ngmesh.Elements3D}
+    number_coarse_cells = len(ngElements[ngmesh.dim]())
+    #Curving linear mesh
+    mesh = fd.Mesh(mesh.curve_field(order=order, digits=digits))
+    meshes += [mesh]
+    for _ in range(levs):
+        #Streightening the mesh
+        ngmesh.Curve(1)
+        #We refine the netgen mesh uniformly
+        ngmesh.Refine(adaptive=adaptive)
+        #We construct the refined linear mesh and curve it
+        mesh = fd.Mesh(ngmesh, comm=comm)
+        number_fine_cells = len(ngElements[ngmesh.dim]())
+        mesh = fd.Mesh(mesh.curve_field(order=order, digits=digits))
+        meshes += [mesh]
+        #We populate the coarse to fine map
+        fine_cells_per_coarse_cell = number_fine_cells // number_coarse_cells
+        c2f = np.zeros((number_coarse_cells,fine_cells_per_coarse_cell),dtype=np.int32)
+        f2c = np.zeros((number_fine_cells,1),dtype=np.int32)
+        coarse_counter = [0]*number_coarse_cells
+        V = ngmesh.Coordinates()
+        T = ngElements[ngmesh.dim]().NumPy()["nodes"]
+        T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
+        for i in range(number_fine_cells):
+            coarse_index = meshes[-2].locate_cell(sum(V[T[i]])/len(T[i]))
+            fine_index = meshes[-1].locate_cell(sum(V[T[i]])/len(T[i]))
+            c2f[coarse_index][coarse_counter[coarse_index]] = fine_index
+            coarse_counter[coarse_index] += 1
+            f2c[fine_index][0] = coarse_index
+        coarse_to_fine_cells.append(c2f)
+        fine_to_coarse_cells.append(f2c)
+        number_coarse_cells = number_fine_cells
+
+    coarse_to_fine_cells = dict((Fraction(i, refinements_per_level), c2f)
+                                for i, c2f in enumerate(coarse_to_fine_cells))
+    fine_to_coarse_cells = dict((Fraction(i, refinements_per_level), f2c)
+                            for i, f2c in enumerate(fine_to_coarse_cells))
+    return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
+                         refinements_per_level, nested=False)
