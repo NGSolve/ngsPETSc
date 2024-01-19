@@ -87,7 +87,7 @@ def curveField(self, order, digits=8):
     element = low_order_element.reconstruct(degree=order)
     space = fd.VectorFunctionSpace(self, fd.BrokenElement(element))
     newFunctionCoordinates = fd.assemble(fd.interpolate(self.coordinates, space))
-
+    self.netgen_mesh = self.comm.bcast(self.netgen_mesh, root=0)
     #Computing reference points using fiat
     fiat_element = newFunctionCoordinates.function_space().finat_element.fiat_equivalent
     entity_ids = fiat_element.entity_dofs()
@@ -99,9 +99,7 @@ def curveField(self, order, digits=8):
                 # Assert singleton point for each node.
                 pt, = nodes[dof].get_point_dict().keys()
                 refPts.append(pt)
-
     V = newFunctionCoordinates.dat.data
-    getIdx = self._cell_numbering.getOffset
     refPts = np.array(refPts)
     rnd = lambda x: round(x, digits)
     if self.geometric_dimension() == 2:
@@ -116,17 +114,22 @@ def curveField(self, order, digits=8):
         self.netgen_mesh.CalcElementMapping(refPts, curvedPhysPts)
         cellMap = newFunctionCoordinates.cell_node_map()
         for i, el in enumerate(self.netgen_mesh.Elements2D()):
-            if el.curved:
-                pts = [tuple(map(rnd, pts))
-                       for pts in physPts[i][0:refPts.shape[0]]]
-                dofMap = {k: v for v, k in enumerate(pts)}
-                p = [dofMap[tuple(map(rnd, pts))]
-                     for pts in V[cellMap.values[getIdx(i)]][0:refPts.shape[0]]]
-                curvedPhysPts[i] = curvedPhysPts[i][p]
-                for j, datIdx in enumerate(cellMap.values[getIdx(i)][0:refPts.shape[0]]):
-                    newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
-                    newFunctionCoordinates.sub(1).dat.data[datIdx] = curvedPhysPts[i][j][1]
-
+            pts = [tuple(map(rnd, pts))
+                    for pts in physPts[i][0:refPts.shape[0]]]
+            bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
+            Idx = self.locate_cell(bary)
+            isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
+            if el.curved and isInMesh:
+                try:
+                    dofMap = {k: v for v, k in enumerate(pts)}
+                    p = [dofMap[tuple(map(rnd, pts))]
+                        for pts in V[cellMap.values[Idx]][0:refPts.shape[0]]]
+                    curvedPhysPts[i] = curvedPhysPts[i][p]
+                    for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
+                        newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
+                        newFunctionCoordinates.sub(1).dat.data[datIdx] = curvedPhysPts[i][j][1]
+                except KeyError:
+                    fd.logging.warning("Not able to curve Firedrake element {}".format(Idx))
     if self.geometric_dimension() == 3:
         #Mapping to the physical domain
         physPts = np.ndarray((len(self.netgen_mesh.Elements3D()),
@@ -139,17 +142,23 @@ def curveField(self, order, digits=8):
         self.netgen_mesh.CalcElementMapping(refPts, curvedPhysPts)
         cellMap = newFunctionCoordinates.cell_node_map()
         for i, el in enumerate(self.netgen_mesh.Elements3D()):
-            if el.curved:
-                pts = [tuple(map(rnd, pts))
-                       for pts in physPts[i][0:refPts.shape[0]]]
+            pts = [tuple(map(rnd, pts))
+                    for pts in physPts[i][0:refPts.shape[0]]]
+            bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
+            Idx = self.locate_cell(bary)
+            isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
+            if el.curved and isInMesh:
                 dofMap = {k: v for v, k in enumerate(pts)}
-                p = [dofMap[tuple(map(rnd, pts))]
-                     for pts in V[cellMap.values[getIdx(i)]][0:refPts.shape[0]]]
-                curvedPhysPts[i] = curvedPhysPts[i][p]
-                for j, datIdx in enumerate(cellMap.values[getIdx(i)][0:refPts.shape[0]]):
-                    newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
-                    newFunctionCoordinates.sub(1).dat.data[datIdx] = curvedPhysPts[i][j][1]
-                    newFunctionCoordinates.sub(2).dat.data[datIdx] = curvedPhysPts[i][j][2]
+                try:
+                    p = [dofMap[tuple(map(rnd, pts))]
+                        for pts in V[cellMap.values[Idx]][0:refPts.shape[0]]]
+                    curvedPhysPts[i] = curvedPhysPts[i][p]
+                    for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
+                        newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
+                        newFunctionCoordinates.sub(1).dat.data[datIdx] = curvedPhysPts[i][j][1]
+                        newFunctionCoordinates.sub(2).dat.data[datIdx] = curvedPhysPts[i][j][2]
+                except KeyError:
+                    fd.logging.warning("Not able to curve Firedrake element {}".format(Idx))
     return newFunctionCoordinates
 
 class FiredrakeMesh:
@@ -215,6 +224,8 @@ class FiredrakeMesh:
         else:
             self.firedrakeMesh.sfBCInv = None
         self.firedrakeMesh.comm = self.comm
+        #Generating ngs to Firedrake cell index map
+        #Adding refine_marked_elements and curve_field methods
         setattr(fd.MeshGeometry, "refine_marked_elements", refineMarkedElements)
         setattr(fd.MeshGeometry, "curve_field", curveField)
 
