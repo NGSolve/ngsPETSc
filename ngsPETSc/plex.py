@@ -33,8 +33,9 @@ class MeshMapping:
 
     '''
 
-    def __init__(self, mesh=None, name="Default"):
+    def __init__(self, mesh=None, comm=MPI.COMM_WORLD, name="Default"):
         self.name = name
+        self.comm = comm
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             self.createPETScDMPlex(mesh)
         elif isinstance(mesh,PETSc.DMPlex):
@@ -157,7 +158,7 @@ class MeshMapping:
             self.ngMesh = mesh.ngmesh
         else:
             self.ngMesh = mesh
-        comm = MPI.COMM_WORLD
+        comm = self.comm
         if self.ngMesh.dim == 3:
             if comm.rank == 0:
                 V = self.ngMesh.Coordinates()

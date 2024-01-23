@@ -5,6 +5,7 @@ the package will only be used in combination with Firedrake.
 '''
 try:
     import firedrake as fd
+    from firedrake.cython import mgimpl as impl
 except ImportError:
     fd = None
 
@@ -114,22 +115,22 @@ def curveField(self, order, digits=8):
         self.netgen_mesh.CalcElementMapping(refPts, curvedPhysPts)
         cellMap = newFunctionCoordinates.cell_node_map()
         for i, el in enumerate(self.netgen_mesh.Elements2D()):
-            pts = [tuple(map(rnd, pts))
-                    for pts in physPts[i][0:refPts.shape[0]]]
-            bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
-            Idx = self.locate_cell(bary)
-            isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
-            if el.curved and isInMesh:
-                try:
-                    dofMap = {k: v for v, k in enumerate(pts)}
-                    p = [dofMap[tuple(map(rnd, pts))]
-                        for pts in V[cellMap.values[Idx]][0:refPts.shape[0]]]
+            #Inefficent code but runs only on curved elements
+            if el.curved:
+                pts = physPts[i][0:refPts.shape[0]]
+                bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
+                Idx = self.locate_cell(bary)
+                isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
+                if isInMesh:
+                    p = [np.argmin(np.sum((pts - pt)**2, axis=1)) for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
                     curvedPhysPts[i] = curvedPhysPts[i][p]
-                    for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
-                        newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
-                        newFunctionCoordinates.sub(1).dat.data[datIdx] = curvedPhysPts[i][j][1]
-                except KeyError:
-                    fd.logging.warning("Not able to curve Firedrake element {}".format(Idx))
+                    res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
+                    if res > 1e-8:
+                        fd.logging.warning("Not able to curve Firedrake element {}".format(Idx))
+                    else:
+                        for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
+                            newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
+                            newFunctionCoordinates.sub(1).dat.data[datIdx] = curvedPhysPts[i][j][1]
     if self.geometric_dimension() == 3:
         #Mapping to the physical domain
         physPts = np.ndarray((len(self.netgen_mesh.Elements3D()),
@@ -142,23 +143,23 @@ def curveField(self, order, digits=8):
         self.netgen_mesh.CalcElementMapping(refPts, curvedPhysPts)
         cellMap = newFunctionCoordinates.cell_node_map()
         for i, el in enumerate(self.netgen_mesh.Elements3D()):
-            pts = [tuple(map(rnd, pts))
-                    for pts in physPts[i][0:refPts.shape[0]]]
-            bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
-            Idx = self.locate_cell(bary)
-            isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
-            if el.curved and isInMesh:
-                dofMap = {k: v for v, k in enumerate(pts)}
-                try:
-                    p = [dofMap[tuple(map(rnd, pts))]
-                        for pts in V[cellMap.values[Idx]][0:refPts.shape[0]]]
+            #Inefficent code but runs only on curved elements
+            if el.curved:
+                pts = physPts[i][0:refPts.shape[0]]
+                bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
+                Idx = self.locate_cell(bary)
+                isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
+                if isInMesh:
+                    p = [np.argmin(np.sum((pts - pt)**2, axis=1)) for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
                     curvedPhysPts[i] = curvedPhysPts[i][p]
-                    for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
-                        newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
-                        newFunctionCoordinates.sub(1).dat.data[datIdx] = curvedPhysPts[i][j][1]
-                        newFunctionCoordinates.sub(2).dat.data[datIdx] = curvedPhysPts[i][j][2]
-                except KeyError:
-                    fd.logging.warning("Not able to curve Firedrake element {}".format(Idx))
+                    res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
+                    if res > 1e-8:
+                        fd.logging.warning("Not able to curve Firedrake element {}".format(Idx))
+                    else:
+                        for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
+                            newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
+                            newFunctionCoordinates.sub(1).dat.data[datIdx] = curvedPhysPts[i][j][1]
+                            newFunctionCoordinates.sub(2).dat.data[datIdx] = curvedPhysPts[i][j][2]
     return newFunctionCoordinates
 
 class FiredrakeMesh:
@@ -219,7 +220,7 @@ class FiredrakeMesh:
         self.firedrakeMesh.name = name
         # Adding Netgen mesh and inverse sfBC as attributes
         self.firedrakeMesh.netgen_mesh = self.meshMap.ngMesh
-        if self.comm.Get_size() > 1:
+        if self.firedrakeMesh.sfBC is not None:
             self.firedrakeMesh.sfBCInv = self.firedrakeMesh.sfBC.createInverse()
         else:
             self.firedrakeMesh.sfBCInv = None
@@ -229,58 +230,79 @@ class FiredrakeMesh:
         setattr(fd.MeshGeometry, "refine_marked_elements", refineMarkedElements)
         setattr(fd.MeshGeometry, "curve_field", curveField)
 
-def NetgenHierarchy(ngmesh, levs, order=1, digits=8, adaptive=False, comm=fd.COMM_WORLD):
+def snapToNetgenDMPlex(ngmesh, petscPlex):
+    ngCoordinates = ngmesh.Coordinates()
+    petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)
+    for i, pt in enumerate(petscCoordinates):
+        j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
+        petscCoordinates[i] = ngCoordinates[j]
+    petscPlexCoordinates = petscPlex.getCoordinatesLocal()
+    petscPlexCoordinates.setArray(petscPlexCoordinates)
+    petscPlex.setCoordinatesLocal(petscPlexCoordinates)
+
+def NetgenHierarchy(ngmesh, levs, order=1, digits=8, comm=fd.COMM_WORLD):
     '''
     This function creates a Firedrake mesh hierarchy from Netgen/NGSolve meshes.
 
     :arg mesh: the Netgen/NGSolve mesh
     :arg levs: the number of levels in the hierarchy
     '''
+    #Firedrake quoantities
     meshes = []
     refinements_per_level = 1
     coarse_to_fine_cells = []
     fine_to_coarse_cells = [None]
+    params = {"partition": False}
+
     #We construct the unrefined linear mesh
-    mesh = fd.Mesh(ngmesh, comm=comm)
+    mesh = fd.Mesh(ngmesh, comm=comm, reorder=False)
     if mesh.comm.size > 1 and mesh._grown_halos:
         raise RuntimeError("Cannot refine parallel overlapped meshes ")
-    #Computing useful quantities
-    ngElements = {2: ngmesh.Elements2D, 3: ngmesh.Elements3D}
-    number_coarse_cells = len(ngElements[ngmesh.dim]())
-    #Curving linear mesh
-    mesh = fd.Mesh(mesh.curve_field(order=order, digits=digits))
+    #We curve the mesh
+    if order>1:
+        mesh = fd.Mesh(mesh.curve_field(order=order, digits=digits), distribution_parameters=params, comm=comm)
     meshes += [mesh]
-    for _ in range(levs):
+    for l in range(levs):
         #Streightening the mesh
         ngmesh.Curve(1)
         #We refine the netgen mesh uniformly
-        ngmesh.Refine(adaptive=adaptive)
-        #We construct the refined linear mesh and curve it
-        mesh = fd.Mesh(ngmesh, comm=comm)
-        number_fine_cells = len(ngElements[ngmesh.dim]())
-        mesh = fd.Mesh(mesh.curve_field(order=order, digits=digits))
+        ngmesh.Refine(adaptive=False) 
+        #We refine the DMPlex mesh uniformly
+        cdm = meshes[-1].topology_dm
+        cdm.setRefinementUniform(True)
+        rdm = cdm.refine()
+        rdm.removeLabel("pyop2_core")
+        rdm.removeLabel("pyop2_owned")
+        rdm.removeLabel("pyop2_ghost")
+        #We snap the mesh to the Netgen mesh
+        snapToNetgenDMPlex(ngmesh, rdm)
+        #We construct a Firedrake mesh from the DMPlex mesh
+        mesh = fd.Mesh(rdm, dim=meshes[-1].ufl_cell().geometric_dimension(), reorder=False,
+                                    distribution_parameters=params, comm=comm)
+        mesh.netgen_mesh = ngmesh
+        #We curve the mesh
+        if order > 1:
+            mesh = fd.Mesh(mesh.curve_field(order=order, digits=digits), distribution_parameters=params, comm=comm)
         meshes += [mesh]
-        #We populate the coarse to fine map
-        fine_cells_per_coarse_cell = number_fine_cells // number_coarse_cells
-        c2f = np.zeros((number_coarse_cells,fine_cells_per_coarse_cell),dtype=np.int32)
-        f2c = np.zeros((number_fine_cells,1),dtype=np.int32)
-        coarse_counter = [0]*number_coarse_cells
-        V = ngmesh.Coordinates()
-        T = ngElements[ngmesh.dim]().NumPy()["nodes"]
-        T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
-        for i in range(number_fine_cells):
-            coarse_index = meshes[-2].locate_cell(sum(V[T[i]])/len(T[i]))
-            fine_index = meshes[-1].locate_cell(sum(V[T[i]])/len(T[i]))
-            c2f[coarse_index][coarse_counter[coarse_index]] = fine_index
-            coarse_counter[coarse_index] += 1
-            f2c[fine_index][0] = coarse_index
+    #We populate the coarse to fine map
+    lgmaps = []
+    for i, m in enumerate(meshes):
+        no = impl.create_lgmap(m.topology_dm)
+        m.init()
+        o = impl.create_lgmap(m.topology_dm)
+        m.topology_dm.setRefineLevel(i)
+        lgmaps.append((no, o))
+    coarse_to_fine_cells = []
+    fine_to_coarse_cells = [None]
+    for (coarse, fine), (clgmaps, flgmaps) in zip(zip(meshes[:-1], meshes[1:]),
+                                                zip(lgmaps[:-1], lgmaps[1:])):
+        c2f, f2c = impl.coarse_to_fine_cells(coarse, fine, clgmaps, flgmaps)
         coarse_to_fine_cells.append(c2f)
         fine_to_coarse_cells.append(f2c)
-        number_coarse_cells = number_fine_cells
 
     coarse_to_fine_cells = dict((Fraction(i, refinements_per_level), c2f)
                                 for i, c2f in enumerate(coarse_to_fine_cells))
     fine_to_coarse_cells = dict((Fraction(i, refinements_per_level), f2c)
-                            for i, f2c in enumerate(fine_to_coarse_cells))
+                                for i, f2c in enumerate(fine_to_coarse_cells))
     return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
                          refinements_per_level, nested=False)
