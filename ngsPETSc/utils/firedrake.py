@@ -154,7 +154,7 @@ def curveField(self, order, digits=8):
                     curvedPhysPts[i] = curvedPhysPts[i][p]
                     res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
                     if res > 1e-8:
-                        fd.logging.warning("Not able to curve Firedrake element {}".format(Idx))
+                        fd.logging.warning("Not able to curve Firedrake element {}, residual is: {}".format(Idx, res))
                     else:
                         for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
                             newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
@@ -231,14 +231,24 @@ class FiredrakeMesh:
         setattr(fd.MeshGeometry, "curve_field", curveField)
 
 def snapToNetgenDMPlex(ngmesh, petscPlex):
-    ngCoordinates = ngmesh.Coordinates()
-    petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)
-    for i, pt in enumerate(petscCoordinates):
-        j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
-        petscCoordinates[i] = ngCoordinates[j]
-    petscPlexCoordinates = petscPlex.getCoordinatesLocal()
-    petscPlexCoordinates.setArray(petscPlexCoordinates)
-    petscPlex.setCoordinatesLocal(petscPlexCoordinates)
+    if petscPlex.getDimension() == 2:
+        ngCoordinates = ngmesh.Coordinates()
+        petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)
+        for i, pt in enumerate(petscCoordinates):
+            j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
+            petscCoordinates[i] = ngCoordinates[j]
+        petscPlexCoordinates = petscPlex.getCoordinatesLocal()
+        petscPlexCoordinates.setArray(petscPlexCoordinates)
+        petscPlex.setCoordinatesLocal(petscPlexCoordinates)
+    else:
+        ngCoordinates = ngmesh.Coordinates()
+        petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)
+        for i, pt in enumerate(petscCoordinates):
+            j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
+            petscCoordinates[i] = ngCoordinates[j]
+        petscPlexCoordinates = petscPlex.getCoordinatesLocal()
+        petscPlexCoordinates.setArray(petscPlexCoordinates)
+        petscPlex.setCoordinatesLocal(petscPlexCoordinates)
 
 def NetgenHierarchy(ngmesh, levs, order=1, digits=8, comm=fd.COMM_WORLD):
     '''
@@ -247,6 +257,8 @@ def NetgenHierarchy(ngmesh, levs, order=1, digits=8, comm=fd.COMM_WORLD):
     :arg mesh: the Netgen/NGSolve mesh
     :arg levs: the number of levels in the hierarchy
     '''
+    if ngmesh.dim == 3:
+        raise NotImplementedError("Netgen hierachies are only implemented for 2D meshes.")
     #Firedrake quoantities
     meshes = []
     refinements_per_level = 1
@@ -267,6 +279,7 @@ def NetgenHierarchy(ngmesh, levs, order=1, digits=8, comm=fd.COMM_WORLD):
         ngmesh.Curve(1)
         #We refine the netgen mesh uniformly
         ngmesh.Refine(adaptive=False) 
+        fd.File("meshes/ng.pvd").write(fd.Mesh(ngmesh))
         #We refine the DMPlex mesh uniformly
         cdm = meshes[-1].topology_dm
         cdm.setRefinementUniform(True)
