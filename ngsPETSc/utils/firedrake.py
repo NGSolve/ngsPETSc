@@ -5,6 +5,7 @@ the package will only be used in combination with Firedrake.
 '''
 try:
     import firedrake as fd
+    from firedrake.logging import warning
     from firedrake.cython import mgimpl as impl
 except ImportError:
     fd = None
@@ -77,7 +78,7 @@ def refineMarkedElements(self, mark):
     else:
         raise NotImplementedError("No implementation for dimension other than 2 and 3.")
 
-def curveField(self, order, digits=8):
+def curveField(self, order, tol=1e-8):
     '''
     This method returns a curved mesh as a Firedrake function.
 
@@ -102,7 +103,6 @@ def curveField(self, order, digits=8):
                 refPts.append(pt)
     V = newFunctionCoordinates.dat.data
     refPts = np.array(refPts)
-    rnd = lambda x: round(x, digits)
     if self.geometric_dimension() == 2:
         #Mapping to the physical domain
         physPts = np.ndarray((len(self.netgen_mesh.Elements2D()),
@@ -122,10 +122,11 @@ def curveField(self, order, digits=8):
                 Idx = self.locate_cell(bary)
                 isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
                 if isInMesh:
-                    p = [np.argmin(np.sum((pts - pt)**2, axis=1)) for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
+                    p = [np.argmin(np.sum((pts - pt)**2, axis=1))
+                         for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
                     curvedPhysPts[i] = curvedPhysPts[i][p]
                     res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
-                    if res > 1e-8:
+                    if res > tol:
                         fd.logging.warning("Not able to curve Firedrake element {}".format(Idx))
                     else:
                         for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
@@ -150,11 +151,12 @@ def curveField(self, order, digits=8):
                 Idx = self.locate_cell(bary)
                 isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
                 if isInMesh:
-                    p = [np.argmin(np.sum((pts - pt)**2, axis=1)) for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
+                    p = [np.argmin(np.sum((pts - pt)**2, axis=1))
+                         for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
                     curvedPhysPts[i] = curvedPhysPts[i][p]
                     res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
-                    if res > 1e-8:
-                        fd.logging.warning("Not able to curve Firedrake element {}, residual is: {}".format(Idx, res))
+                    if res > tol:
+                        warning("Not able to curve element {}, residual is: {}".format(Idx, res))
                     else:
                         for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
                             newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
@@ -231,6 +233,9 @@ class FiredrakeMesh:
         setattr(fd.MeshGeometry, "curve_field", curveField)
 
 def snapToNetgenDMPlex(ngmesh, petscPlex):
+    '''
+    This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
+    '''
     if petscPlex.getDimension() == 2:
         ngCoordinates = ngmesh.Coordinates()
         petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)
@@ -241,16 +246,9 @@ def snapToNetgenDMPlex(ngmesh, petscPlex):
         petscPlexCoordinates.setArray(petscPlexCoordinates)
         petscPlex.setCoordinatesLocal(petscPlexCoordinates)
     else:
-        ngCoordinates = ngmesh.Coordinates()
-        petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)
-        for i, pt in enumerate(petscCoordinates):
-            j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
-            petscCoordinates[i] = ngCoordinates[j]
-        petscPlexCoordinates = petscPlex.getCoordinatesLocal()
-        petscPlexCoordinates.setArray(petscPlexCoordinates)
-        petscPlex.setCoordinatesLocal(petscPlexCoordinates)
+        raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
 
-def NetgenHierarchy(ngmesh, levs, order=1, digits=8, comm=fd.COMM_WORLD):
+def NetgenHierarchy(ngmesh, levs, order=1, tol=1e-8, comm=fd.COMM_WORLD):
     '''
     This function creates a Firedrake mesh hierarchy from Netgen/NGSolve meshes.
 
@@ -272,13 +270,14 @@ def NetgenHierarchy(ngmesh, levs, order=1, digits=8, comm=fd.COMM_WORLD):
         raise RuntimeError("Cannot refine parallel overlapped meshes ")
     #We curve the mesh
     if order>1:
-        mesh = fd.Mesh(mesh.curve_field(order=order, digits=digits), distribution_parameters=params, comm=comm)
+        mesh = fd.Mesh(mesh.curve_field(order=order, tol=tol),
+                       distribution_parameters=params, comm=comm)
     meshes += [mesh]
-    for l in range(levs):
+    for _ in range(levs):
         #Streightening the mesh
         ngmesh.Curve(1)
         #We refine the netgen mesh uniformly
-        ngmesh.Refine(adaptive=False) 
+        ngmesh.Refine(adaptive=False)
         fd.File("meshes/ng.pvd").write(fd.Mesh(ngmesh))
         #We refine the DMPlex mesh uniformly
         cdm = meshes[-1].topology_dm
@@ -295,7 +294,8 @@ def NetgenHierarchy(ngmesh, levs, order=1, digits=8, comm=fd.COMM_WORLD):
         mesh.netgen_mesh = ngmesh
         #We curve the mesh
         if order > 1:
-            mesh = fd.Mesh(mesh.curve_field(order=order, digits=digits), distribution_parameters=params, comm=comm)
+            mesh = fd.Mesh(mesh.curve_field(order=order, tol=1e-8),
+                           distribution_parameters=params, comm=comm)
         meshes += [mesh]
     #We populate the coarse to fine map
     lgmaps = []
