@@ -278,7 +278,6 @@ def NetgenHierarchy(ngmesh, levs, order=1, tol=1e-8, comm=fd.COMM_WORLD):
         ngmesh.Curve(1)
         #We refine the netgen mesh uniformly
         ngmesh.Refine(adaptive=False)
-        fd.File("meshes/ng.pvd").write(fd.Mesh(ngmesh))
         #We refine the DMPlex mesh uniformly
         cdm = meshes[-1].topology_dm
         cdm.setRefinementUniform(True)
