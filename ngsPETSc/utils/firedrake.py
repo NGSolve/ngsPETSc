@@ -7,6 +7,7 @@ try:
     import firedrake as fd
     from firedrake.logging import warning
     from firedrake.cython import mgimpl as impl
+    from firedrake.__future__ import interpolate
 except ImportError:
     fd = None
 
@@ -88,7 +89,7 @@ def curveField(self, order, tol=1e-8):
     low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
     element = low_order_element.reconstruct(degree=order)
     space = fd.VectorFunctionSpace(self, fd.BrokenElement(element))
-    newFunctionCoordinates = fd.assemble(fd.interpolate(self.coordinates, space))
+    newFunctionCoordinates = fd.assemble(interpolate(self.coordinates, space))
     self.netgen_mesh = self.comm.bcast(self.netgen_mesh, root=0)
     #Computing reference points using fiat
     fiat_element = newFunctionCoordinates.function_space().finat_element.fiat_equivalent
@@ -119,6 +120,7 @@ def curveField(self, order, tol=1e-8):
             if el.curved:
                 pts = physPts[i][0:refPts.shape[0]]
                 bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
+                print("COMM :",self.comm.size,self.comm.rank)
                 Idx = self.locate_cell(bary)
                 isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
                 if isInMesh:
@@ -172,7 +174,7 @@ class FiredrakeMesh:
     :param netgen_flags: The dictionary of flags to be passed to ngsPETSc.
     :arg comm: the MPI communicator.
     '''
-    def __init__(self, mesh, netgen_flags, user_comm=PETSc.COMM_WORLD):
+    def __init__(self, mesh, netgen_flags, user_comm=fd.COMM_WORLD):
         self.comm = user_comm
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             try:
@@ -180,12 +182,12 @@ class FiredrakeMesh:
                     mesh.Split2Tets()
             except KeyError:
                 warnings.warn("No purify_to_tets flag found, mesh will not be purified to tets.")
-            self.meshMap = MeshMapping(mesh)
+            self.meshMap = MeshMapping(mesh, comm=self.comm)
         else:
             raise ValueError("Mesh format not recognised.")
         try:
             if netgen_flags["quad"]:
-                transform = PETSc.DMPlexTransform().create(comm=PETSc.COMM_WORLD)
+                transform = PETSc.DMPlexTransform().create(comm=self.comm)
                 transform.setType(PETSc.DMPlexTransformType.REFINETOBOX)
                 transform.setDM(self.meshMap.petscPlex)
                 transform.setUp()
@@ -226,7 +228,6 @@ class FiredrakeMesh:
             self.firedrakeMesh.sfBCInv = self.firedrakeMesh.sfBC.createInverse()
         else:
             self.firedrakeMesh.sfBCInv = None
-        self.firedrakeMesh.comm = self.comm
         #Generating ngs to Firedrake cell index map
         #Adding refine_marked_elements and curve_field methods
         setattr(fd.MeshGeometry, "refine_marked_elements", refineMarkedElements)
@@ -248,24 +249,24 @@ def snapToNetgenDMPlex(ngmesh, petscPlex):
     else:
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
 
-def NetgenHierarchy(ngmesh, levs, order=1, tol=1e-8, comm=fd.COMM_WORLD):
+def NetgenHierarchy(mesh, levs, order=1, tol=1e-8):
     '''
     This function creates a Firedrake mesh hierarchy from Netgen/NGSolve meshes.
 
     :arg mesh: the Netgen/NGSolve mesh
     :arg levs: the number of levels in the hierarchy
     '''
-    if ngmesh.dim == 3:
+    if mesh.geometric_dimension() == 3:
         raise NotImplementedError("Netgen hierachies are only implemented for 2D meshes.")
+    ngmesh = mesh.netgen_mesh
+    comm = mesh.comm
     #Firedrake quoantities
     meshes = []
     refinements_per_level = 1
     coarse_to_fine_cells = []
     fine_to_coarse_cells = [None]
     params = {"partition": False}
-
     #We construct the unrefined linear mesh
-    mesh = fd.Mesh(ngmesh, comm=comm, reorder=False)
     if mesh.comm.size > 1 and mesh._grown_halos:
         raise RuntimeError("Cannot refine parallel overlapped meshes ")
     #We curve the mesh
@@ -273,18 +274,19 @@ def NetgenHierarchy(ngmesh, levs, order=1, tol=1e-8, comm=fd.COMM_WORLD):
         mesh = fd.Mesh(mesh.curve_field(order=order, tol=tol),
                        distribution_parameters=params, comm=comm)
     meshes += [mesh]
+    cdm = meshes[-1].topology_dm
     for _ in range(levs):
         #Streightening the mesh
         ngmesh.Curve(1)
         #We refine the netgen mesh uniformly
         ngmesh.Refine(adaptive=False)
         #We refine the DMPlex mesh uniformly
-        cdm = meshes[-1].topology_dm
         cdm.setRefinementUniform(True)
         rdm = cdm.refine()
         rdm.removeLabel("pyop2_core")
         rdm.removeLabel("pyop2_owned")
         rdm.removeLabel("pyop2_ghost")
+        cdm = rdm
         #We snap the mesh to the Netgen mesh
         snapToNetgenDMPlex(ngmesh, rdm)
         #We construct a Firedrake mesh from the DMPlex mesh
