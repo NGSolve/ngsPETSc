@@ -187,7 +187,8 @@ class MeshMapping:
             else:
                 plex = PETSc.DMPlex().createFromCellList(3,
                                                         np.zeros((0, 4), dtype=np.int32),
-                                                        np.zeros((0, 3), dtype=np.double), comm=comm)
+                                                        np.zeros((0, 3), dtype=np.double),
+                                                        comm=comm)
                 self.petscPlex = plex
         elif self.ngMesh.dim == 2:
             if comm.rank == 0:
@@ -209,5 +210,6 @@ class MeshMapping:
             else:
                 plex = PETSc.DMPlex().createFromCellList(2,
                                                         np.zeros((0, 3), dtype=np.int32),
-                                                        np.zeros((0, 2), dtype=np.double), comm=comm)
+                                                        np.zeros((0, 2), dtype=np.double),
+                                                        comm=comm)
                 self.petscPlex = plex
