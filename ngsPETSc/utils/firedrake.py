@@ -257,25 +257,37 @@ def flagsUtils(flags, option, default):
     except KeyError:
         return default
 
-def NetgenHierarchy(mesh, levs, flags, tol=1e-8):
+def uniformRefinementRoutine(ngmesh, plex):
+    '''
+    Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
+    '''
+
+def NetgenHierarchy(mesh, levs, flags):
     '''
     This function creates a Firedrake mesh hierarchy from Netgen/NGSolve meshes.
 
     :arg mesh: the Netgen/NGSolve mesh
     :arg levs: the number of levels in the hierarchy
-    :ar netgen_flags: either a bool or a dictionray containing options for Netgen.
+    :arg netgen_flags: either a bool or a dictionray containing options for Netgen.
     If not False the hierachy is constructed using ngsPETSc, if None hierarchy
-    constructed in a standard manner.
+    constructed in a standard manner. Netgen flags includes:
+        -degree, either an integer denoting the degree of curvature of all levels of
+        the mesh or a list of levs+1 integers denoting the degree of curvature of
+        each level of the mesh.
+        -tol, geometric tollerance adopted in snapToNetgenDMPlex.
+        -refinement_type, the refinment type to be used: uniform (default), Alfeld
     '''
     if mesh.geometric_dimension() == 3:
         raise NotImplementedError("Netgen hierachies are only implemented for 2D meshes.")
     ngmesh = mesh.netgen_mesh
     comm = mesh.comm
     #Parsing netgen flags
-    if isinstance(flags, dict):
-        order = flagsUtils(flags, "degree", 1)
-    else:
-        order = 1
+    if not isinstance(flags, dict):
+        flags = {}
+    order = flagsUtils(flags, "degree", 1)
+    if isinstance(order, int):
+        order= [order]*(levs+1)
+    tol = flagsUtils(flags, "tol", 1e-8)
     #Firedrake quoantities
     meshes = []
     refinements_per_level = 1
@@ -286,12 +298,12 @@ def NetgenHierarchy(mesh, levs, flags, tol=1e-8):
     if mesh.comm.size > 1 and mesh._grown_halos:
         raise RuntimeError("Cannot refine parallel overlapped meshes ")
     #We curve the mesh
-    if order>1:
-        mesh = fd.Mesh(mesh.curve_field(order=order, tol=tol),
+    if order[0]>1:
+        mesh = fd.Mesh(mesh.curve_field(order=order[0], tol=tol),
                        distribution_parameters=params, comm=comm)
     meshes += [mesh]
     cdm = meshes[-1].topology_dm
-    for _ in range(levs):
+    for l in range(levs):
         #Streightening the mesh
         ngmesh.Curve(1)
         #We refine the netgen mesh uniformly
@@ -310,8 +322,8 @@ def NetgenHierarchy(mesh, levs, flags, tol=1e-8):
                                     distribution_parameters=params, comm=comm)
         mesh.netgen_mesh = ngmesh
         #We curve the mesh
-        if order > 1:
-            mesh = fd.Mesh(mesh.curve_field(order=order, tol=1e-8),
+        if order[l+1] > 1:
+            mesh = fd.Mesh(mesh.curve_field(order=order[l+1], tol=1e-8),
                            distribution_parameters=params, comm=comm)
         meshes += [mesh]
     #We populate the coarse to fine map
