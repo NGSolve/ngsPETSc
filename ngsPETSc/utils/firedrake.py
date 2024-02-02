@@ -120,7 +120,6 @@ def curveField(self, order, tol=1e-8):
             if el.curved:
                 pts = physPts[i][0:refPts.shape[0]]
                 bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
-                print("COMM :",self.comm.size,self.comm.rank)
                 Idx = self.locate_cell(bary)
                 isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
                 if isInMesh:
@@ -249,17 +248,34 @@ def snapToNetgenDMPlex(ngmesh, petscPlex):
     else:
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
 
-def NetgenHierarchy(mesh, levs, order=1, tol=1e-8):
+def flagsUtils(flags, option, default):
+    '''
+    utility fuction used to parse Netgen flag options
+    '''
+    try:
+        return flags[option]
+    except KeyError:
+        return default
+
+def NetgenHierarchy(mesh, levs, flags, tol=1e-8):
     '''
     This function creates a Firedrake mesh hierarchy from Netgen/NGSolve meshes.
 
     :arg mesh: the Netgen/NGSolve mesh
     :arg levs: the number of levels in the hierarchy
+    :ar netgen_flags: either a bool or a dictionray containing options for Netgen.
+    If not False the hierachy is constructed using ngsPETSc, if None hierarchy
+    constructed in a standard manner.
     '''
     if mesh.geometric_dimension() == 3:
         raise NotImplementedError("Netgen hierachies are only implemented for 2D meshes.")
     ngmesh = mesh.netgen_mesh
     comm = mesh.comm
+    #Parsing netgen flags
+    if isinstance(flags, dict):
+        order = flagsUtils(flags, "degree", 1)
+    else:
+        order = 1
     #Firedrake quoantities
     meshes = []
     refinements_per_level = 1
