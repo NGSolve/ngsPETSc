@@ -257,10 +257,36 @@ def flagsUtils(flags, option, default):
     except KeyError:
         return default
 
-def uniformRefinementRoutine(ngmesh, plex):
+def uniformRefinementRoutine(ngmesh, cdm):
     '''
     Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
     '''
+    #We refine the netgen mesh uniformly
+    ngmesh.Refine(adaptive=False)
+    #We refine the DMPlex mesh uniformly
+    cdm.setRefinementUniform(True)
+    rdm = cdm.refine()
+    rdm.removeLabel("pyop2_core")
+    rdm.removeLabel("pyop2_owned")
+    rdm.removeLabel("pyop2_ghost")
+    return (rdm, ngmesh)
+
+def alfeldRefinementRoutine(ngmesh, cdm):
+    '''
+    Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
+    '''
+    #We refine the netgen mesh alfeld
+    ngmesh.SplitAlfeld()
+    #We refine the DMPlex mesh alfeld
+    tr = PETSc.DMPlexTransform().create(comm=PETSc.COMM_WORLD)
+    tr.setType(PETSc.DMPlexTransformType.REFINEREGULAR)
+    tr.setDM(cdm)
+    tr.setUp()
+    rdm = tr.apply(cdm)
+    return (rdm, ngmesh)
+
+refinementTypes = {"uniform": uniformRefinementRoutine,
+                   "Alfeld": alfeldRefinementRoutine}
 
 def NetgenHierarchy(mesh, levs, flags):
     '''
@@ -288,6 +314,7 @@ def NetgenHierarchy(mesh, levs, flags):
     if isinstance(order, int):
         order= [order]*(levs+1)
     tol = flagsUtils(flags, "tol", 1e-8)
+    refType = flagsUtils(flags, "refinement_type", "uniform")
     #Firedrake quoantities
     meshes = []
     refinements_per_level = 1
@@ -306,14 +333,7 @@ def NetgenHierarchy(mesh, levs, flags):
     for l in range(levs):
         #Streightening the mesh
         ngmesh.Curve(1)
-        #We refine the netgen mesh uniformly
-        ngmesh.Refine(adaptive=False)
-        #We refine the DMPlex mesh uniformly
-        cdm.setRefinementUniform(True)
-        rdm = cdm.refine()
-        rdm.removeLabel("pyop2_core")
-        rdm.removeLabel("pyop2_owned")
-        rdm.removeLabel("pyop2_ghost")
+        rdm, ngmesh = refinementTypes[refType](ngmesh, cdm)
         cdm = rdm
         #We snap the mesh to the Netgen mesh
         snapToNetgenDMPlex(ngmesh, rdm)
