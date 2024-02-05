@@ -3,8 +3,9 @@ This module contains all the functions related to wrapping NGSolve meshes to
 PETSc DMPlex using the petsc4py interface.
 '''
 import itertools
-import numpy as np
+import warnings
 
+import numpy as np
 from petsc4py import PETSc
 
 import netgen.meshing as ngm
@@ -200,7 +201,10 @@ class MeshMapping:
                 vStart, _ = plex.getDepthStratum(0)   # vertices
                 for e in self.ngMesh.Elements1D():
                     join = plex.getJoin([vStart+v.nr-1 for v in e.vertices])
-                    plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.index))
+                    if len(join) > 0:
+                        plex.setLabelValue(EDGE_SETS_LABEL, join[0], int(e.index))
+                    else:
+                        warnings.warn("Labled Netgen mesh not found in the plex.")
                 if not (1 == self.ngMesh.Elements2D().NumPy()["index"]).all():
                     for e in self.ngMesh.Elements2D():
                         join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
