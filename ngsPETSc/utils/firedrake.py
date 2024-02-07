@@ -29,6 +29,15 @@ except ImportError:
 
 from ngsPETSc import MeshMapping
 
+def flagsUtils(flags, option, default):
+    '''
+    utility fuction used to parse Netgen flag options
+    '''
+    try:
+        return flags[option]
+    except KeyError:
+        return default
+
 def refineMarkedElements(self, mark):
     '''
     This method is used to refine a mesh based on a marking function
@@ -120,7 +129,6 @@ def curveField(self, order, tol=1e-8):
             if el.curved:
                 pts = physPts[i][0:refPts.shape[0]]
                 bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
-                print("COMM :",self.comm.size,self.comm.rank)
                 Idx = self.locate_cell(bary)
                 isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
                 if isInMesh:
@@ -166,6 +174,9 @@ def curveField(self, order, tol=1e-8):
                             newFunctionCoordinates.sub(2).dat.data[datIdx] = curvedPhysPts[i][j][2]
     return newFunctionCoordinates
 
+splitTypes = {"Alfeld": lambda x: x.SplitAlfeld(),
+              "Powell-Sabin": lambda x: x.SplitPowellSabin()}
+
 class FiredrakeMesh:
     '''
     This class creates a Firedrake mesh from Netgen/NGSolve meshes.
@@ -176,15 +187,21 @@ class FiredrakeMesh:
     '''
     def __init__(self, mesh, netgen_flags, user_comm=fd.COMM_WORLD):
         self.comm = user_comm
+        #Parsing netgen flags
+        if not isinstance(netgen_flags, dict):
+            netgen_flags = {}
+        split2tets = flagsUtils(netgen_flags, "split_to_tets", False)
+        split = flagsUtils(netgen_flags, "split", False)
+        #Checking the mesh format
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
-            try:
-                if netgen_flags["purify_to_tets"]:
-                    mesh.Split2Tets()
-            except KeyError:
-                warnings.warn("No purify_to_tets flag found, mesh will not be purified to tets.")
+            if split2tets:
+                mesh = mesh.Split2Tets()
+            if split:
+                splitTypes[split](mesh)
             self.meshMap = MeshMapping(mesh, comm=self.comm)
         else:
             raise ValueError("Mesh format not recognised.")
+        #We quadrilateralise the mesh or apply a transform if requested
         try:
             if netgen_flags["quad"]:
                 transform = PETSc.DMPlexTransform().create(comm=self.comm)
@@ -249,56 +266,26 @@ def snapToNetgenDMPlex(ngmesh, petscPlex):
     else:
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
 
-def NetgenHierarchy(mesh, levs, order=1, tol=1e-8):
+def uniformRefinementRoutine(ngmesh, cdm):
     '''
-    This function creates a Firedrake mesh hierarchy from Netgen/NGSolve meshes.
+    Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
+    '''
+    #We refine the netgen mesh uniformly
+    ngmesh.Refine(adaptive=False)
+    #We refine the DMPlex mesh uniformly
+    cdm.setRefinementUniform(True)
+    rdm = cdm.refine()
+    rdm.removeLabel("pyop2_core")
+    rdm.removeLabel("pyop2_owned")
+    rdm.removeLabel("pyop2_ghost")
+    return (rdm, ngmesh)
 
-    :arg mesh: the Netgen/NGSolve mesh
-    :arg levs: the number of levels in the hierarchy
+def uniformMapRoutine(meshes):
     '''
-    if mesh.geometric_dimension() == 3:
-        raise NotImplementedError("Netgen hierachies are only implemented for 2D meshes.")
-    ngmesh = mesh.netgen_mesh
-    comm = mesh.comm
-    #Firedrake quoantities
-    meshes = []
+    This function computes the coarse to fine and fine to coarse maps
+    for a uniform mesh hierarchy.
+    '''
     refinements_per_level = 1
-    coarse_to_fine_cells = []
-    fine_to_coarse_cells = [None]
-    params = {"partition": False}
-    #We construct the unrefined linear mesh
-    if mesh.comm.size > 1 and mesh._grown_halos:
-        raise RuntimeError("Cannot refine parallel overlapped meshes ")
-    #We curve the mesh
-    if order>1:
-        mesh = fd.Mesh(mesh.curve_field(order=order, tol=tol),
-                       distribution_parameters=params, comm=comm)
-    meshes += [mesh]
-    cdm = meshes[-1].topology_dm
-    for _ in range(levs):
-        #Streightening the mesh
-        ngmesh.Curve(1)
-        #We refine the netgen mesh uniformly
-        ngmesh.Refine(adaptive=False)
-        #We refine the DMPlex mesh uniformly
-        cdm.setRefinementUniform(True)
-        rdm = cdm.refine()
-        rdm.removeLabel("pyop2_core")
-        rdm.removeLabel("pyop2_owned")
-        rdm.removeLabel("pyop2_ghost")
-        cdm = rdm
-        #We snap the mesh to the Netgen mesh
-        snapToNetgenDMPlex(ngmesh, rdm)
-        #We construct a Firedrake mesh from the DMPlex mesh
-        mesh = fd.Mesh(rdm, dim=meshes[-1].ufl_cell().geometric_dimension(), reorder=False,
-                                    distribution_parameters=params, comm=comm)
-        mesh.netgen_mesh = ngmesh
-        #We curve the mesh
-        if order > 1:
-            mesh = fd.Mesh(mesh.curve_field(order=order, tol=1e-8),
-                           distribution_parameters=params, comm=comm)
-        meshes += [mesh]
-    #We populate the coarse to fine map
     lgmaps = []
     for i, m in enumerate(meshes):
         no = impl.create_lgmap(m.topology_dm)
@@ -318,5 +305,90 @@ def NetgenHierarchy(mesh, levs, order=1, tol=1e-8):
                                 for i, c2f in enumerate(coarse_to_fine_cells))
     fine_to_coarse_cells = dict((Fraction(i, refinements_per_level), f2c)
                                 for i, f2c in enumerate(fine_to_coarse_cells))
+    return (coarse_to_fine_cells, fine_to_coarse_cells)
+
+def alfeldRefinementRoutine(ngmesh, cdm):
+    '''
+    Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
+    '''
+    #We refine the netgen mesh alfeld
+    ngmesh.SplitAlfeld()
+    #We refine the DMPlex mesh alfeld
+    tr = PETSc.DMPlexTransform().create(comm=PETSc.COMM_WORLD)
+    tr.setType(PETSc.DMPlexTransformType.REFINEREGULAR)
+    tr.setDM(cdm)
+    tr.setUp()
+    rdm = tr.apply(cdm)
+    return (rdm, ngmesh)
+
+def alfeldMapRoutine(meshes):
+    '''
+    This function computes the coarse to fine and fine to coarse maps
+    for a alfeld mesh hierarchy.
+    '''
+    raise NotImplementedError("Alfeld refinement is not implemented yet.")
+
+refinementTypes = {"uniform": (uniformRefinementRoutine, uniformMapRoutine),
+                   "Alfeld": (alfeldRefinementRoutine, alfeldMapRoutine)}
+
+def NetgenHierarchy(mesh, levs, flags):
+    '''
+    This function creates a Firedrake mesh hierarchy from Netgen/NGSolve meshes.
+
+    :arg mesh: the Netgen/NGSolve mesh
+    :arg levs: the number of levels in the hierarchy
+    :arg netgen_flags: either a bool or a dictionray containing options for Netgen.
+    If not False the hierachy is constructed using ngsPETSc, if None hierarchy
+    constructed in a standard manner. Netgen flags includes:
+        -degree, either an integer denoting the degree of curvature of all levels of
+        the mesh or a list of levs+1 integers denoting the degree of curvature of
+        each level of the mesh.
+        -tol, geometric tollerance adopted in snapToNetgenDMPlex.
+        -refinement_type, the refinment type to be used: uniform (default), Alfeld
+    '''
+    if mesh.geometric_dimension() == 3:
+        raise NotImplementedError("Netgen hierachies are only implemented for 2D meshes.")
+    ngmesh = mesh.netgen_mesh
+    comm = mesh.comm
+    #Parsing netgen flags
+    if not isinstance(flags, dict):
+        flags = {}
+    order = flagsUtils(flags, "degree", 1)
+    if isinstance(order, int):
+        order= [order]*(levs+1)
+    tol = flagsUtils(flags, "tol", 1e-8)
+    refType = flagsUtils(flags, "refinement_type", "uniform")
+    #Firedrake quoantities
+    meshes = []
+    coarse_to_fine_cells = []
+    fine_to_coarse_cells = [None]
+    params = {"partition": False}
+    #We construct the unrefined linear mesh
+    if mesh.comm.size > 1 and mesh._grown_halos:
+        raise RuntimeError("Cannot refine parallel overlapped meshes ")
+    #We curve the mesh
+    if order[0]>1:
+        mesh = fd.Mesh(mesh.curve_field(order=order[0], tol=tol),
+                       distribution_parameters=params, comm=comm)
+    meshes += [mesh]
+    cdm = meshes[-1].topology_dm
+    for l in range(levs):
+        #Streightening the mesh
+        ngmesh.Curve(1)
+        rdm, ngmesh = refinementTypes[refType][0](ngmesh, cdm)
+        cdm = rdm
+        #We snap the mesh to the Netgen mesh
+        snapToNetgenDMPlex(ngmesh, rdm)
+        #We construct a Firedrake mesh from the DMPlex mesh
+        mesh = fd.Mesh(rdm, dim=meshes[-1].ufl_cell().geometric_dimension(), reorder=False,
+                                    distribution_parameters=params, comm=comm)
+        mesh.netgen_mesh = ngmesh
+        #We curve the mesh
+        if order[l+1] > 1:
+            mesh = fd.Mesh(mesh.curve_field(order=order[l+1], tol=1e-8),
+                           distribution_parameters=params, comm=comm)
+        meshes += [mesh]
+    #We populate the coarse to fine map
+    coarse_to_fine_cells, fine_to_coarse_cells = refinementTypes[refType][1](meshes)
     return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
-                         refinements_per_level, nested=False)
+                            1, nested=False)
