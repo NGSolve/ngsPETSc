@@ -14,6 +14,7 @@ elif 'NGS_FROM_SOURCE' in os.environ:
         ]
 else:
     install_requires=[
+        'netgen',
         'ngsolve',
         'petsc4py',
         'mpi4py',
