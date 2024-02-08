@@ -9,6 +9,7 @@ elif 'NGS_FROM_SOURCE' in os.environ:
     install_requires = [
         'petsc4py',
         'mpi4py',
+        'numpy',
         'pytest', #For testing
         'pylint', #For formatting
         ]
