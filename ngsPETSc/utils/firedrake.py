@@ -221,7 +221,6 @@ class FiredrakeMesh:
                 #Optimises the mesh, for example smoothing
                 if mesh.dim == 2: 
                     mesh.OptimizeMesh2d(MeshingParameters(optimize2d=optMoves))
-                    print("Optimising mesh")
                 elif mesh.dim == 3:
                     mesh.OptimizeVolumeMesh(MeshingParameters(optimize3d=optMoves))
                 else:
@@ -371,6 +370,7 @@ def NetgenHierarchy(mesh, levs, flags):
         order= [order]*(levs+1)
     tol = flagsUtils(flags, "tol", 1e-8)
     refType = flagsUtils(flags, "refinement_type", "uniform")
+    optMoves = flagsUtils(flags, "optimisation_moves", False)
     #Firedrake quoantities
     meshes = []
     coarse_to_fine_cells = []
@@ -395,6 +395,14 @@ def NetgenHierarchy(mesh, levs, flags):
         #We construct a Firedrake mesh from the DMPlex mesh
         mesh = fd.Mesh(rdm, dim=meshes[-1].ufl_cell().geometric_dimension(), reorder=False,
                                     distribution_parameters=params, comm=comm)
+        if optMoves:
+            #Optimises the mesh, for example smoothing
+            if ngmesh.dim == 2: 
+                ngmesh.OptimizeMesh2d(MeshingParameters(optimize2d=optMoves))
+            elif mesh.dim == 3:
+                ngmesh.OptimizeVolumeMesh(MeshingParameters(optimize3d=optMoves))
+            else:
+                raise ValueError("Only 2D and 3D meshes can be optimised.")
         mesh.netgen_mesh = ngmesh
         #We curve the mesh
         if order[l+1] > 1:
