@@ -12,7 +12,6 @@ except ImportError:
     fd = None
 
 from fractions import Fraction
-import warnings
 import numpy as np
 from petsc4py import PETSc
 
@@ -184,10 +183,10 @@ def splitToQuads(plex, dim, comm):
         transform.setType(PETSc.DMPlexTransformType.REFINETOBOX)
         transform.setDM(plex)
         transform.setUp()
-        newplex = transform.apply(plex)
-        return newplex
     else:
         raise RuntimeError("Splitting to quads is only possible for 2D meshes.")
+    newplex = transform.apply(plex)
+    return newplex
 
 splitTypes = {"Alfeld": lambda x: x.SplitAlfeld(),
               "Powell-Sabin": lambda x: x.SplitPowellSabin()}
@@ -219,7 +218,7 @@ class FiredrakeMesh:
                 splitTypes[split](mesh)
             if optMoves:
                 #Optimises the mesh, for example smoothing
-                if mesh.dim == 2: 
+                if mesh.dim == 2:
                     mesh.OptimizeMesh2d(MeshingParameters(optimize2d=optMoves))
                 elif mesh.dim == 3:
                     mesh.OptimizeVolumeMesh(MeshingParameters(optimize3d=optMoves))
@@ -397,7 +396,7 @@ def NetgenHierarchy(mesh, levs, flags):
                                     distribution_parameters=params, comm=comm)
         if optMoves:
             #Optimises the mesh, for example smoothing
-            if ngmesh.dim == 2: 
+            if ngmesh.dim == 2:
                 ngmesh.OptimizeMesh2d(MeshingParameters(optimize2d=optMoves))
             elif mesh.dim == 3:
                 ngmesh.OptimizeVolumeMesh(MeshingParameters(optimize3d=optMoves))
