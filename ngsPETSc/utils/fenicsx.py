@@ -34,7 +34,7 @@ class GeometricModel:
         dolfinx.cpp.mesh.MeshTags_int32,dolfinx.cpp.mesh.MeshTags_int32]:
         """Given a NetGen model, take all physical entities of the highest
         topological dimension and create the corresponding DOLFINx mesh.
-        
+
         This function only works in serial, at the moment.
 
         Args:
@@ -73,9 +73,10 @@ class GeometricModel:
             V = ngmesh.Coordinates()
             T = ngmesh.Elements3D().NumPy()["nodes"]
             T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
-        ufl_domain = dolfinx.io.gmshio.ufl_mesh(_ngs_to_cells[(gdim,T.shape[1])],gdim)
+        ufl_domain = dolfinx.io.gmshio.ufl_mesh(
+            _ngs_to_cells[(gdim,T.shape[1])], gdim, dolfinx.default_real_type)
         cell_perm = dolfinx.cpp.io.perm_gmsh(dolfinx.cpp.mesh.to_type(str(ufl_domain.ufl_cell())),
                                              T.shape[1])
-        T = T[:, cell_perm]
+        T = np.ascontiguousarray(T[:, cell_perm])
         mesh = dolfinx.mesh.create_mesh(self.comm, T, V, ufl_domain, partitioner)
         return mesh
