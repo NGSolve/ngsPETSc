@@ -35,19 +35,15 @@ bibliography: paper.bib
 ---
 
 # Summary
+In the ever-evolving landscape of computational science and engineering, the synthesis of advanced meshing techniques and robust solver capabilities is fundamental to pushing the boundaries of simulation accuracy and efficiency. Addressing this need, we introduce ngsPETSc, a cutting-edge interface that seamlessly integrates the NETGEN mesher [@NETGEN], the versatile NGSolve finite element library [@NGSolve], and the high-performance Portable, Extensible Toolkit for Scientific Computation (PETSc)[@PETSc].
 
-There are few common ingredients in any Finite Element (FE) simulation, among these common ingredients there are mesh generation and efficient linear or non-linear solves.
-Furthermore in recent years that have been an increasing focus in the development of finite element softwares both as useful research tools and also to solve real-life applications, just to mention a few: `Deal II` [@DealII], `Dune` [@DuneFEM; @DuneVEM], `FEniCSx` [@Basix; @UFL], `FEniCS` [@FEniCS], `Firedrake` [@Firedrake] and `NGSolve` [@NGSolve].
-Among the previously mentioned software packages there those whose strength lies in their intimate nature with a liner and non-linear solver such as `Firedrake`, `FEniCS` and `FEniCSx`, which relies on `PETSc` [@PETSc] as solver.
-Other software packages such as `NGSolve` found their strength in their relation with the Netgen [@Netgen] mesh generator.
-`NGSPETSc` is a Python software package that brings these two ingredients by improving mesh generation capabilities of `PETSc` based solvers, such as `Firedrake` or `FEniCSx`, while at the same giving access to `PETSc` preconditioner together with linear and non-linear solvers to NGSolve.
+On the meshing front, ngsPETSc serves as a bridge between NETGEN and PETSc DMPlex, offering a sophisticated framework for the export of finely crafted meshes generated from constructive solid geometry (CSG) descriptions using OpenCASCADE. This integration extends the capabilities of mesh-based simulations, empowering researchers and practitioners to leverage intricate geometries and realize higher-order meshing strategies. In particular, ngsPETSc interface with Firedrake\ [@Firedrake] expands these possibilities, enabling the utilization of CSG-derived meshes while maintaining conformity to complex geometries and facilitating the construction of mesh hierarchies for geometric multigrid solvers.
+
+On the solver front, ngsPETSc empowers NGSolve with access to the extensive suite of PETSc solvers through interfaces with PC, KSP, and SNES. This integration broadens the range of linear and nonlinear solvers available to NGSolve, providing a versatile toolkit for tackling a diverse array of complex problems.
+
+This paper unfolds the capabilities and potential of ngsPETSc, contributing to the evolving landscape of computational simulations by seamlessly integrating advanced meshing and solver functionalities. In doing so, we will showcase the diverse range of problems and scenarios where ngsPETSc proves instrumental, from fluid dynamics to structural mechanics and beyond. 
 
 # Statement of need
-`ngsPETSc` provides an interface between the `NGSolve`/`Netgen` software family to PETSc. We begin discussing the `Netgen` to `PETSc` interface, which to the best of our knowledge is a major difference with any previous `NGSolve`-`PETSc` interface. In particular, the `Netgen` to `PETSc` interface offers access to Netgen meshes exported in the form a PETSc `DMPlex` [@DMPlex]. Accessing `Netgen` meshes as PETSc `DMPlex` the following new features are available in `Firedrake` and `FEniCSx`:
-- `Netgen` linear mesh can be used in both `Firedrake` and `FEniCSx` to solve all sorts of partial differential equations (PDEs). In particular, both two and three dimensional constructive solid geometries can be used to describe the domain where we aim to solve a PDE. Furthermore, thanks to new `Netgen` support for `OpenCascade` it is possible to describe the domain of solution of a PDE via the `OpenCascade` framework.
-- Anisotropic refined mesh generated via `Netgen` can be used in `Firedrake` and `FEniCSx`.
-- `Netgen` high order mesh can used in `Firedrake`. In particular the `OpenCascade` framework can be used to described arbitrary curved domains. Futhermore, curved Alfeld splits mesh can be constructed and used in `Firedrake`.
-- Adaptive mesh refinement is now available in `Firedrake` thanks to `Netgen` support for adaptivity.
 
 
 # References

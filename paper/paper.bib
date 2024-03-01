@@ -1,134 +1,50 @@
-@Article{DuneFEM,
-author={Dedner, Andreas
-and Kl{\"o}fkorn, Robert
-and Nolte, Martin
-and Ohlberger, Mario},
-title={A generic interface for parallel and adaptive discretization schemes: abstraction principles and the Dune-Fem module},
-journal={Computing},
-year={2010},
-month={Nov},
-day={01},
-volume={90},
-number={3},
-pages={165-196},
-abstract={Starting from an abstract mathematical notion of discrete function spaces and operators, we derive a general abstraction for a large class of grid-based discretization schemes for stationary and instationary partial differential equations. Special emphasis is put on concepts for local adaptivity and parallelization with dynamic load balancing. The concepts are based on a corresponding abstract definition of a parallel and hierarchical adaptive grid given in Bastian et al. (Computing 82(2--3):103--119, 2008). Based on the abstract framework, we describe an efficient object oriented implementation of a generic interface for grid-based discretization schemes that is realized in the Dune-Fem library (http://dune.mathematik.uni-freiburg.de). By using interface classes we manage to separate functionality from data structures. Efficiency is obtained by using modern template based generic programming techniques, including static polymorphism, the engine concept, and template metaprogramming. We present numerical results for several benchmark problems and some advanced applications.},
-issn={1436-5057},
-doi={10.1007/s00607-010-0110-3},
-url={https://doi.org/10.1007/s00607-010-0110-3}
-}
-@Article{DealII,
-  title   = {The \texttt{deal.II} Library, Version 9.5},
-  author  = {Daniel Arndt and Wolfgang Bangerth and Maximilian Bergbauer and
-             Marco Feder and Marc Fehling and Johannes Heinz and
-             Timo Heister and Luca Heltai and Martin Kronbichler and
-             Matthias Maier and Peter Munch and Jean-Paul Pelteret and
-             Bruno Turcksin and David Wells and Stefano Zampini},
-  journal = {Journal of Numerical Mathematics},
-  year    = {2023},
-  doi     = {10.1515/jnma-2023-0089},
-  pages   = {231--246},
-  volume  = {31},
-  number  = {3},
-  url     = {https://dealii.org/deal95-preprint.pdf}
-}
-@article{Basix,
-  title     = {Basix: a runtime finite element basis evaluation library},
-  author    = {M. W. Scroggs and I. A. Baratta and C. N. Richardson and G. N. Wells},
-  journal   = {Journal of Open Source Software},
-  year      = {2022},
-  volume    = {7},
-  number    = {73},
-  doi       = {10.21105/joss.03982},
-  pages     = {3982}
-}
-@article{UFL,
-  title     = {Unified Form Language: A domain-specific language for weak formulations of partial differential equations},
-  author    = {M. S. Alnaes and A. Logg and K. B. Ølgaard and M. E. Rognes and G. N. Wells},
-  journal   = {{ACM} Transactions on Mathematical Software},
-  year      = {2014},
-  volume    = {40},
-  doi       = {10.1145/2566630},
-}
-@article{FEniCS,
-  title     = {The {FEniCS} Project Version 1.5},
-  author    = {M. S. Alnaes and J. Blechta and J. Hake and A. Johansson and B. Kehlet and A. Logg and C. Richardson and J. Ring and M. E. Rognes and G. N. Wells},
-  journal   = {Archive of Numerical Software},
-  year      = {2015},
-  volume    = {3},
-  doi       = {10.11588/ans.2015.100.20553},
-}
-@incollection{Kirby,
-  title     = {{FIAT:} Numerical Construction of Finite Element Basis Functions},
-  author    = {R. C. Kirby},
-  year      = {2012},
-  booktitle = {Automated Solution of Differential Equations by the Finite Element Method},
-  publisher = {Springer},
-  series    = {Lecture Notes in Computational Science and Engineering},
-  volume    = {84},
-  chapter   = {13},
-  editor    = {A. Logg and {K.-A.} Mardal and G. N. Wells},
-}
-@manual{Firedrake,
-    title        = {Firedrake User Manual},
-    author       = {David A. Ham and Paul H. J. Kelly and Lawrence Mitchell and Colin J. Cotter and Robert C. Kirby and Koki Sagiyama and Nacime Bouziani and Sophia Vorderwuelbecke and Thomas J. Gregory and Jack Betteridge and Daniel R. Shapero and Reuben W. Nixon-Hill and Connor J. Ward and Patrick E. Farrell and Pablo D. Brubeck and India Marsden and Thomas H. Gibson and Miklós Homolya and Tianjiao Sun and Andrew T. T. McRae and Fabio Luporini and Alastair Gregory and Michael Lange and Simon W. Funke and Florian Rathgeber and Gheorghe-Teodor Bercea and Graham R. Markall},
-    organization = {Imperial College London and University of Oxford and Baylor University and University of Washington},
-    edition      = {First edition},
-    year         = {2023},
-    month        = {5},
-    doi          = {10.25561/104839},
-}
-@misc{DuneVEM,
-    title={A framework for implementing general virtual element spaces}, 
-    author={Andreas Dedner and Alice Hodson},
-    year={2023},
-    eprint={2208.08978},
-    archivePrefix={arXiv},
-    primaryClass={math.NA}
-}
-@Article{Netgen,
-    author={Sch{\"o}berl, Joachim},
-    title={NETGEN An advancing front 2D/3D-mesh generator based on abstract rules},
-    journal={Computing and Visualization in Science},
-    year={1997},
-    month={Jul},
-    day={01},
-    volume={1},
-    number={1},
-    pages={41-52},
-    abstract={In this paper, the algorithms of the automatic mesh generator NETGEN are described. The domain is provided by a Constructive Solid Geometry (CSG). The whole task of 3D mesh generation splits into four subproblems of special point calculation, edge following, surface meshing and finally volume mesh generation. Surface and volume mesh generation are based on the advancing front method. Emphasis is given to the abstract structure of the element generation rules. Several techniques of mesh optimization are tested and quality plots are presented.},
-    issn={1432-9360},
-    doi={10.1007/s007910050004},
-    url={https://doi.org/10.1007/s007910050004}
+@article{Netgen,
+pages = {41-52},
+publisher = {Springer Science and Business Media LLC},
+volume = {1},
+year = {1997},
+title = {NETGEN An advancing front 2D/3D-mesh generator based on abstract rules},
+author = {Schöberl, Joachim},
+journal = {Computing and visualization in science},
+number = {1},
 }
 @article{NGSolve,
   title={C++ 11 implementation of finite elements in NGSolve},
   author={Sch{\"o}berl, Joachim},
   journal={Institute for analysis and scientific computing, Vienna University of Technology},
   volume={30},
-  year={2014},
-  publisher={Citeseer}
+  year={2014}
 }
-@TechReport{PETSc,
-  author = {Satish Balay and Shrirang Abhyankar and Mark~F. Adams and Steven Benson and Jed
-                  Brown and Peter Brune and Kris Buschelman and Emil Constantinescu and Lisandro
-                  Dalcin and Alp Dener and Victor Eijkhout and Jacob Faibussowitsch and William~D.
-                  Gropp and V\'{a}clav Hapla and Tobin Isaac and Pierre Jolivet and Dmitry Karpeev
-                  and Dinesh Kaushik and Matthew~G. Knepley and Fande Kong and Scott Kruger and
-                  Dave~A. May and Lois Curfman McInnes and Richard Tran Mills and Lawrence Mitchell
-                  and Todd Munson and Jose~E. Roman and Karl Rupp and Patrick Sanan and Jason Sarich
-                  and Barry~F. Smith and Stefano Zampini and Hong Zhang and Hong Zhang and Junchao
-                  Zhang},
-  title = {{PETSc/TAO} Users Manual},
-  institution = {Argonne National Laboratory},
-  number = {ANL-21/39 - Revision 3.20},
-  doi = {10.2172/1968587},
-  year = {2023}
+@article{Firedrake,
+  title={Firedrake user manual},
+  author={Ham, David A and Kelly, Paul HJ and Mitchell, Lawrence and Cotter, Colin J and Kirby, Robert C and Sagiyama, Koki and Bouziani, Nacime and Vorderwuelbecke, Sophia and Gregory, Thomas J and Betteridge, Jack and others},
+  journal={Imperial College London and University of Oxford and Baylor University and University of Washington,},
+  volume={5},
+  year={2023}
 }
-@misc{DMPlex,
-      title={Flexible, Scalable Mesh and Data Management using PETSc DMPlex}, 
-      author={Michael Lange and Matthew G. Knepley and Gerard J. Gorman},
-      year={2015},
-      eprint={1505.04633},
-      archivePrefix={arXiv},
-      primaryClass={cs.MS}
+@techreport{PETSc,
+  author={Satish Balay and Shrirang Abhyankar and Mark~F. Adams and Steven Benson and Jed
+          Brown and Peter Brune and Kris Buschelman and Emil Constantinescu and Lisandro
+          Dalcin and Alp Dener and Victor Eijkhout and Jacob Faibussowitsch and William~D.
+          Gropp and V\'{a}clav Hapla and Tobin Isaac and Pierre Jolivet and Dmitry Karpeev
+          and Dinesh Kaushik and Matthew~G. Knepley and Fande Kong and Scott Kruger and
+          Dave~A. May and Lois Curfman McInnes and Richard Tran Mills and Lawrence Mitchell
+          and Todd Munson and Jose~E. Roman and Karl Rupp and Patrick Sanan and Jason Sarich
+          and Barry~F. Smith and Stefano Zampini and Hong Zhang and Hong Zhang and Junchao
+          Zhang},
+  title={{PETSc/TAO} Users Manual},
+  institution={Argonne National Laboratory},
+  number={ANL-21/39 - Revision 3.20},
+  doi={10.2172/2205494},
+  year={2023}
+}
+@article{petsc4py,
+  title={Parallel distributed computing using Python},
+  author={Lisandro D. Dalcin and Rodrigo R. Paz and Pablo A. Kler and Alejandro Cosimo},
+  journal={Advances in Water Resources},
+  volume={34},
+  number={9},
+  pages={1124 - 1139},
+  issn={0309-1708},
+  year={2011}
 }
