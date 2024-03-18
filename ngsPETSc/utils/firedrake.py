@@ -12,12 +12,12 @@ except ImportError:
     fd = None
 
 from fractions import Fraction
-import warnings
 import numpy as np
 from petsc4py import PETSc
 
 import netgen
 import netgen.meshing as ngm
+from netgen.meshing import MeshingParameters
 try:
     import ngsolve as ngs
 except ImportError:
@@ -174,6 +174,23 @@ def curveField(self, order, tol=1e-8):
                             newFunctionCoordinates.sub(2).dat.data[datIdx] = curvedPhysPts[i][j][2]
     return newFunctionCoordinates
 
+def splitToQuads(plex, dim, comm):
+    '''
+    This method splits a Netgen mesh to quads, using a PETSc transform.
+    TODO: Improve support quad meshing.
+        @pef  Get netgen to make a quad-dominant mesh, and then only split the triangles.
+              Current implementation will make for poor-quality meshes. 
+    '''
+    if dim == 2:
+        transform = PETSc.DMPlexTransform().create(comm=comm)
+        transform.setType(PETSc.DMPlexTransformType.REFINETOBOX)
+        transform.setDM(plex)
+        transform.setUp()
+    else:
+        raise RuntimeError("Splitting to quads is only possible for 2D meshes.")
+    newplex = transform.apply(plex)
+    return newplex
+
 splitTypes = {"Alfeld": lambda x: x.SplitAlfeld(),
               "Powell-Sabin": lambda x: x.SplitPowellSabin()}
 
@@ -192,35 +209,31 @@ class FiredrakeMesh:
             netgen_flags = {}
         split2tets = flagsUtils(netgen_flags, "split_to_tets", False)
         split = flagsUtils(netgen_flags, "split", False)
+        quad = flagsUtils(netgen_flags, "quad", False)
+        optMoves = flagsUtils(netgen_flags, "optimisation_moves", False)
         #Checking the mesh format
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             if split2tets:
                 mesh = mesh.Split2Tets()
             if split:
+                #Split mesh this includes Alfeld and Powell-Sabin
                 splitTypes[split](mesh)
+            if optMoves:
+                #Optimises the mesh, for example smoothing
+                if mesh.dim == 2:
+                    mesh.OptimizeMesh2d(MeshingParameters(optimize2d=optMoves))
+                elif mesh.dim == 3:
+                    mesh.OptimizeVolumeMesh(MeshingParameters(optimize3d=optMoves))
+                else:
+                    raise ValueError("Only 2D and 3D meshes can be optimised.")
+            #We create the plex from the netgen mesh
             self.meshMap = MeshMapping(mesh, comm=self.comm)
+            #We apply the DMPLEX transform
+            if quad:
+                newplex = splitToQuads(self.meshMap.petscPlex, mesh.dim, comm=self.comm)
+                self.meshMap = MeshMapping(newplex)
         else:
             raise ValueError("Mesh format not recognised.")
-        #We quadrilateralise the mesh or apply a transform if requested
-        try:
-            if netgen_flags["quad"]:
-                transform = PETSc.DMPlexTransform().create(comm=self.comm)
-                transform.setType(PETSc.DMPlexTransformType.REFINETOBOX)
-                transform.setDM(self.meshMap.petscPlex)
-                transform.setUp()
-                newplex = transform.apply(self.meshMap.petscPlex)
-                self.meshMap = MeshMapping(newplex)
-        except KeyError:
-            warnings.warn("No quad flag found, mesh will not be quadrilateralised.")
-        try:
-            if netgen_flags["transform"] is not None:
-                transform = netgen_flags["transform"]
-                transform.setDM(self.meshMap.petscPlex)
-                transform.setUp()
-                newplex = transform.apply(self.meshMap.petscPlex)
-                self.meshMap = MeshMapping(newplex)
-        except KeyError:
-            warnings.warn("No PETSc transform found, mesh will not be transformed.")
 
     def createFromTopology(self, topology, name):
         '''
@@ -358,6 +371,7 @@ def NetgenHierarchy(mesh, levs, flags):
         order= [order]*(levs+1)
     tol = flagsUtils(flags, "tol", 1e-8)
     refType = flagsUtils(flags, "refinement_type", "uniform")
+    optMoves = flagsUtils(flags, "optimisation_moves", False)
     #Firedrake quoantities
     meshes = []
     coarse_to_fine_cells = []
@@ -382,6 +396,14 @@ def NetgenHierarchy(mesh, levs, flags):
         #We construct a Firedrake mesh from the DMPlex mesh
         mesh = fd.Mesh(rdm, dim=meshes[-1].ufl_cell().geometric_dimension(), reorder=False,
                                     distribution_parameters=params, comm=comm)
+        if optMoves:
+            #Optimises the mesh, for example smoothing
+            if ngmesh.dim == 2:
+                ngmesh.OptimizeMesh2d(MeshingParameters(optimize2d=optMoves))
+            elif mesh.dim == 3:
+                ngmesh.OptimizeVolumeMesh(MeshingParameters(optimize3d=optMoves))
+            else:
+                raise ValueError("Only 2D and 3D meshes can be optimised.")
         mesh.netgen_mesh = ngmesh
         #We curve the mesh
         if order[l+1] > 1:
