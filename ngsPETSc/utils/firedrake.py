@@ -177,6 +177,9 @@ def curveField(self, order, tol=1e-8):
 def splitToQuads(plex, dim, comm):
     '''
     This method splits a Netgen mesh to quads, using a PETSc transform.
+    TODO: Improve support quad meshing.
+        @pef  Get netgen to make a quad-dominant mesh, and then only split the triangles.
+              Current implementation will make for poor-quality meshes. 
     '''
     if dim == 2:
         transform = PETSc.DMPlexTransform().create(comm=comm)
@@ -211,7 +214,6 @@ class FiredrakeMesh:
         #Checking the mesh format
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             if split2tets:
-                #Splits 2 tets
                 mesh = mesh.Split2Tets()
             if split:
                 #Split mesh this includes Alfeld and Powell-Sabin
