@@ -33,11 +33,11 @@ class MeshMapping:
 
     '''
 
-    def __init__(self, mesh=None, comm=MPI.COMM_WORLD, name="Default"):
+    def __init__(self, mesh=None, comm=MPI.COMM_WORLD, name="default", labels={}): #pylint: disable=W0102
         self.name = name
         self.comm = comm
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
-            self.createPETScDMPlex(mesh)
+            self.createPETScDMPlex(mesh, labels=labels)
         elif isinstance(mesh,PETSc.DMPlex):
             self.createNGSMesh(mesh)
         else:
@@ -146,13 +146,13 @@ class MeshMapping:
         else:
             raise NotImplementedError("No implementation for dimension greater than 3.")
 
-    def createPETScDMPlex(self, mesh):
+    def createPETScDMPlex(self, mesh, labels):
         '''
         This function generate an PETSc DMPlex from a Netgen/NGSolve mesh object
 
-        :arg plex: the Netgen/NGSolve mesh object to be converted into a PETSc
+        :arg mesh: the Netgen/NGSolve mesh object to be converted into a PETSc
                    DMPlex.
-
+        :arg labels: Dictionary with the new labels for the sets.
         '''
         if isinstance(mesh,ngs.comp.Mesh):
             self.ngMesh = mesh.ngmesh
@@ -192,6 +192,14 @@ class MeshMapping:
                 self.petscPlex = plex
         elif self.ngMesh.dim == 2:
             if comm.rank == 0:
+                # Map Netgen string to ids for the labels
+                newLabels = []
+                if len(labels) > 0:
+                    for key in labels.keys():
+                        for i, s in enumerate(self.ngMesh.GetRegionNames(dim=1)):
+                            if key == s:
+                                newLabels = newLabels + [(i+1, labels[key])]
+                newLabels = dict(newLabels)
                 V = self.ngMesh.Coordinates()
                 T = self.ngMesh.Elements2D().NumPy()["nodes"]
                 T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
@@ -204,8 +212,10 @@ class MeshMapping:
                 if not (1 == self.ngMesh.Elements2D().NumPy()["index"]).all():
                     for e in self.ngMesh.Elements2D():
                         join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
-                        plex.setLabelValue(CELL_SETS_LABEL, join[0], int(e.index))
-
+                        if e.index in newLabels:
+                            plex.setLabelValue(CELL_SETS_LABEL, join[0], int(newLabels[e.index]))
+                        else:
+                            plex.setLabelValue(CELL_SETS_LABEL, join[0], int(e.index))
                 self.petscPlex = plex
             else:
                 plex = PETSc.DMPlex().createFromCellList(2,
