@@ -208,14 +208,14 @@ class MeshMapping:
                 vStart, _ = plex.getDepthStratum(0)   # vertices
                 for e in self.ngMesh.Elements1D():
                     join = plex.getJoin([vStart+v.nr-1 for v in e.vertices])
-                    plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.index))
+                    if e.index in newLabels:
+                        plex.setLabelValue(FACE_SETS_LABEL, join[0], int(newLabels[e.index]))
+                    else:
+                        plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.index))
                 if not (1 == self.ngMesh.Elements2D().NumPy()["index"]).all():
                     for e in self.ngMesh.Elements2D():
                         join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
-                        if e.index in newLabels:
-                            plex.setLabelValue(CELL_SETS_LABEL, join[0], int(newLabels[e.index]))
-                        else:
-                            plex.setLabelValue(CELL_SETS_LABEL, join[0], int(e.index))
+                        plex.setLabelValue(CELL_SETS_LABEL, join[0], int(e.index))
                 self.petscPlex = plex
             else:
                 plex = PETSc.DMPlex().createFromCellList(2,
