@@ -99,7 +99,8 @@ def curveField(self, order, tol=1e-8):
     element = low_order_element.reconstruct(degree=order)
     space = fd.VectorFunctionSpace(self, fd.BrokenElement(element))
     newFunctionCoordinates = fd.assemble(interpolate(self.coordinates, space))
-    self.netgen_mesh = self.comm.bcast(self.netgen_mesh, root=0)
+    if self.comm.size > 1:
+        self.netgen_mesh = self.comm.bcast(self.netgen_mesh, root=0)
     #Computing reference points using fiat
     fiat_element = newFunctionCoordinates.function_space().finat_element.fiat_equivalent
     entity_ids = fiat_element.entity_dofs()
