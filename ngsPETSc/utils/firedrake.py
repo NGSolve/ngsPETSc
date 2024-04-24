@@ -95,6 +95,9 @@ def curveField(self, order, tol=1e-8):
     :arg order: the order of the curved mesh
 
     '''
+    #Checking if the mesh is a surface mesh
+    surf = len(self.netgen_mesh.Elements3D()) == 0
+    #Constructing mesh as a function
     low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
     element = low_order_element.reconstruct(degree=order)
     space = fd.VectorFunctionSpace(self, fd.BrokenElement(element))
@@ -144,17 +147,18 @@ def curveField(self, order, tol=1e-8):
                             newFunctionCoordinates.sub(0).dat.data[datIdx] = curvedPhysPts[i][j][0]
                             newFunctionCoordinates.sub(1).dat.data[datIdx] = curvedPhysPts[i][j][1]
     if self.geometric_dimension() == 3:
+        els = {True: self.netgen_mesh.Elements2D, False: self.netgen_mesh.Elements3D}
         #Mapping to the physical domain
-        physPts = np.ndarray((len(self.netgen_mesh.Elements3D()),
+        physPts = np.ndarray((len(els[surf]()),
                              refPts.shape[0], self.geometric_dimension()))
         self.netgen_mesh.CalcElementMapping(refPts, physPts)
         #Cruving the mesh
         self.netgen_mesh.Curve(order)
-        curvedPhysPts = np.ndarray((len(self.netgen_mesh.Elements3D()),
+        curvedPhysPts = np.ndarray((len(els[surf]()),
                                    refPts.shape[0], self.geometric_dimension()))
         self.netgen_mesh.CalcElementMapping(refPts, curvedPhysPts)
         cellMap = newFunctionCoordinates.cell_node_map()
-        for i, el in enumerate(self.netgen_mesh.Elements3D()):
+        for i, el in enumerate(els[surf]()):
             #Inefficent code but runs only on curved elements
             if el.curved:
                 pts = physPts[i][0:refPts.shape[0]]
