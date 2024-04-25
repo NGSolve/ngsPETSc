@@ -159,6 +159,14 @@ class MeshMapping:
         else:
             self.ngMesh = mesh
         comm = self.comm
+        # Map Netgen string to ids for the labels
+        newLabels = []
+        if len(labels) > 0:
+            for key in labels.keys():
+                for i, s in enumerate(self.ngMesh.GetRegionNames(dim=self.ngMesh.dim-1)):
+                    if key == s:
+                        newLabels = newLabels + [(i+1, labels[key])]
+        newLabels = dict(newLabels)
         if self.ngMesh.dim == 3:
             if comm.rank == 0:
                 V = self.ngMesh.Coordinates()
@@ -179,7 +187,10 @@ class MeshMapping:
                 else:
                     for e in self.ngMesh.Elements2D():
                         join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
-                        plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.index))
+                        if e.index in newLabels:
+                            plex.setLabelValue(FACE_SETS_LABEL, join[0], int(newLabels[e.index]))
+                        else:
+                            plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.index))
                     for e in self.ngMesh.Elements1D():
                         join = plex.getJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(EDGE_SETS_LABEL, join[0], int(e.index))
@@ -192,14 +203,6 @@ class MeshMapping:
                 self.petscPlex = plex
         elif self.ngMesh.dim == 2:
             if comm.rank == 0:
-                # Map Netgen string to ids for the labels
-                newLabels = []
-                if len(labels) > 0:
-                    for key in labels.keys():
-                        for i, s in enumerate(self.ngMesh.GetRegionNames(dim=1)):
-                            if key == s:
-                                newLabels = newLabels + [(i+1, labels[key])]
-                newLabels = dict(newLabels)
                 V = self.ngMesh.Coordinates()
                 T = self.ngMesh.Elements2D().NumPy()["nodes"]
                 T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
