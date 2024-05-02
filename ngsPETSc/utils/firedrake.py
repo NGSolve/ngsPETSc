@@ -126,17 +126,20 @@ def curveField(self, order, tol=1e-8):
         curvedPhysPts = np.ndarray((len(els[surf]()),
                                     refPts.shape[0], self.geometric_dimension()))
         self.netgen_mesh.CalcElementMapping(refPts, curvedPhysPts)
+        curved = els[surf]().NumPy()["curved"]
     else:
         physPts = np.ndarray((len(els[surf]()),
                                 refPts.shape[0], self.geometric_dimension()))
         curvedPhysPts = np.ndarray((len(els[surf]()),
                                     refPts.shape[0], self.geometric_dimension()))
+        curved = np.array((len(els[surf]()),1))
     physPts = self.comm.bcast(physPts, root=0)
     curvedPhysPts = self.comm.bcast(curvedPhysPts, root=0)
+    curved = self.comm.bcast(curved, root=0)
     cellMap = newFunctionCoordinates.cell_node_map()
     for i in range(physPts.shape[0]):
         #Inefficent code but runs only on curved elements
-        if True:
+        if curved[i]:
             pts = physPts[i][0:refPts.shape[0]]
             bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
             Idx = self.locate_cell(bary)
