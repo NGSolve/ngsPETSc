@@ -5,7 +5,6 @@ the package will only be used in combination with Firedrake.
 '''
 try:
     import firedrake as fd
-    from firedrake.logging import warning
     from firedrake.cython import mgimpl as impl
     from firedrake.__future__ import interpolate
 except ImportError:
@@ -153,8 +152,8 @@ def curveField(self, order, tol=1e-8):
                     fd.logging.warning("Not able to curve Firedrake element {}".format(Idx))
                 else:
                     for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
-                        for dim in range(self.geometric_dimension()):
-                            newFunctionCoordinates.sub(dim).dat.data[datIdx] = curvedPhysPts[i][j][dim]
+                        for d in range(self.geometric_dimension()):
+                            newFunctionCoordinates.sub(d).dat.data[datIdx] = curvedPhysPts[i][j][d]
     return newFunctionCoordinates
 
 def splitToQuads(plex, dim, comm):
