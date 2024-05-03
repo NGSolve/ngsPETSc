@@ -146,31 +146,42 @@ def curveField(self, order, tol=1e-8):
             #Check if element is shared across processes
             shared = self.comm.gather(isInMesh, root=0)
             shared = self.comm.bcast(shared, root=0)
-            shared = np.sum(shared) > 1
             #Bend if not shared
-            if isInMesh and not shared:
-                p = [np.argmin(np.sum((pts - pt)**2, axis=1))
-                        for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
-                curvedPhysPts[i] = curvedPhysPts[i][p]
-                res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
-                if not shared:
+            if np.sum(shared) == 1:
+                if isInMesh:
+                    p = [np.argmin(np.sum((pts - pt)**2, axis=1))
+                            for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
+                    curvedPhysPts[i] = curvedPhysPts[i][p]
+                    res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
                     if res > tol:
-                        fd.logging.warning("[{}, {}] Not able to curve Firedrake element {} ({}) -- residual: {}".format(self.comm.rank, shared, Idx,i, res))
+                        fd.logging.warning("[{}] Not able to curve Firedrake element {} \
+                            ({}) -- residual: {}".format(self.comm.rank, Idx,i, res))
                     else:
                         for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
                             for dim in range(self.geometric_dimension()):
-                                newFunctionCoordinates.sub(dim).dat.data[datIdx] = curvedPhysPts[i][j][dim]
+                                coo = curvedPhysPts[i][j][dim]
+                                newFunctionCoordinates.sub(dim).dat.data[datIdx] = coo
+            else:
+                if isInMesh:
+                    p = [np.argmin(np.sum((pts - pt)**2, axis=1))
+                            for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
+                    curvedPhysPts[i] = curvedPhysPts[i][p]
+                    res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
                 else:
-                    res = self.comm.gather(res, root=0)
-                    res = self.comm.bcast(shared, root=0)
-                    if self.comm.rank == np.argmin(res):
-                        res = np.min(res)
-                        if res > tol:
-                            fd.logging.warning("[{}, {}] Not able to curve Firedrake element {} ({}) -- residual: {}".format(self.comm.rank, shared, Idx,i, res))
-                        else:
-                            for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
-                                for dim in range(self.geometric_dimension()):
-                                    newFunctionCoordinates.sub(dim).dat.data[datIdx] = curvedPhysPts[i][j][dim]
+                    res = np.Inf
+                res = self.comm.gather(res, root=0)
+                res = self.comm.bcast(res, root=0)
+                rank = np.argmin(res)
+                if self.comm.rank == rank:
+                    if res[rank] > tol:
+                        fd.logging.warning("[{}, {}] Not able to curve Firedrake element {} \
+                            ({}) -- residual: {}".format(self.comm.rank, shared, Idx,i, res))
+                    else:
+                        for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
+                            for dim in range(self.geometric_dimension()):
+                                coo = curvedPhysPts[i][j][dim]
+                                newFunctionCoordinates.sub(dim).dat.data[datIdx] = coo
+
     return newFunctionCoordinates
 
 def splitToQuads(plex, dim, comm):
