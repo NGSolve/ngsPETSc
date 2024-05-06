@@ -59,7 +59,7 @@ RUN mkdir -p ~/ngsuite \
            && mkdir ~/ngsuite/ngsolve-build \
            && mkdir ~/ngsuite/ngsolve-install \
            && cd ~/ngsuite/ngsolve-build \
-           && cmake -DCMAKE_INSTALL_PREFIX=~/ngsuite/ngsolve-install ~/ngsuite/ngsolve-src -DUSE_MPI=ON -DUSE_OCC=ON \
+           && cmake -DCMAKE_INSTALL_PREFIX=~/ngsuite/ngsolve-install ~/ngsuite/ngsolve-src -DUSE_MPI=ON -DBUILD_OCC=ON \
            && make && make install
 #Adding NGS to PYTHONPATH
 ENV PYTHONPATH /root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib:/root/ngsuite/ngsolve-install/lib/python3.10/site-packages
