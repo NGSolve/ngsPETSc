@@ -60,11 +60,11 @@ jobs:
 
       - name: Install Netgen and ngsPETSc
         run: |
-          pip install netgen-mesher
-          pip install pylint
+          pip install netgen-mesher --break-system-packages
+          pip install pylint --break-system-packages
           export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.10/site-packages
           echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV
-          NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
+          NGSPETSC_NO_INSTALL_REQUIRED=ON pip install . --break-system-packages
 
       - name: Check formatting
         run: |
