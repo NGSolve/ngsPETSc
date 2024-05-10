@@ -98,14 +98,14 @@ jobs:
 
       - name: Install Netgen and ngsPETSc
         run: |
-          . ../firedrake_venv/bin/activate
+          . /home/firedrake/firedrake/bin/activate
           pip install netgen-mesher
           pip install xdist pytest-timeout
           NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
 
       - name: Run part of the Firedrake test suite
         run: |
-          . ../firedrake_venv/bin/activate
+          . /home/firedrake/firedrake/bin/activate
           cd $VIRTUAL_ENV/src/firedrake
           python -m pytest \
             --timeout=1800 \
