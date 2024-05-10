@@ -100,7 +100,7 @@ jobs:
         run: |
           . /home/firedrake/firedrake/bin/activate
           pip install netgen-mesher
-          pip install xdist pytest-timeout
+          pip install xdist pytest-timeout ipympl
           NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
 
       - name: Run part of the Firedrake test suite
