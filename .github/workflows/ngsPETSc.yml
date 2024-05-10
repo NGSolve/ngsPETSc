@@ -65,7 +65,9 @@ jobs:
 
   fenicsx:
     runs-on: ubuntu-latest
-    container: dolfinx/dolfinx:nightly
+    container:
+      image: dolfinx/dolfinx:nightly
+      options: --user root
     timeout-minutes: 50
 
     steps:
@@ -85,7 +87,9 @@ jobs:
 
   firedrake:
     runs-on: ubuntu-latest
-    container: firedrakeproject/firedrake-vanilla:latest
+    container:
+      image: firedrakeproject/firedrake-vanilla:latest
+      options: --user root
     timeout-minutes: 50
 
     steps:
