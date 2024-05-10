@@ -168,7 +168,7 @@ def curveField(self, order, tol=1e-8):
                     curvedPhysPts[i] = curvedPhysPts[i][p]
                     res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
                 else:
-                    res = np.Inf
+                    res = np.inf
                 res = self.comm.gather(res, root=0)
                 res = self.comm.bcast(res, root=0)
                 rank = np.argmin(res)
@@ -189,7 +189,7 @@ def splitToQuads(plex, dim, comm):
     This method splits a Netgen mesh to quads, using a PETSc transform.
     TODO: Improve support quad meshing.
         @pef  Get netgen to make a quad-dominant mesh, and then only split the triangles.
-              Current implementation will make for poor-quality meshes. 
+              Current implementation will make for poor-quality meshes.
     '''
     if dim == 2:
         transform = PETSc.DMPlexTransform().create(comm=comm)
