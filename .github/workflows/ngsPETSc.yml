@@ -118,4 +118,4 @@ jobs:
             --timeout-method=thread \
             -o faulthandler_timeout=1860 \
             -n 4 --dist worksteal \
-            -v tests/regression/test_netgen.py tests/demos
+            -v tests/regression/test_netgen.py tests/demos tests/multigrid/test_netgen_gmg.py
