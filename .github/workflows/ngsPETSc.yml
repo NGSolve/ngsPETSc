@@ -99,7 +99,8 @@ jobs:
       - name: Add SLEPc to vanilla Firedrake
         run: |
           . /home/firedrake/firedrake/bin/activate
-          firedrake-update --slepc
+          cp -R $SLEPC_DIR/src/binding/slepc4py $VIRTUAL_ENV/src
+          pip install --no-build-isolation --no-binary mpi4py,randomgen,numpy --no-deps $VIRTUAL_ENV/src/slepc4py/
 
       - name: Install Netgen and ngsPETSc
         run: |
