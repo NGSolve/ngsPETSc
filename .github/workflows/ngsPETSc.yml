@@ -96,6 +96,11 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v4
 
+      - name: Add SLEPc to vanilla Firedrake
+        run: |
+          . /home/firedrake/firedrake/bin/activate
+          firedrake-update --slepc
+
       - name: Install Netgen and ngsPETSc
         run: |
           . /home/firedrake/firedrake/bin/activate
