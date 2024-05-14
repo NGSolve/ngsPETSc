@@ -38,6 +38,6 @@ if ngsolve:
     from ngsPETSc.eps import *
     from ngsPETSc.snes import *
 
-VERSION = "0.0.4"
+VERSION = "0.0.5"
 
 __all__ = ["Matrix","VectorMapping","MeshMapping","KrylovSolver","EigenSolver","FiredrakeMesh"]
