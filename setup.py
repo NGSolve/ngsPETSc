@@ -15,7 +15,7 @@ elif 'NGS_FROM_SOURCE' in os.environ:
         ]
 else:
     install_requires=[
-        'netgen-mesher'
+        'netgen-mesher',
         'ngsolve',
         'petsc4py',
         'mpi4py',
