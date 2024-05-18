@@ -34,10 +34,12 @@ if ngsolve:
     from ngsPETSc.mat import *
     from ngsPETSc.vec import *
     from ngsPETSc.ksp import *
+    from ngsPETSc.nullspace import *
     from ngsPETSc.pc import *
     from ngsPETSc.eps import *
     from ngsPETSc.snes import *
 
 VERSION = "0.0.5"
 
-__all__ = ["Matrix","VectorMapping","MeshMapping","KrylovSolver","EigenSolver","FiredrakeMesh"]
+__all__ = ["Matrix","VectorMapping","MeshMapping","KrylovSolver","EigenSolver",
+           "FiredrakeMesh","NullSpace"]

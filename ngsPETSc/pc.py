@@ -4,8 +4,9 @@ This module contains all the function and class needed to wrap a PETSc Precondit
 from petsc4py import PETSc
 
 from ngsolve import BaseMatrix, comp
-
 from ngsPETSc import Matrix, VectorMapping
+
+
 
 class PETScPreconditioner(BaseMatrix):
     '''
@@ -24,6 +25,7 @@ class PETScPreconditioner(BaseMatrix):
     MKL sparse: mklaij or CUDA: aijcusparse
 
     '''
+    nullsapce = None
     def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix=None, matType="aij"):
         BaseMatrix.__init__(self)
         self.ngsMat = mat
@@ -45,7 +47,6 @@ class PETScPreconditioner(BaseMatrix):
         if solverParameters is not None:
             for optName, optValue in solverParameters.items():
                 options_object[optName] = optValue
-
         self.petscPreconditioner.setOptionsPrefix(optionsPrefix)
         self.petscPreconditioner.setFromOptions()
         self.petscPreconditioner.setUp()
