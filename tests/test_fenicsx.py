@@ -12,7 +12,7 @@ def test_square_netgen():
         import ngsPETSc.utils.fenicsx as ngfx
         from dolfinx.io import XDMFFile
     except ImportError:
-        pytest.skip(msg="DOLFINx unavailable, skipping FENICSx test")
+        pytest.skip("DOLFINx unavailable, skipping FENICSx test")
 
     from netgen.geom2d import SplineGeometry
     geo = SplineGeometry()
@@ -36,7 +36,7 @@ def test_poisson_netgen():
         from petsc4py.PETSc import ScalarType
         import ngsPETSc.utils.fenicsx as ngfx
     except ImportError:
-        pytest.skip(msg="DOLFINx unavailable, skipping FENICSx test")
+        pytest.skip("DOLFINx unavailable, skipping FENICSx test")
 
     from netgen.geom2d import SplineGeometry
     geo = SplineGeometry()
