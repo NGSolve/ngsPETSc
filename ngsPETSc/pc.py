@@ -37,6 +37,7 @@ class PETScPreconditioner(BaseMatrix):
         if hasattr(solverParameters, "ToDict"):
             solverParameters = solverParameters.ToDict()
         try:
+            freeDofs = solverParameters["restrictedTo"]
             matType = solverParameters["matType"]
         except KeyError:
             pass
@@ -46,7 +47,8 @@ class PETScPreconditioner(BaseMatrix):
         options_object = PETSc.Options()
         if solverParameters is not None:
             for optName, optValue in solverParameters.items():
-                options_object[optName] = optValue
+                if optName not in ["restrictedTo", "matType"]:
+                    options_object[optName] = optValue
         self.petscPreconditioner.setOptionsPrefix(optionsPrefix)
         self.petscPreconditioner.setFromOptions()
         self.petscPreconditioner.setUp()
