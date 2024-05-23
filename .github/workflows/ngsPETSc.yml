@@ -76,10 +76,10 @@ jobs:
 
       - name: Install Netgen and ngsPETSc
         run: |
-          pip install netgen-mesher
+          pip install --break-system-packages netgen-mesher
           export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.10/site-packages
           echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV
-          NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
+          NGSPETSC_NO_INSTALL_REQUIRED=ON pip -break-system-packages install -e .
 
       - name: Run test suite in serial
         run: |
