@@ -26,21 +26,21 @@ class PETScPreconditioner(BaseMatrix):
 
     '''
     nullsapce = None
-    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix=None, matType="aij"):
-        BaseMatrix.__init__(self)
+    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix=None):
+        BaseMatrix.__init__(self),
+        matType="aij"
+        if hasattr(solverParameters, "ToDict"):
+            solverParameters = solverParameters.ToDict()
+        if "restrictedTo" in solverParameters:
+            freeDofs = solverParameters["restrictedTo"]
+        if "matType" in solverParameters:
+            matType = solverParameters["matType"]
         self.ngsMat = mat
         if hasattr(self.ngsMat, "row_pardofs"):
             dofs = self.ngsMat.row_pardofs
         else:
             dofs = None
         self.vecMap = VectorMapping((dofs,freeDofs,{"bsize":self.ngsMat.local_mat.entrysizes}))
-        if hasattr(solverParameters, "ToDict"):
-            solverParameters = solverParameters.ToDict()
-        try:
-            freeDofs = solverParameters["restrictedTo"]
-            matType = solverParameters["matType"]
-        except KeyError:
-            pass
         petscMat = Matrix(self.ngsMat, (dofs, freeDofs, None), matType).mat
         self.petscPreconditioner = PETSc.PC().create(comm=petscMat.getComm())
         self.petscPreconditioner.setOperators(petscMat)
