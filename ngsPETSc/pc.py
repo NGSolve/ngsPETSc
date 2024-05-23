@@ -27,6 +27,7 @@ class PETScPreconditioner(BaseMatrix):
     '''
     nullsapce = None
     def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix=None):
+        BaseMatrix.__init__(self)
         matType="aij"
         if hasattr(solverParameters, "ToDict"):
             solverParameters = solverParameters.ToDict()
