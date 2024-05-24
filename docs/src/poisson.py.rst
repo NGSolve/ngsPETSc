@@ -3,6 +3,7 @@ Solving the Poisson using PETSc KSP
 
 In this tutorial we explore solving the Poisson problem with Dirichlet boundary conditions using `PETSc KSP`.
 We begin by creating a discretisation of the Poisson problem using H1 elements, in particular we consider the usual variational formulation
+
 .. math::
 
    \text{find } u\in H^1_0(\Omega) \text{ s.t. } a(u,v) := \int_{\Omega} \nabla u\cdot \nabla v \; d\vec{x} = L(v) := \int_{\Omega} fv\; d\vec{x}\qquad v\in H^1_0(\Omega).
@@ -26,6 +27,7 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
 
 We now import from ngsPETSc the `KrylovSolver` object that exposes to NGSolve the `PETSc KSP` object, using petsc4py. 
 The `PETSc KSP` provides a wide range of iterative solvers and preconditioners that can be used to solve a linear system of equations, i.e.
+
 .. math::
 
    Au= b
