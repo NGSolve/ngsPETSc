@@ -45,7 +45,9 @@ def refineMarkedElements(self, mark):
     :arg mark: the marking function which is a Firedrake DG0 function.
 
     '''
-    if self.geometric_dimension() == 2:
+    els = {2: self.netgen_mesh.Elements2D, 3: self.netgen_mesh.Elements3D}
+    dim = self.geometric_dimension()
+    if dim in [2,3]:
         with mark.dat.vec as marked:
             marked0 = marked
             getIdx = self._cell_numbering.getOffset
@@ -56,34 +58,17 @@ def refineMarkedElements(self, mark):
                                                               marked)
             if self.comm.Get_rank() == 0:
                 mark = marked0.getArray()
-                for i, el in enumerate(self.netgen_mesh.Elements2D()):
-                    if mark[getIdx(i)]:
-                        el.refine = True
-                    else:
-                        el.refine = False
-                self.netgen_mesh.Refine(adaptive=True)
+                max_refs = np.max(mark)
+                for _ in range(int(max_refs)):
+                    for i, el in enumerate(els[dim]()):
+                        if mark[getIdx(i)] > 0:
+                            el.refine = True
+                        else:
+                            el.refine = False
+                    self.netgen_mesh.Refine(adaptive=True)
+                    mark = mark-np.ones(mark.shape)
                 return fd.Mesh(self.netgen_mesh)
-            return fd.Mesh(netgen.libngpy._meshing.Mesh(2))
-
-    elif self.geometric_dimension() == 3:
-        with mark.dat.vec as marked:
-            marked0 = marked
-            getIdx = self._cell_numbering.getOffset
-            if self.sfBCInv is not None:
-                getIdx = lambda x: x
-                _, marked0 = self.topology_dm.distributeField(self.sfBCInv,
-                                                              self._cell_numbering,
-                                                              marked)
-            if self.comm.Get_rank() == 0:
-                mark = marked0.getArray()
-                for i, el in enumerate(self.netgen_mesh.Elements3D()):
-                    if mark[getIdx(i)]:
-                        el.refine = True
-                    else:
-                        el.refine = False
-                self.netgen_mesh.Refine(adaptive=True)
-                return fd.Mesh(self.netgen_mesh)
-            return fd.Mesh(netgen.libngpy._meshing.Mesh(3))
+            return fd.Mesh(netgen.libngpy._meshing.Mesh(dim))
     else:
         raise NotImplementedError("No implementation for dimension other than 2 and 3.")
 
