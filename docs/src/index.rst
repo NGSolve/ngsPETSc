@@ -11,7 +11,11 @@ Welcome to ngsPETSc's documentation!
    :caption: Contents:
    
    ngsPETSc
-   Tutorials
+   poisson.py
+   elasticity.
+   precond.py
+   saddle.py
+   Firedrake-Netgen interface via ngsPETSc <https://www.firedrakeproject.org/demos/netgen_mesh.py.html>
 
 
 Indices and tables
