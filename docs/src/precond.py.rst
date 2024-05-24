@@ -3,6 +3,7 @@ Using PETSc PC inside of NGSolve
 
 In this tutorial we explore using `PETSc PC` as a preconditioner inside NGSolve preconditioning infrastructure.
 Once again, we begin by creating a discretisation of the Poisson problem using H1 elements, in particular we consider the usual variational formulation
+
 .. math::
 
    \text{find } u\in H^1_0(\Omega) \text{ s.t. } a(u,v) := \int_{\Omega} \nabla u\cdot \nabla v \; d\vec{x} = L(v) := \int_{\Omega} fv\; d\vec{x}\qquad v\in H^1_0(\Omega).
