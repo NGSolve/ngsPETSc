@@ -206,6 +206,7 @@ class FiredrakeMesh:
         split = flagsUtils(netgen_flags, "split", False)
         quad = flagsUtils(netgen_flags, "quad", False)
         optMoves = flagsUtils(netgen_flags, "optimisation_moves", False)
+        labels = flagsUtils(netgen_flags, "labels", {})
         #Checking the mesh format
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             if split2tets:
@@ -222,7 +223,7 @@ class FiredrakeMesh:
                 else:
                     raise ValueError("Only 2D and 3D meshes can be optimised.")
             #We create the plex from the netgen mesh
-            self.meshMap = MeshMapping(mesh, comm=self.comm)
+            self.meshMap = MeshMapping(mesh, comm=self.comm, labels=labels)
             #We apply the DMPLEX transform
             if quad:
                 newplex = splitToQuads(self.meshMap.petscPlex, mesh.dim, comm=self.comm)
@@ -354,7 +355,7 @@ def NetgenHierarchy(mesh, levs, flags):
         -tol, geometric tollerance adopted in snapToNetgenDMPlex.
         -refinement_type, the refinment type to be used: uniform (default), Alfeld
     '''
-    if mesh.geometric_dimension() == 3:
+    if mesh.dim == 3:
         raise NotImplementedError("Netgen hierachies are only implemented for 2D meshes.")
     ngmesh = mesh.netgen_mesh
     comm = mesh.comm
