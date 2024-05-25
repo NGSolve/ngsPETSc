@@ -65,6 +65,8 @@ class GeometricModel:
             meshMap = MeshMapping(newplex)
             ngmesh = meshMap.ngmesh
         # We extract topology and geometry
+        V = None
+        T = None
         if ngmesh.dim == 2:
             V = ngmesh.Coordinates()
             T = ngmesh.Elements2D().NumPy()["nodes"]
