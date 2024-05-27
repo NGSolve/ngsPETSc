@@ -50,7 +50,7 @@ def refineMarkedElements(self, mark):
             marked0 = marked
             getIdx = self._cell_numbering.getOffset
             if self.sfBCInv is not None:
-                getIdx = lambda x: x
+                getIdx = lambda x: x #pylint: disable=C3001
                 _, marked0 = self.topology_dm.distributeField(self.sfBCInv,
                                                               self._cell_numbering,
                                                               marked)
