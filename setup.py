@@ -39,7 +39,7 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    packages=["ngsPETSc", "ngsPETSc.utils"],
+    packages=["ngsPETSc", "ngsPETSc.utils", "ngsPETSc.utils.firedrake"],
     python_requires = ">=3.9",
     install_requires=install_requires
 

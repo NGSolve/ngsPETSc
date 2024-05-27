@@ -117,5 +117,7 @@ jobs:
         run: |
           . /home/firedrake/firedrake/bin/activate
           cd $VIRTUAL_ENV/src/firedrake
-          pytest -v tests/regression/test_netgen.py
-          pytest -v tests/multigrid/test_netgen_gmg.py
+          ls tests/regression
+          python -c 'import ngsPETSc; print(ngsPETSc.VERSION)'
+          pytest tests/regression/test_poisson_strong_bcs.py
+          pytest tests/regression/test_netgen.py

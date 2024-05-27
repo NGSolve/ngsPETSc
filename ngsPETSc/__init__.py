@@ -45,4 +45,4 @@ if ngsolve:
     __all__ = __all__ + ["Matrix","VectorMapping","MeshMapping",
                          "KrylovSolver","EigenSolver","NullSpace"]
 
-VERSION = "0.0.5"
+VERSION = "0.0.6"
