@@ -117,9 +117,5 @@ jobs:
         run: |
           . /home/firedrake/firedrake/bin/activate
           cd $VIRTUAL_ENV/src/firedrake
-          python -m pytest \
-            --timeout=1800 \
-            --timeout-method=thread \
-            -o faulthandler_timeout=1860 \
-            -n 4 --dist worksteal \
-            -v tests/regression/test_netgen.py tests/multigrid/test_netgen_gmg.py
+          pytest -v tests/regression/test_netgen.py
+          pytest -v tests/multigrid/test_netgen_gmg.py
