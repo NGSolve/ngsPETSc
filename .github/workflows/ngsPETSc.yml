@@ -73,7 +73,11 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
-
+      
+      - name: Install pytest
+        run: |
+          pip install pytest --break-system-packages
+      
       - name: Install Netgen and ngsPETSc
         run: |
           pip install netgen-mesher --break-system-packages
