@@ -4,7 +4,6 @@ This module contains all the functions related
 try:
     import firedrake as fd
     from firedrake.cython import mgimpl as impl
-    from firedrake.__future__ import interpolate
 except ImportError:
     fd = None
 
@@ -12,19 +11,9 @@ from fractions import Fraction
 import numpy as np
 from petsc4py import PETSc
 
-import netgen
-import netgen.meshing as ngm
 from netgen.meshing import MeshingParameters
-try:
-    import ngsolve as ngs
-except ImportError:
-    class ngs:
-        "dummy class"
-        class comp:
-            "dummy class"
-            Mesh = type(None)
-            
-from ngsPETSc.utils.firedrake import *
+
+from ngsPETSc.utils.firedrake.meshes import flagsUtils
 
 def snapToNetgenDMPlex(ngmesh, petscPlex):
     '''

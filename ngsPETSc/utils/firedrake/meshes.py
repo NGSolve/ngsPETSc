@@ -5,12 +5,10 @@ the package will only be used in combination with Firedrake.
 '''
 try:
     import firedrake as fd
-    from firedrake.cython import mgimpl as impl
     from firedrake.__future__ import interpolate
 except ImportError:
     fd = None
 
-from fractions import Fraction
 import numpy as np
 from petsc4py import PETSc
 

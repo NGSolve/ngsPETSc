@@ -5,6 +5,8 @@ import warnings
 
 from ngsPETSc.plex import *
 
+__all__ = []
+
 #Firedrake
 try:
     import firedrake
@@ -12,7 +14,9 @@ except ImportError:
     firedrake = None
 
 if firedrake:
-    from ngsPETSc.utils.firedrake import *
+    from ngsPETSc.utils.firedrake.meshes import *
+    from ngsPETSc.utils.firedrake.hierarchies import *
+    __all__ = __all__ + ["FiredrakeMesh", "NetgenHierarchy"]
 
 #FEniCSx
 try:
@@ -38,8 +42,7 @@ if ngsolve:
     from ngsPETSc.pc import *
     from ngsPETSc.eps import *
     from ngsPETSc.snes import *
+    __all__ = __all__ + ["Matrix","VectorMapping","MeshMapping",
+                         "KrylovSolver","EigenSolver","NullSpace"]
 
 VERSION = "0.0.5"
-
-__all__ = ["Matrix","VectorMapping","MeshMapping","KrylovSolver","EigenSolver",
-           "FiredrakeMesh","NullSpace"]
