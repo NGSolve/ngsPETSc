@@ -1,5 +1,6 @@
 '''
-This module contains all the functions related 
+This module contains all the functions related to creating Firedrake mesh hierarchies
+from Netgen/NGSolve meshes.
 '''
 try:
     import firedrake as fd
