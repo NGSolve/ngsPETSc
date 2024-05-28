@@ -5,7 +5,20 @@ Perfectly Matched Layer (PML) in Firedrake.
 from collections.abc import Iterable
 from firedrake import Constant, Function, solve, DirichletBC, TrialFunction, TestFunction
 from firedrake import inner, grad, dx, conditional, real, FunctionSpace
+from firedrake import ufl
 from firedrake.__future__ import interpolate
+
+class WeightedMeasure(ufl.Measure):
+    """
+    This class creates a weighted measure in Firedrake.
+    """
+    def __init__(self, *args, weight=None, **kwargs):
+        self.weight = weight
+        ufl.Measure.__init__(self, *args, **kwargs)
+
+    def __rmul__(self, integrand):
+        return ufl.Measure.__rmul__(self, self.weight * integrand)
+
 class PML:
     """
     This class creates a Perfectly Matched Layer (PML) in Firedrake.
@@ -59,17 +72,22 @@ class PML:
             if region[2] not in labels1:
                 raise ValueError("The PML outer boundary name must be a valid region name.")
             #Construct the weight function for the PML
-            V = FunctionSpace(self.mesh, "CG", self.order)
-            u = TrialFunction(V)
-            v = TestFunction(V)
+            self.V = FunctionSpace(self.mesh, "CG", self.order)
+            u = TrialFunction(self.V)
+            v = TestFunction(self.V)
             F = inner(grad(u), grad(v))*dx(labels2[region[0]])
             for i in range(1, len(self.mesh.netgen_mesh.GetRegionNames(dim=2))+1):
                 if i != labels2[region[0]]:
                     F += inner(grad(u), grad(v))*dx(i)
             L = inner(Constant(1),v)*dx(2)
-            bcs = [DirichletBC(V, 1, labels1[region[1]]), DirichletBC(V, 0, labels1[region[2]])]
-            dalet = Function(V)
+            bcs = [DirichletBC(self.V, 1, labels1[region[1]]),
+                   DirichletBC(self.V, 0, labels1[region[2]])]
+            dalet = Function(self.V)
             solve(F == L, dalet, bcs=bcs, solver_parameters=solver_parameters)
-            sigma = interpolate(1+(alpha/k)*dalet, V)
+            sigma = interpolate(1+(alpha/k)*dalet, self.V)
             self.pmls = self.pmls + [conditional(real(sigma) < 1e-12, 1, sigma)]
-    
+            #Assembling the weighted measure
+            weight = Function(self.V)
+            for pml in self.pmls:
+                weight = weight+pml
+            self.dx = WeightedMeasure("dx", weight=weight)
