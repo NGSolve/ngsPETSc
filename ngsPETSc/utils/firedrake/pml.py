@@ -64,6 +64,9 @@ class PML:
             alpha = [alpha]*len(pml_regions)
         #Construct the PML for each PML region
         self.pmls = []
+        self.V = FunctionSpace(self.mesh, "CG", self.order)
+        u = TrialFunction(self.V)
+        v = TestFunction(self.V)
         for region in self.pml_regions:
             if region[0] not in labels2:
                 raise ValueError("The PML region name must be a valid region name.")
@@ -72,9 +75,6 @@ class PML:
             if region[2] not in labels1:
                 raise ValueError("The PML outer boundary name must be a valid region name.")
             #Construct the weight function for the PML
-            self.V = FunctionSpace(self.mesh, "CG", self.order)
-            u = TrialFunction(self.V)
-            v = TestFunction(self.V)
             F = inner(grad(u), grad(v))*dx(labels2[region[0]])
             for i in range(1, len(self.mesh.netgen_mesh.GetRegionNames(dim=2))+1):
                 if i != labels2[region[0]]:
