@@ -16,8 +16,7 @@ except ImportError:
 if firedrake:
     from ngsPETSc.utils.firedrake.meshes import *
     from ngsPETSc.utils.firedrake.hierarchies import *
-    from ngsPETSc.utils.firedrake.pml import *
-    __all__ = __all__ + ["FiredrakeMesh", "NetgenHierarchy", "PML"]
+    __all__ = __all__ + ["FiredrakeMesh", "NetgenHierarchy"]
 
 #FEniCSx
 try:
