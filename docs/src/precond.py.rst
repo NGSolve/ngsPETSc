@@ -1,8 +1,8 @@
 Using PETSc PC inside of NGSolve
 =================================
 
-In this tutorial we explore using `PETSc PC` as a preconditioner inside NGSolve preconditioning infrastructure.
-Once again, we begin by creating a discretisation of the Poisson problem using H1 elements, in particular we consider the usual variational formulation
+In this tutorial, we explore using `PETSc PC` as a preconditioner inside NGSolve preconditioning infrastructure.
+Once again, we begin by creating a discretisation of the Poisson problem using H1 elements, in particular, we consider the usual variational formulation
 
 .. math::
 
@@ -29,7 +29,8 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
    a.Assemble()
    f.Assemble()
 
-We now consturct an NGSolve preconditioner wrapping a `PETSc PC`, in particular we will construct an Algebraic MultiGrid preconditioner using `HYPRE` and use the Krylov solver implemented inside NGSolve to solve the linear system. ::
+We now construct an NGSolve preconditioner wrapping a `PETSc PC`, we begin considering an Algebraic MultiGrid preconditioner constructed using `HYPRE`.
+In this tutorial we will use the Krylov solver implemented inside NGSolve to solve the linear system. ::
 
    from ngsPETSc import pc
    from ngsolve.krylovspace import CG

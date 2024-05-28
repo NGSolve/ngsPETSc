@@ -1,8 +1,8 @@
 Saddle point problems and PETSc PC
 =======================================
 
-In this tutorial we explore solving constructing preconditioners for saddle point problems using `PETSc PC`.
-We begin by creating a discretisation of the Poisson problem using H1 elements, in particular we consider the usual variational formulation
+In this tutorial, we explore constructing preconditioners for saddle point problems using `PETSc PC`.
+We begin by creating a discretization of the Poisson problem using H1 elements, in particular, we consider the usual variational formulation
 
 .. math::       
    
@@ -13,7 +13,7 @@ We begin by creating a discretisation of the Poisson problem using H1 elements, 
       (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad q\in L^2(\Omega)
    \end{cases}
 
-Such a discretisation can easily be constructed using NGSolve as follows: ::
+Such a discretization can easily be constructed using NGSolve as follows: ::
 
    from ngsolve import *
    from ngsolve import BilinearForm as BF
@@ -28,7 +28,7 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
       shape.edges.Min(X).name="inlet"
       shape.edges.Max(X).name="outlet"
       geo = OCCGeometry(shape, dim=2)
-      ngmesh = geo.GenerateMesh(maxh=0.1)
+      ngmesh = geo.GenerateMesh(maxh=0.05)
       mesh = Mesh(ngmesh.Distribute(COMM_WORLD))
    else:
       mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
@@ -73,26 +73,27 @@ We can construct the Schur complement preconditioner using the following code: :
                    printrates=True, initialize=False)
    Draw(gfu)
 
-Notice that the Schur complement is dense hence inverting it is not a good idea. Not only that but to perform the inversion of the Schur complement had to write a lot of "boiler plate" code.
-Since our discretisation is inf-sup stable it is possible to prove that the mass matrix of the pressure space is spectrally equivalent to the Schur complement.
+Notice that the Schur complement is dense hence inverting it is not a good idea. Not only that but to perform the inversion of the Schur complement had to write a lot of "boilerplate" code.
+Since our discretization is inf-sup stable it is possible to prove that the mass matrix of the pressure space is spectrally equivalent to the Schur complement.
 This means that we can use the mass matrix of the pressure space as a preconditioner for the Schur complement.
-Notice that we still need to invert tha mass matrix and we will do so using a `PETSc PC` of type Jacobi, which is the exact inverse since we are using `P0` elements.
+Notice that we still need to invert the mass matrix and we will do so using a `PETSc PC` of type Jacobi, which is the exact inverse since we are using `P0` elements.
 We will also invert the Laplacian block using a `PETSc PC` of type `LU`. ::
 
    m = BilinearForm((1/nu)*p*q*dx).Assemble()
-   mpre = Preconditioner(m, "PETScPC", pc_type="jacobi")
-   apre = Preconditioner(a, "PETScPC", pc_type="lu")
-   C = BlockMatrix( [ [apre.mat, None], [None, mpre.mat] ] )
+   mpre = Preconditioner(m, "PETScPC", pc_type="lu")
+   apre = a.mat.Inverse(V.FreeDofs())
+   C = BlockMatrix( [ [apre, None], [None, mpre] ] )
 
-   gfu.vec.data[:] = 1; gfp.vec.data[:] = 1
+   gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
+   gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
    sol = BlockVector( [gfu.vec, gfp.vec] )
 
    print("-----------|Mass LU|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-8,
-                   printrates=True, initialize=False)
+                   maxsteps=100, printrates=True, initialize=False)
    Draw(gfu)
 
-The mass matrix as a preconditioner doesn't seem to be ideal, in fact our Krylov solver took many iterations to converge.
+The mass matrix as a preconditioner doesn't seem to be ideal, in fact, our Krylov solver took many iterations to converge.
 To resolve this issue we resort to an augmented Lagrangian formulation, i.e.
 
 .. math::
@@ -113,7 +114,8 @@ This formulation can easily be adding an augmentation block in the `BlockMatrix`
    K = BlockMatrix( [ [aG.mat, b.mat.T], [b.mat, None] ] )
    C = BlockMatrix( [ [aGpre.mat, None], [None, mGpre.mat] ] )
 
-   gfu.vec.data[:] = 1; gfp.vec.data[:] = 1
+   gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
+   gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
    sol = BlockVector( [gfu.vec, gfp.vec] )
 
    print("-----------|Augmented LU|-----------")
@@ -121,12 +123,13 @@ This formulation can easily be adding an augmentation block in the `BlockMatrix`
                    printrates=True, initialize=False)
    Draw(gfu)
 
-Notice that so far we have been inverting the matrix corresponding to the Laplacian block using a direct LU factorisation.
-As our mesh becomes finer and finer this is no longer a viable options. To overcome this issue we can try inverting the matrix via `HYPRE`. ::
+Notice that so far we have been inverting the matrix corresponding to the Laplacian block using a direct LU factorization.
+As our mesh becomes finer and finer this is no longer a viable option. To overcome this issue we can try inverting the matrix via `HYPRE`. ::
 
    aGpre = Preconditioner(aG, "PETScPC", pc_type="hypre")
    C = BlockMatrix( [ [aGpre.mat, None], [None, mGpre.mat] ] )
-   gfu.vec.data[:] = 1; gfp.vec.data[:] = 1
+   gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
+   gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
    sol = BlockVector( [gfu.vec, gfp.vec] )
 
    print("-----------|Augmented HYPRE|-----------")
@@ -134,19 +137,16 @@ As our mesh becomes finer and finer this is no longer a viable options. To overc
                    printrates=True, initialize=False)
    Draw(gfu)
 
-We notice that our solver is no longer converging. This a known issue of augemnted Lagrangian formulation: inverting the augmented Laplacian block using multigrid is hard.
-The reason behind this phenomena is the fact that the augmented Laplacian block has a large kernel. Lets try to fix this using a vertex patch two level additive Schwartz preconditioner, which is known to be kernel capturing. ::
+We notice that our solver is no longer converging. This is a known issue of augmented Lagrangian formulation: inverting the augmented Laplacian block using multigrid is hard.
+We can try to use a BDDC preconditioner instead. ::
 
-   ngmesh = unit_square.GenerateMesh(maxh=0.1)
-   mesh = Mesh(ngmesh)
-   V = H1(mesh, order=2)
-   u,v = V.TnT()
-   aG = BilinearForm(InnerProduct(grad(u),grad(v))*dx)
-   aG.Assemble()
-   print(aG.mat.shape)
-   for l in range(3):
-      mesh.ngmesh.Refine(adaptive=True)
-      V.Update()
-      aG.Assemble()
-      prol = V.Prolongation().Operator(l+1)
-      print(prol.shape, aG.mat.shape)
+   aGpre = Preconditioner(aG, "PETScPC", pc_type="bddc", matType="is", pc_view="")
+   C = BlockMatrix( [ [aGpre.mat, None], [None, mGpre.mat] ] )
+   gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
+   gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
+   sol = BlockVector( [gfu.vec, gfp.vec] )
+
+   print("-----------|Augmented BDDC|-----------")
+   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
+                   printrates=True, initialize=False)
+   Draw(gfu)
