@@ -2,16 +2,16 @@
 This file contains all the functions related to creating a 
 Perfectly Matched Layer (PML) in Firedrake.
 '''
-
-from firedrake import Constant, Function, solve, DirichletBC, TrialFunction, TestFunction
-from firedrake import inner, grad, dx, conditional, real
-from firedrake.__future__ import interpolate
 from collections.abc import Iterable
+from firedrake import Constant, Function, solve, DirichletBC, TrialFunction, TestFunction
+from firedrake import inner, grad, dx, conditional, real, FunctionSpace
+from firedrake.__future__ import interpolate
 class PML:
     """
     This class creates a Perfectly Matched Layer (PML) in Firedrake.
     :arg mesh: The Firedrake mesh.
-    :arg V: The function space of the Helmholtz problem.
+    :arg order: The function space order to solve the Poisson problem, when 
+                constructing the PML.
     :arg pmls: A list of touple of the from:
                 (pml_region_name, pml_inner_boundary_name, pml_outer_boundary_name).
     :arg k: The wavenumber of the Helmholtz problem, it can be a Constant, a Function,
@@ -22,17 +22,17 @@ class PML:
                 coefficient for one of the PML regions.
     :arg solver_parameters: The solver parameters for the PML problem.
     """
-    def __init__(self, mesh, V, pml_regions, k, alpha=Constant(1j), solver_parameters=None):
+    def __init__(self, mesh, order, pml_regions, k, alpha=Constant(1j), solver_parameters=None):
         """
         This function initializes the PML object.
         """
         self.mesh = mesh
-        self.V = V
+        self.order = order
         self.pml_regions = pml_regions
         self.k = k
         self.alpha = alpha
         if solver_parameters is None:
-            solver_parameters = {"ksp_type":"preonly", "pc_type":"lu", 
+            solver_parameters = {"ksp_type":"preonly", "pc_type":"lu",
                                  "pc_factor_mat_solver_type":"mumps"}
         if not hasattr(self.mesh, "netgen_mesh"):
             raise ValueError("The mesh must be a Netgen mesh.")
@@ -42,15 +42,13 @@ class PML:
                         range(len(mesh.netgen_mesh.GetRegionNames(dim=2)))))
         if not isinstance(k, (Constant, Function, list)):
             raise ValueError("The wavenumber must be a Constant, a Function, or a list.")
-        else:
-            if not isinstance(k, Iterable):
-                k = [k]*len(pml_regions)
+        if not isinstance(k, Iterable):
+            k = [k]*len(pml_regions)
         if not isinstance(alpha, (Constant, Function, list)):
-            raise ValueError("The attenuation coefficient must be a Constant, a Function, or a list.")
-        else:
-            if not isinstance(alpha, Iterable):
-                alpha = [alpha]*len(pml_regions)
-        
+            raise ValueError("The attenuation coefficient must be a \
+                             Constant, a Function, or a list.")
+        if not isinstance(alpha, Iterable):
+            alpha = [alpha]*len(pml_regions)
         #Construct the PML for each PML region
         self.pmls = []
         for region in self.pml_regions:
@@ -61,6 +59,7 @@ class PML:
             if region[2] not in labels1:
                 raise ValueError("The PML outer boundary name must be a valid region name.")
             #Construct the weight function for the PML
+            V = FunctionSpace(self.mesh, "CG", self.order)
             u = TrialFunction(V)
             v = TestFunction(V)
             F = inner(grad(u), grad(v))*dx(labels2[region[0]])
@@ -73,6 +72,4 @@ class PML:
             solve(F == L, dalet, bcs=bcs, solver_parameters=solver_parameters)
             sigma = interpolate(1+(alpha/k)*dalet, V)
             self.pmls = self.pmls + [conditional(real(sigma) < 1e-12, 1, sigma)]
-
-
-
+    
