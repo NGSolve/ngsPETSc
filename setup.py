@@ -40,7 +40,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     packages=["ngsPETSc", "ngsPETSc.utils", "ngsPETSc.utils.firedrake"],
-    python_requires = ">=3.9",
+    python_requires = ">=3.8",
     install_requires=install_requires
 
 )
