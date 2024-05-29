@@ -3,7 +3,13 @@ This file contains all the functions related to creating a
 Perfectly Matched Layer (PML) in Firedrake.
 '''
 from collections.abc import Iterable
-import firedrake as fd
+
+try:
+    import firedrake as fd
+except ImportError:
+    fd = None
+
+import numpy as np
 
 class WeightedMeasure(fd.ufl.Measure):
     """
@@ -24,22 +30,18 @@ class PML:
                 constructing the PML.
     :arg pmls: A list of touple of the from:
                 (pml_region_name, pml_inner_boundary_name, pml_outer_boundary_name).
-    :arg k: The wavenumber of the Helmholtz problem, it can be a Constant, a Function,
-            or a list, if it is a list we assume each element of the list the wavenumber
-            for one of the PML regions.
     :arg alpha: The attenuation coefficient of the PML, it can be a Constant, a Function,
                 or a list, if it is a list we assume each element of the list the attenuation
                 coefficient for one of the PML regions.
     :arg solver_parameters: The solver parameters for the PML problem.
     """
-    def __init__(self, mesh, order, pml_regions, k, alpha=fd.Constant(1j), solver_parameters=None):
+    def __init__(self, mesh, order, pml_regions, alpha=fd.Constant(1j), solver_parameters=None):
         """
         This function initializes the PML object.
         """
         self.mesh = mesh
         self.order = order
         self.pml_regions = pml_regions
-        self.k = k
         self.alpha = alpha
         if solver_parameters is None:
             solver_parameters = {"ksp_type":"preonly", "pc_type":"lu",
@@ -50,17 +52,13 @@ class PML:
                         range(len(mesh.netgen_mesh.GetRegionNames(dim=1)))))
         labels2 = dict(map(lambda i,j : (i,j+1) , mesh.netgen_mesh.GetRegionNames(dim=2),
                         range(len(mesh.netgen_mesh.GetRegionNames(dim=2)))))
-        if not isinstance(k, (fd.Constant, fd.Function, list)):
-            raise ValueError("The wavenumber must be a Constant, a Function, or a list.")
-        if not isinstance(k, Iterable):
-            k = [k]*len(pml_regions)
         if not isinstance(alpha, (fd.Constant, fd.Function, list)):
             raise ValueError("The attenuation coefficient must be a \
                              Constant, a Function, or a list.")
         if not isinstance(alpha, Iterable):
             alpha = [alpha]*len(pml_regions)
         #Construct the PML for each PML region
-        self.pmls = []
+        self.dalets = []
         self.V = fd.FunctionSpace(self.mesh, "CG", self.order)
         u = fd.TrialFunction(self.V)
         v = fd.TestFunction(self.V)
@@ -75,16 +73,25 @@ class PML:
             F = fd.inner(fd.grad(u), fd.grad(v))*fd.dx(labels2[region[0]])
             for i in range(1, len(self.mesh.netgen_mesh.GetRegionNames(dim=2))+1):
                 if i != labels2[region[0]]:
-                    F += fd.inner(fd.grad(u), fd.grad(v))*fd.dx(i)
+                    F += fd.inner(u, v)*fd.dx(i)
             L = fd.inner(fd.Constant(1),v)*fd.dx(labels2[region[0]])
-            bcs = [fd.DirichletBC(self.V, 1, labels1[region[1]]),
-                   fd.DirichletBC(self.V, 0, labels1[region[2]])]
+            bcs = [fd.DirichletBC(self.V, 0, labels1[region[1]]),
+                   fd.DirichletBC(self.V, 1, labels1[region[2]])]
             dalet = fd.Function(self.V)
             fd.solve(F == L, dalet, bcs=bcs, solver_parameters=solver_parameters)
-            sigma = fd.__future__.interpolate(1+(alpha/k)*dalet, self.V)
-            self.pmls = self.pmls + [fd.conditional(fd.real(sigma) < 1e-12, 1, sigma)]
-            #Assembling the weighted measure
-            weight = fd.Function(self.V)
-            for pml in self.pmls:
-                weight = weight+pml
-            self.dx = WeightedMeasure("dx", weight=weight)
+            self.dalets = self.dalets + [dalet]
+
+    def adiabatic_layer(self, k, deg_absorb=2):
+        """
+        This function returns a complex absorption coefficient, simulating a PML
+        """
+        RT = 1.0e-6
+        wave_len = 2*np.pi / k  # wavelength
+        d_absorb = 2 * wave_len    # depth of absorber
+        sigma0 = -(deg_absorb + 1) * np.log(RT) / (2.0 * d_absorb)
+        absk = fd.assemble(fd.interpolate(fd.Constant(0), self.V))
+        for dalet in self.dalets:
+            absk += fd.assemble(fd.interpolate(self.alpha*k*sigma0*(fd.real(dalet)**deg_absorb)
+                                               -(sigma0*fd.real(dalet))**2, self.V))
+        fd.File("absk.pvd").write(absk)
+        return absk
