@@ -95,7 +95,8 @@ class PML:
                 absk = fd.assemble(fd.interpolate(fd.Constant(0), self.V))
                 for dalet in self.dalets:
                     absk += fd.assemble(fd.interpolate(
-                        self.alpha*k*sigma0*(fd.real(dalet)**deg_absorb)-(sigma0*fd.real(dalet))**2,
+                        self.alpha*k*sigma0*(fd.real(d_absorb*dalet)**deg_absorb)
+                        -(sigma0*fd.real(d_absorb*dalet))**2,
                         self.V))
                 fd.File("absk.pvd").write(absk)
                 return absk
