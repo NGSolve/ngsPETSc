@@ -1,8 +1,3 @@
-ngsPETSc
-------------------
-
-ngsPETSc is a PETSc interface for NGSolve.
-
 Installation
 -----------------
 To install ngsPETSc you need to clone the GitHub repository, and then you can install it using pip.

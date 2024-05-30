@@ -10,12 +10,8 @@ Welcome to ngsPETSc's documentation!
    :maxdepth: 2
    :caption: Contents:
    
-   ngsPETSc
-   poisson.py
-   elasticity.
-   precond.py
-   saddle.py
-   Firedrake-Netgen interface via ngsPETSc <https://www.firedrakeproject.org/demos/netgen_mesh.py.html>
+   install
+   
 
 
 Indices and tables

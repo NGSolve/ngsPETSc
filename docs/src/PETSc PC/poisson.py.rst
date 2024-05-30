@@ -1,8 +1,10 @@
-Using PETSc PC inside of NGSolve
-=================================
+Preconditioning the Poisson problem
+=====================================
 
 In this tutorial, we explore using `PETSc PC` as a preconditioner inside NGSolve preconditioning infrastructure.
-Once again, we begin by creating a discretisation of the Poisson problem using H1 elements, in particular, we consider the usual variational formulation
+We will focus our attention on the Poisson problem, and we will consider different preconditioning strategies.
+Not all the preconditioning strategies are equally effective for all the discretizations of the Poisson problem, and this demo is intended to provide a starting point for the exploration of the preconditioning strategies rather than providing a definitive answer.
+We begin by creating a discretisation of the Poisson problem using H1 elements, in particular, we consider the usual variational formulation
 
 .. math::
 
