@@ -31,8 +31,8 @@ class PETScPreconditioner(BaseMatrix):
         matType="aij"
         if hasattr(solverParameters, "ToDict"):
             solverParameters = solverParameters.ToDict()
-        if "restrictedTo" in solverParameters:
-            freeDofs = solverParameters["restrictedTo"]
+        if "subset" in solverParameters:
+            freeDofs = solverParameters["subset"]
         if "matType" in solverParameters:
             matType = solverParameters["matType"]
         self.ngsMat = mat
@@ -47,12 +47,12 @@ class PETScPreconditioner(BaseMatrix):
         options_object = PETSc.Options()
         if solverParameters is not None:
             for optName, optValue in solverParameters.items():
-                if optName not in ["restrictedTo", "matType"]:
+                if optName not in ["subset", "matType"]:
                     options_object[optName] = optValue
         self.petscPreconditioner.setOptionsPrefix(optionsPrefix)
         self.petscPreconditioner.setFromOptions()
         self.petscPreconditioner.setUp()
-        self.petscPreconditioner.view()
+        #self.petscPreconditioner.view()
         self.petscVecX, self.petscVecY = petscMat.createVecs()
     def Shape(self):
         '''
