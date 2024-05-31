@@ -4,6 +4,8 @@ on:
     schedule:
     - cron:  '30 10 7,14,21,28 * *'
 
+    workflow_dispatch:
+
     push:
         paths:
         - Dockerfile
@@ -11,11 +13,12 @@ on:
 jobs:
   docker:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 480
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Login to Docker Hub
+        if: github.repository == 'NGSolve/ngsPETSc'
         uses: docker/login-action@v1
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -24,6 +27,7 @@ jobs:
         run: |
           docker build -t ngspetsc:latest .
       - name: Push Docker image
+        if: github.repository == 'NGSolve/ngsPETSc'
         run: |
           docker tag ngspetsc:latest urzerbinati/ngspetsc:latest
           docker push urzerbinati/ngspetsc:latest

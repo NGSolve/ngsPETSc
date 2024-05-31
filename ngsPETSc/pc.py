@@ -4,8 +4,9 @@ This module contains all the function and class needed to wrap a PETSc Precondit
 from petsc4py import PETSc
 
 from ngsolve import BaseMatrix, comp
-
 from ngsPETSc import Matrix, VectorMapping
+
+
 
 class PETScPreconditioner(BaseMatrix):
     '''
@@ -24,28 +25,30 @@ class PETScPreconditioner(BaseMatrix):
     MKL sparse: mklaij or CUDA: aijcusparse
 
     '''
-    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix=None, matType="aij"):
+    nullsapce = None
+    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix=None):
         BaseMatrix.__init__(self)
+        matType="aij"
+        if hasattr(solverParameters, "ToDict"):
+            solverParameters = solverParameters.ToDict()
+        if "restrictedTo" in solverParameters:
+            freeDofs = solverParameters["restrictedTo"]
+        if "matType" in solverParameters:
+            matType = solverParameters["matType"]
         self.ngsMat = mat
         if hasattr(self.ngsMat, "row_pardofs"):
             dofs = self.ngsMat.row_pardofs
         else:
             dofs = None
         self.vecMap = VectorMapping((dofs,freeDofs,{"bsize":self.ngsMat.local_mat.entrysizes}))
-        if hasattr(solverParameters, "ToDict"):
-            solverParameters = solverParameters.ToDict()
-        try:
-            matType = solverParameters["matType"]
-        except KeyError:
-            pass
         petscMat = Matrix(self.ngsMat, (dofs, freeDofs, None), matType).mat
         self.petscPreconditioner = PETSc.PC().create(comm=petscMat.getComm())
         self.petscPreconditioner.setOperators(petscMat)
         options_object = PETSc.Options()
         if solverParameters is not None:
             for optName, optValue in solverParameters.items():
-                options_object[optName] = optValue
-
+                if optName not in ["restrictedTo", "matType"]:
+                    options_object[optName] = optValue
         self.petscPreconditioner.setOptionsPrefix(optionsPrefix)
         self.petscPreconditioner.setFromOptions()
         self.petscPreconditioner.setUp()

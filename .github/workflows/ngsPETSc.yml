@@ -1,14 +1,33 @@
 # .github/workflows/app.yaml
 name: ngsPETSc tests
-on: 
+on:
     push:
-      branches-ignore:    
+      branches-ignore:
       - 'no-ci/*'
 
     schedule:
     - cron:  '30 10 7,14,21,28 * *'
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    container: urzerbinati/ngspetsc:latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Install ngsPETSc
+        run: |
+          python -m pip install .
+          pip install pylint
+
+      - name: Lint
+        run: |
+          make lint GITHUB_ACTIONS_FORMATTING=1
+          make lint_test GITHUB_ACTIONS_FORMATTING=1
+
   ngsolve:
     runs-on: ubuntu-latest
     container: urzerbinati/ngspetsc:latest
@@ -16,16 +35,11 @@ jobs:
 
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install ngsPETSc
         run: |
           python -m pip install .
-
-      - name: Check formatting
-        run: |
-          make lint
-          make lint_test
 
       - name: Run test suite in serial
         run: |
@@ -51,26 +65,58 @@ jobs:
 
   fenicsx:
     runs-on: ubuntu-latest
-    container: dolfinx/dolfinx:latest
-    timeout-minutes: 30
+    container:
+      image: dolfinx/dolfinx:nightly
+      options: --user root
+    timeout-minutes: 50
 
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v2
-
+        uses: actions/checkout@v4
+      
+      - name: Install pytest
+        run: |
+          pip install pytest --break-system-packages
+      
       - name: Install Netgen and ngsPETSc
         run: |
-          pip3 install netgen-mesher \
-          && pip3 install pylint \
-          && export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.10/site-packages \
-          && echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV \
-          && NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
-
-      - name: Check formatting
-        run: |
-          make lint
-          make lint_test
+          pip install netgen-mesher --break-system-packages
+          export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.10/site-packages
+          echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV
+          NGSPETSC_NO_INSTALL_REQUIRED=ON pip install -e . --break-system-packages
 
       - name: Run test suite in serial
         run: |
           pytest -v tests/test_fenicsx.py
+
+  firedrake:
+    runs-on: ubuntu-latest
+    container:
+      image: firedrakeproject/firedrake-vanilla:latest
+      options: --user root
+    timeout-minutes: 50
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Add SLEPc to vanilla Firedrake
+        run: |
+          . /home/firedrake/firedrake/bin/activate
+          cp -R $SLEPC_DIR/src/binding/slepc4py $VIRTUAL_ENV/src
+          pip install --no-build-isolation --no-binary mpi4py,randomgen,numpy --no-deps $VIRTUAL_ENV/src/slepc4py/
+
+      - name: Install Netgen and ngsPETSc
+        run: |
+          . /home/firedrake/firedrake/bin/activate
+          pip install netgen-mesher
+          pip install xdist pytest-timeout ipympl
+          NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
+
+      - name: Run part of the Firedrake test suite
+        run: |
+          . /home/firedrake/firedrake/bin/activate
+          cd $VIRTUAL_ENV/src/firedrake
+          pytest tests/regression/test_poisson_strong_bcs.py
+          pytest tests/multigrid/test_netgen_gmg.py
+          pytest tests/regression/test_netgen.py

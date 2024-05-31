@@ -25,7 +25,7 @@ class KrylovSolver():
     :arg optionsPrefix: special solver options prefix for this specific Krylov solver
 
     """
-    def __init__(self, a, fes, p=None, solverParameters=None, optionsPrefix=None):
+    def __init__(self, a, fes, p=None, solverParameters=None, optionsPrefix=None, nullspace=None):
         a.Assemble()
         Amat = a.mat
         if p is not None:
@@ -49,6 +49,11 @@ class KrylovSolver():
         A = Matrix(Amat, fes).mat
         A.setOptionsPrefix(optionsPrefix)
         A.setFromOptions()
+        if nullspace is not None:
+            if nullspace.near:
+                A.setNearNullSpace(nullspace.nullspace)
+            else:
+                A.setNullSpace(nullspace.nullspace)
         P = A
         if Pmat is not None:
             P = Matrix(Pmat, fes).mat

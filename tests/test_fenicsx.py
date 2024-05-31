@@ -12,7 +12,7 @@ def test_square_netgen():
         import ngsPETSc.utils.fenicsx as ngfx
         from dolfinx.io import XDMFFile
     except ImportError:
-        pytest.skip(msg="DOLFINx unavailable, skipping FENICSx test")
+        pytest.skip("DOLFINx unavailable, skipping FENICSx test")
 
     from netgen.geom2d import SplineGeometry
     geo = SplineGeometry()
@@ -36,14 +36,14 @@ def test_poisson_netgen():
         from petsc4py.PETSc import ScalarType
         import ngsPETSc.utils.fenicsx as ngfx
     except ImportError:
-        pytest.skip(msg="DOLFINx unavailable, skipping FENICSx test")
+        pytest.skip("DOLFINx unavailable, skipping FENICSx test")
 
     from netgen.geom2d import SplineGeometry
     geo = SplineGeometry()
     geo.AddRectangle((0,0),(np.pi,np.pi))
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
-    msh  =geoModel.model_to_mesh(hmax=0.1)
-    V = fem.FunctionSpace(msh, ("Lagrange", 2))
+    msh  = geoModel.model_to_mesh(hmax=0.1)
+    V = fem.functionspace(msh, ("Lagrange", 2)) #pylint: disable=E1120
     facetsLR = mesh.locate_entities_boundary(msh, dim=(msh.topology.dim - 1),
              marker=lambda x: np.logical_or(np.isclose(x[0], 0.0),
              np.isclose(x[0], np.pi)))

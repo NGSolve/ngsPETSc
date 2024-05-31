@@ -33,8 +33,9 @@ class MeshMapping:
 
     '''
 
-    def __init__(self, mesh=None, name="Default"):
+    def __init__(self, mesh=None, comm=MPI.COMM_WORLD, name="Default"):
         self.name = name
+        self.comm = comm
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             self.createPETScDMPlex(mesh)
         elif isinstance(mesh,PETSc.DMPlex):
@@ -157,7 +158,7 @@ class MeshMapping:
             self.ngMesh = mesh.ngmesh
         else:
             self.ngMesh = mesh
-        comm = MPI.COMM_WORLD
+        comm = self.comm
         if self.ngMesh.dim == 3:
             if comm.rank == 0:
                 V = self.ngMesh.Coordinates()
@@ -168,7 +169,7 @@ class MeshMapping:
                     surfMesh, dim = True, 2
                     T = self.ngMesh.Elements2D().NumPy()["nodes"]
                     T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
-                plex = PETSc.DMPlex().createFromCellList(dim, T, V)
+                plex = PETSc.DMPlex().createFromCellList(dim, T, V, comm=comm)
                 plex.setName(self.name)
                 vStart, _ = plex.getDepthStratum(0)
                 if surfMesh:
@@ -186,14 +187,15 @@ class MeshMapping:
             else:
                 plex = PETSc.DMPlex().createFromCellList(3,
                                                         np.zeros((0, 4), dtype=np.int32),
-                                                        np.zeros((0, 3), dtype=np.double))
+                                                        np.zeros((0, 3), dtype=np.double),
+                                                        comm=comm)
                 self.petscPlex = plex
         elif self.ngMesh.dim == 2:
             if comm.rank == 0:
                 V = self.ngMesh.Coordinates()
                 T = self.ngMesh.Elements2D().NumPy()["nodes"]
                 T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
-                plex = PETSc.DMPlex().createFromCellList(2, T, V)
+                plex = PETSc.DMPlex().createFromCellList(2, T, V, comm=comm)
                 plex.setName(self.name)
                 vStart, _ = plex.getDepthStratum(0)   # vertices
                 for e in self.ngMesh.Elements1D():
@@ -208,5 +210,6 @@ class MeshMapping:
             else:
                 plex = PETSc.DMPlex().createFromCellList(2,
                                                         np.zeros((0, 3), dtype=np.int32),
-                                                        np.zeros((0, 2), dtype=np.double))
+                                                        np.zeros((0, 2), dtype=np.double),
+                                                        comm=comm)
                 self.petscPlex = plex

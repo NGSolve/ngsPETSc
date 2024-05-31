@@ -9,11 +9,13 @@ elif 'NGS_FROM_SOURCE' in os.environ:
     install_requires = [
         'petsc4py',
         'mpi4py',
+        'numpy',
         'pytest', #For testing
         'pylint', #For formatting
         ]
 else:
     install_requires=[
+        'netgen-mesher',
         'ngsolve',
         'petsc4py',
         'mpi4py',
@@ -23,7 +25,7 @@ else:
 
 setuptools.setup(
     name = "ngsPETSc",
-    version = "0.0.1",
+    version = "0.0.5",
     author = "Umberto Zerbinati",
     author_email = "umberto.zerbinati@maths.ox.ac.uk",
     description = "NGSolve/Netgen interface to PETSc.",
@@ -37,8 +39,8 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    packages=["ngsPETSc", "ngsPETSc.utils"],
-    python_requires = ">=3.10",
+    packages=["ngsPETSc", "ngsPETSc.utils", "ngsPETSc.utils.firedrake"],
+    python_requires = ">=3.8",
     install_requires=install_requires
 
 )
