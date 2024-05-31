@@ -31,8 +31,6 @@ class PETScPreconditioner(BaseMatrix):
         matType="aij"
         if hasattr(solverParameters, "ToDict"):
             solverParameters = solverParameters.ToDict()
-        if "subset" in solverParameters:
-            freeDofs = solverParameters["subset"]
         if "matType" in solverParameters:
             matType = solverParameters["matType"]
         self.ngsMat = mat
@@ -47,7 +45,7 @@ class PETScPreconditioner(BaseMatrix):
         options_object = PETSc.Options()
         if solverParameters is not None:
             for optName, optValue in solverParameters.items():
-                if optName not in ["subset", "matType"]:
+                if optName not in ["matType"]:
                     options_object[optName] = optValue
         self.petscPreconditioner.setOptionsPrefix(optionsPrefix)
         self.petscPreconditioner.setFromOptions()
