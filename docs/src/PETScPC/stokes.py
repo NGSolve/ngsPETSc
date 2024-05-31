@@ -2,11 +2,11 @@
 # =======================================
 #
 # In this tutorial, we explore constructing preconditioners for saddle point problems using `PETSc PC`.
-# We begin by creating a discretization of the Poisson problem using H1 elements, in particular, we consider the usual variational formulation
+# In particular, we will consider a Bernardi-Raugel inf-sup stable discretization of the Stokes problem, i.e.
 #
 # .. math::       
 #   
-#    \text{find } (vec{u},p) \in [H^1_{0}(\Omega)]^d\times L^2(\Omega) \text{ s.t. }
+#    \text{find } (\vec{u},p) \in [H^1_{0}(\Omega)]^d\times L^2(\Omega) \text{ s.t. }
 #   
 #    \begin{cases} 
 #       (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)}  = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad v\in H^1_{0}(\Omega)\\
@@ -33,8 +33,8 @@ if COMM_WORLD.rank == 0:
 else:
    mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
 nu = Parameter(1.0)
-V = VectorH1(mesh, order=2, dirichlet="wall|inlet|cyl")
-Q = L2(mesh, order=0)
+V = VectorH1(mesh, order=2, dirichlet="wall|inlet|cyl", autoupdate=True)
+Q = L2(mesh, order=0, autoupdate=True)
 u,v = V.TnT(); p,q = Q.TnT()
 a = BilinearForm(nu*InnerProduct(Grad(u),Grad(v))*dx)
 a.Assemble()
@@ -51,7 +51,7 @@ g = LinearForm(Q).Assemble();
 # We can construct the Schur complement preconditioner using the following code: ::
 
 K = BlockMatrix( [ [a.mat, b.mat.T], [b.mat, None] ] )
-from ngsPETSc import pc
+from ngsPETSc.pc import *
 apre = Preconditioner(a, "PETScPC", pc_type="lu")
 S = (b.mat @ apre.mat @ b.mat.T).ToDense().NumPy()
 from numpy.linalg import inv
@@ -137,16 +137,35 @@ solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                 printrates=True, initialize=False)
 Draw(gfu)
 
-# We notice that our solver is no longer converging. This is a known issue of augmented Lagrangian formulation: inverting the augmented Laplacian block using multigrid is hard.
-# We can try to use a BDDC preconditioner instead. ::
+# To overcome this issue we will use a two-level additive Schwarz preconditioner for the Laplacian block.
+# As fine space correction, we will use a vertex patch smoother while as coarse space correction we will use a direct LU factorization on the vertex degrees of freedom. ::
 
-aGpre = Preconditioner(aG, "PETScPC", pc_type="bddc", matType="is", pc_view="")
-C = BlockMatrix( [ [aGpre.mat, None], [None, mGpre.mat] ] )
+from xfem import P2Prolongation
+preCoarse = PETScPreconditioner(aG.mat, V.FreeDofs(), solverParameters={"pc_type": "lu"})
+mesh.Refine()
+aG.Assemble()
+prol = P2Prolongation(mesh).Operator(1)
+preH = prol@ preCoarse @ prol.T
+def VertexPatchBlocks(mesh, fes):
+   blocks = []
+   freedofs = fes.FreeDofs()
+   for v in mesh.vertices:
+      vdofs = set()
+      for el in mesh[v].elements:
+         vdofs |= set(d for d in fes.GetDofNrs(el) if freedofs[d])
+      blocks.append(vdofs)
+   return blocks
+blocks = VertexPatchBlocks(mesh, V)
+jacobi = aG.mat.CreateBlockSmoother(blocks)
+pre = preH + jacobi
+C = BlockMatrix( [ [pre, None], [None, mGpre.mat] ] )
 gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
 gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
 sol = BlockVector( [gfu.vec, gfp.vec] )
 
-print("-----------|Augmented BDDC|-----------")
+print("-----------|Augmented Additive-Schwarz|-----------")
 solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                 printrates=True, initialize=False)
 Draw(gfu)
+
+

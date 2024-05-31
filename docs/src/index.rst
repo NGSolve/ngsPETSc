@@ -7,10 +7,17 @@ Welcome to ngsPETSc's documentation!
 ====================================
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 1
+   :caption: Getting Started
    
    install
+
+.. toctree::
+   :maxdepth: 1
+   :caption: PETSc PC
+
+   PETScPC/poisson.py
+
    
 
 

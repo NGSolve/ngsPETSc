@@ -25,14 +25,10 @@ class PETScPreconditioner(BaseMatrix):
     MKL sparse: mklaij or CUDA: aijcusparse
 
     '''
-    nullsapce = None
-    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix=None):
+    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix=None, nullspace=None, matType="aij"):
         BaseMatrix.__init__(self)
-        matType="aij"
         if hasattr(solverParameters, "ToDict"):
             solverParameters = solverParameters.ToDict()
-        if "matType" in solverParameters:
-            matType = solverParameters["matType"]
         self.ngsMat = mat
         if hasattr(self.ngsMat, "row_pardofs"):
             dofs = self.ngsMat.row_pardofs
@@ -40,6 +36,9 @@ class PETScPreconditioner(BaseMatrix):
             dofs = None
         self.vecMap = VectorMapping((dofs,freeDofs,{"bsize":self.ngsMat.local_mat.entrysizes}))
         petscMat = Matrix(self.ngsMat, (dofs, freeDofs, None), matType).mat
+        if nullspace is not None:
+            if nullspace.near:
+                petscMat.setNearNullSpace(nullspace.nullspace)
         self.petscPreconditioner = PETSc.PC().create(comm=petscMat.getComm())
         self.petscPreconditioner.setOperators(petscMat)
         options_object = PETSc.Options()

@@ -2,11 +2,11 @@ Saddle point problems and PETSc PC
 =======================================
 
 In this tutorial, we explore constructing preconditioners for saddle point problems using `PETSc PC`.
-We begin by creating a discretization of the Poisson problem using H1 elements, in particular, we consider the usual variational formulation
+In particular, we will consider a high-order variant of the Bernardi-Raugel inf-sup stable discretization of the Stokes problem, i.e.
 
 .. math::       
    
-   \text{find } (vec{u},p) \in [H^1_{0}(\Omega)]^d\times L^2(\Omega) \text{ s.t. }
+   \text{find } (\vec{u},p) \in [H^1_{0}(\Omega)]^d\times L^2(\Omega) \text{ s.t. }
    
    \begin{cases} 
       (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)}  = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad v\in H^1_{0}(\Omega)\\
@@ -28,13 +28,13 @@ Such a discretization can easily be constructed using NGSolve as follows: ::
       shape.edges.Min(X).name="inlet"
       shape.edges.Max(X).name="outlet"
       geo = OCCGeometry(shape, dim=2)
-      ngmesh = geo.GenerateMesh(maxh=0.05)
+      ngmesh = geo.GenerateMesh(maxh=0.1)
       mesh = Mesh(ngmesh.Distribute(COMM_WORLD))
    else:
       mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
    nu = Parameter(1.0)
-   V = VectorH1(mesh, order=2, dirichlet="wall|inlet|cyl")
-   Q = L2(mesh, order=0)
+   V = VectorH1(mesh, order=4, dirichlet="wall|inlet|cyl", autoupdate=True)
+   Q = L2(mesh, order=2, autoupdate=True)
    u,v = V.TnT(); p,q = Q.TnT()
    a = BilinearForm(nu*InnerProduct(Grad(u),Grad(v))*dx)
    a.Assemble()
@@ -51,7 +51,7 @@ We can now explore what happens if we use a Schour complement preconditioner for
 We can construct the Schur complement preconditioner using the following code: ::
 
    K = BlockMatrix( [ [a.mat, b.mat.T], [b.mat, None] ] )
-   from ngsPETSc import pc
+   from ngsPETSc.pc import *
    apre = Preconditioner(a, "PETScPC", pc_type="lu")
    S = (b.mat @ apre.mat @ b.mat.T).ToDense().NumPy()
    from numpy.linalg import inv
@@ -88,12 +88,44 @@ We will also invert the Laplacian block using a `PETSc PC` of type `LU`. ::
    gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
    sol = BlockVector( [gfu.vec, gfp.vec] )
 
-   print("-----------|Mass LU|-----------")
+   print("-----------|Mass & LU|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-8,
                    maxsteps=100, printrates=True, initialize=False)
    Draw(gfu)
 
-The mass matrix as a preconditioner doesn't seem to be ideal, in fact, our Krylov solver took many iterations to converge.
+We can also construct a multi-grid preconditioner for the top left block of the saddle point problem, as we have seen in :doc:`poisson.py`. ::
+
+   def DoFInfo(mesh, fes):
+      blocks = []
+      freedofs = fes.FreeDofs()
+      vertexdofs = BitArray(fes.ndof)
+      vertexdofs[:] = False
+      for v in mesh.vertices:
+         vdofs = set()
+         vdofs |= set(d for d in fes.GetDofNrs(v) if freedofs[d])
+         for ed in mesh[v].edges:
+            vdofs |= set(d for d in fes.GetDofNrs(ed) if freedofs[d])
+         for fc in mesh[v].faces:
+            vdofs |= set(d for d in fes.GetDofNrs(fc) if freedofs[d])
+         blocks.append(vdofs)
+         for d in fes.GetDofNrs(v):
+            vertexdofs[d] = True
+      vertexdofs &= fes.FreeDofs()
+      return vertexdofs, blocks 
+
+   vertexdofs, blocks = DoFInfo(mesh, V)
+   blockjac = a.mat.CreateBlockSmoother(blocks)
+   preH = PETScPreconditioner(a.mat, vertexdofs, solverParameters={"pc_type":"hypre"})
+   twolvpre = preH + blockjac
+   C = BlockMatrix( [ [twolvpre, None], [None, mpre] ] )
+   gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
+   gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
+   print("-----------|Mass & Two Level Additivew Schwarz|-----------")
+   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-8,
+                   maxsteps=100, printrates=True, initialize=False)
+   
+
+The mass matrix as a preconditioner doesn't seem to be ideal, in fact, our Krylov solver took many iterations to converge with a direct LU factorization of the velocity block and did not converge at all with `HYPRE`.
 To resolve this issue we resort to an augmented Lagrangian formulation, i.e.
 
 .. math::
@@ -102,9 +134,9 @@ To resolve this issue we resort to an augmented Lagrangian formulation, i.e.
       (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad q\in L^2(\Omega)
    \end{cases}
 
-This formulation can easily be adding an augmentation block in the `BlockMatrix`, as follows: ::
+This formulation can easily be constructed adding a new velocity block in the `BlockMatrix`, as follows: ::
 
-   gamma = Parameter(1e6)
+   gamma = Parameter(1e5)
    aG = BilinearForm(nu*InnerProduct(Grad(u),Grad(v))*dx+gamma*div(u)*div(v)*dx)
    aG.Assemble()
    aGpre = Preconditioner(aG, "PETScPC", pc_type="lu")
@@ -119,34 +151,36 @@ This formulation can easily be adding an augmentation block in the `BlockMatrix`
    sol = BlockVector( [gfu.vec, gfp.vec] )
 
    print("-----------|Augmented LU|-----------")
-   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-11,
+   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                    printrates=True, initialize=False)
    Draw(gfu)
 
 Notice that so far we have been inverting the matrix corresponding to the Laplacian block using a direct LU factorization.
-As our mesh becomes finer and finer this is no longer a viable option. To overcome this issue we can try inverting the matrix via `HYPRE`. ::
+This is not ideal for large problems, and we can use a `Hypre` preconditioner for the Laplacian block. ::
 
-   aGpre = Preconditioner(aG, "PETScPC", pc_type="hypre")
-   C = BlockMatrix( [ [aGpre.mat, None], [None, mGpre.mat] ] )
+   smoother = aG.mat.CreateBlockSmoother(blocks)
+   preH = PETScPreconditioner(aG.mat, vertexdofs, solverParameters={"pc_type":"gamg"})
+   twolvpre = preH + blockjac
+   C = BlockMatrix( [ [twolvpre, None], [None, mGpre] ] )
    gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
    gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
-   sol = BlockVector( [gfu.vec, gfp.vec] )
-
-   print("-----------|Augmented HYPRE|-----------")
+   print("-----------|Augmented Two Level Additivew Schwarz|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                    printrates=True, initialize=False)
    Draw(gfu)
 
-We notice that our solver is no longer converging. This is a known issue of augmented Lagrangian formulation: inverting the augmented Laplacian block using multigrid is hard.
-We can try to use a BDDC preconditioner instead. ::
+Our first attempt at using a `HYPRE` preconditioner for the Laplacian block did not converge. This is because the top left block of the saddle point problem now contains the augmentation term, which has a very large kernel.
+It is well known that algebraic multi-grid methods do not work well with indefinite problems, and this is what we are observing here. ::
 
-   aGpre = Preconditioner(aG, "PETScPC", pc_type="bddc", matType="is", pc_view="")
-   C = BlockMatrix( [ [aGpre.mat, None], [None, mGpre.mat] ] )
+
+   smoother = aG.mat.CreateBlockSmoother(blocks)
+   preH = PETScPreconditioner(a.mat, V.FreeDofs(), solverParameters={"pc_type":"lu"})
+   twolvpre = preH + preH@ b.mat.T@ Sinv @ b.mat @preH
+
+   C = BlockMatrix( [ [twolvpre, None], [None, mGpre] ] )
    gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
    gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
-   sol = BlockVector( [gfu.vec, gfp.vec] )
-
-   print("-----------|Augmented BDDC|-----------")
-   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
+   print("-----------|Augmented Two Level Additivew Schwarz (Hypre + Vertex Patch)|-----------")
+   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10, maxsteps=200,
                    printrates=True, initialize=False)
    Draw(gfu)
