@@ -17,12 +17,13 @@ import netgen.meshing as ngm
 from mpi4py.MPI import COMM_WORLD
 import pytest
 
-from ngsPETSc import pc
+from ngsPETSc.pc import *
 
 def test_pc():
     '''
     Testing the pc has registered function to register preconditioners
     '''
+    from ngsPETSc import pc
     assert hasattr(pc,"createPETScPreconditioner")
 
 def test_pc_gamg():
@@ -87,7 +88,8 @@ def test_pc_hiptmaier_xu_sor():
     aH1 = BilinearForm(fesH1)
     aH1 += grad(u)*grad(v)*dx
     smoother = Preconditioner(aDG, "PETScPC", pc_type="sor", pc_sor_omega=1., pc_sor_symmetric="")
-    preH1 = Preconditioner(aH1, "PETScPC", pc_type="bddc", matType="is")
+    preH1 = PETScPreconditioner(aH1, fesH1.FreeDofs(), matType="is",
+                                solverParameters={"pc_type":"bddc"})
     aH1.Assemble()
     transform = fesH1.ConvertL2Operator(fesDG)
     pre = transform @ preH1.mat @ transform.T + smoother.mat
@@ -132,7 +134,8 @@ def test_pc_hiptmaier_xu_bjacobi():
     aH1 = BilinearForm(fesH1)
     aH1 += grad(u)*grad(v)*dx
     smoother = Preconditioner(aDG, "PETScPC", pc_type="bjacobi")
-    preH1 = Preconditioner(aH1, "PETScPC", pc_type="bddc", matType="is")
+    preH1 = PETScPreconditioner(aH1, fesH1.FreeDofs(), matType="is",
+                                solverParameters={"pc_type":"bddc"})
     aH1.Assemble()
     transform = fesH1.ConvertL2Operator(fesDG)
     pre = transform @ preH1.mat @ transform.T + smoother.mat
