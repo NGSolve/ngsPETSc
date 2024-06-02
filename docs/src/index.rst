@@ -18,6 +18,11 @@ Welcome to ngsPETSc's documentation!
 
    PETScPC/poisson.py
 
+.. toctree::
+   :maxdepth: 1
+   :caption: SLEPc EPS
+
+   SLEPcEPS/poisson.py
    
 
 
