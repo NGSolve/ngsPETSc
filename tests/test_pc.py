@@ -17,7 +17,7 @@ import netgen.meshing as ngm
 from mpi4py.MPI import COMM_WORLD
 import pytest
 
-from ngsPETSc.pc import *
+from ngsPETSc.pc import PETScPreconditioner
 
 def test_pc():
     '''
@@ -87,12 +87,12 @@ def test_pc_hiptmaier_xu_sor():
     u,v = fesH1.TnT()
     aH1 = BilinearForm(fesH1)
     aH1 += grad(u)*grad(v)*dx
-    smoother = Preconditioner(aDG, "PETScPC", pc_type="sor", pc_sor_omega=1., pc_sor_symmetric="")
-    preH1 = PETScPreconditioner(aH1, fesH1.FreeDofs(), matType="is",
-                                solverParameters={"pc_type":"bddc"})
     aH1.Assemble()
+    smoother = Preconditioner(aDG, "PETScPC", pc_type="sor", pc_sor_omega=1., pc_sor_symmetric="")
+    preH1 = PETScPreconditioner(aH1.mat, fesH1.FreeDofs(), matType="is",
+                                solverParameters={"pc_type":"bddc"})
     transform = fesH1.ConvertL2Operator(fesDG)
-    pre = transform @ preH1.mat @ transform.T + smoother.mat
+    pre = transform @ preH1 @ transform.T + smoother.mat
     CG(mat=aDG.mat, rhs=fDG.vec, sol=gfuDG.vec, pre=pre, printrates = True, maxsteps=200)
     lam = EigenValues_Preconditioner(aDG.mat, pre)
     assert (lam.NumPy()<3.0).all()
@@ -133,12 +133,12 @@ def test_pc_hiptmaier_xu_bjacobi():
     u,v = fesH1.TnT()
     aH1 = BilinearForm(fesH1)
     aH1 += grad(u)*grad(v)*dx
-    smoother = Preconditioner(aDG, "PETScPC", pc_type="bjacobi")
-    preH1 = PETScPreconditioner(aH1, fesH1.FreeDofs(), matType="is",
-                                solverParameters={"pc_type":"bddc"})
     aH1.Assemble()
+    smoother = Preconditioner(aDG, "PETScPC", pc_type="bjacobi")
+    preH1 = PETScPreconditioner(aH1.mat, fesH1.FreeDofs(), matType="is",
+                                solverParameters={"pc_type":"bddc"})
     transform = fesH1.ConvertL2Operator(fesDG)
-    pre = transform @ preH1.mat @ transform.T + smoother.mat
+    pre = transform @ preH1 @ transform.T + smoother.mat
     CG(mat=aDG.mat, rhs=fDG.vec, sol=gfuDG.vec, pre=pre, printrates = True, maxsteps=200)
     lam = EigenValues_Preconditioner(aDG.mat, pre)
     assert (lam.NumPy()<3.0).all()
