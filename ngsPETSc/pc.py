@@ -25,7 +25,8 @@ class PETScPreconditioner(BaseMatrix):
     MKL sparse: mklaij or CUDA: aijcusparse
 
     '''
-    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix=None, nullspace=None, matType="aij"):
+    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix=None, nullspace=None,
+                 matType="aij"):
         BaseMatrix.__init__(self)
         if hasattr(solverParameters, "ToDict"):
             solverParameters = solverParameters.ToDict()
