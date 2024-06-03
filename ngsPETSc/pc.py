@@ -25,8 +25,8 @@ class PETScPreconditioner(BaseMatrix):
     MKL sparse: mklaij or CUDA: aijcusparse
 
     '''
-    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix=None, nullspace=None,
-                 matType="aij"):
+    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix="", nullspace=None,
+                 matType="aij", blocks=None):
         BaseMatrix.__init__(self)
         if hasattr(solverParameters, "ToDict"):
             solverParameters = solverParameters.ToDict()
@@ -39,18 +39,38 @@ class PETScPreconditioner(BaseMatrix):
         petscMat = Matrix(self.ngsMat, (dofs, freeDofs, None), matType).mat
         if nullspace is not None:
             if nullspace.near:
-                petscMat.setNearNullSpace(nullspace.nullspace)
+                petscMat.mat.setNearNullSpace(nullspace.nullspace)
         self.petscPreconditioner = PETSc.PC().create(comm=petscMat.getComm())
         self.petscPreconditioner.setOperators(petscMat)
         options_object = PETSc.Options()
         if solverParameters is not None:
             for optName, optValue in solverParameters.items():
-                if optName not in ["matType"]:
-                    options_object[optName] = optValue
+                if "sub_pc_type"==optName and blocks is not None:
+                    options_object["sub_pc_type"] = "lu"
+                if "sub_pc_factor_mat_ordering_type"==optName and blocks is not None:
+                    options_object["sub_pc_factor_mat_ordering_type"] = "natural"
+                options_object[optName] = optValue
         self.petscPreconditioner.setOptionsPrefix(optionsPrefix)
         self.petscPreconditioner.setFromOptions()
-        self.petscPreconditioner.setUp()
-        #self.petscPreconditioner.view()
+        self.asmpc = None
+        if blocks is not None:
+            if len (blocks) == 0:
+                self.ises = [PETSc.IS().createGeneral([0], comm=PETSc.COMM_SELF)]
+            else:
+                lgmap = petscMat.getLGMap()[0] #TODO: Fiox this only works for rc
+                self.ises = [lgmap.applyIS(PETSc.IS().createGeneral(list(block),
+                             comm=PETSc.COMM_SELF)) for block in blocks]
+            self.asmpc = PETSc.PC().create(comm=self.petscPreconditioner.getComm())
+            self.asmpc.incrementTabLevel(1, parent=self.petscPreconditioner)
+            self.asmpc.setOptionsPrefix(optionsPrefix)
+            self.asmpc.setFromOptions()
+            self.asmpc.setOperators(*self.petscPreconditioner.getOperators())
+            self.asmpc.setType(self.asmpc.Type.ASM)
+            self.asmpc.setASMType(PETSc.PC.ASMType.BASIC)
+            self.asmpc.setASMLocalSubdomains(len(self.ises), self.ises)
+            self.asmpc.setUp()
+        else:
+            self.petscPreconditioner.setUp()
         self.petscVecX, self.petscVecY = petscMat.createVecs()
     def Shape(self):
         '''
@@ -76,7 +96,10 @@ class PETScPreconditioner(BaseMatrix):
 
         '''
         self.vecMap.petscVec(x,self.petscVecX)
-        self.petscPreconditioner.apply(self.petscVecX, self.petscVecY)
+        if self.asmpc is not None:
+            self.asmpc.apply(self.petscVecX, self.petscVecY)
+        else:
+            self.petscPreconditioner.apply(self.petscVecX, self.petscVecY)
         self.vecMap.ngsVec(self.petscVecY, y)
 
     def MultTrans(self,x,y):
@@ -87,7 +110,10 @@ class PETScPreconditioner(BaseMatrix):
 
         '''
         self.vecMap.petscVec(x,self.petscVecX)
-        self.petscPreconditioner.applyTranspose(self.petscVecX, self.petscVecY)
+        if self.asmpc is not None:
+            self.asmpc.applyTranspose(self.petscVecX, self.petscVecY)
+        else:
+            self.petscPreconditioner.applyTranspose(self.petscVecX, self.petscVecY)
         self.vecMap.ngsVec(self.petscVecY, y)
 
 def createPETScPreconditioner(mat, freeDofs, solverParameters):

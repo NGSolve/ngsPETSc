@@ -33,8 +33,8 @@ Such a discretization can easily be constructed using NGSolve as follows: ::
    else:
       mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
    nu = Parameter(1.0)
-   V = VectorH1(mesh, order=2, dirichlet="wall|inlet|cyl", autoupdate=True)
-   Q = L2(mesh, order=0, autoupdate=True)
+   V = VectorH1(mesh, order=4, dirichlet="wall|inlet|cyl", autoupdate=True)
+   Q = L2(mesh, order=2, autoupdate=True)
    u,v = V.TnT(); p,q = Q.TnT()
    a = BilinearForm(nu*InnerProduct(Grad(u),Grad(v))*dx)
    a.Assemble()
@@ -172,7 +172,7 @@ This is not ideal for large problems, and we can use a `Hypre` preconditioner fo
 Our first attempt at using a `HYPRE` preconditioner for the Laplacian block did not converge. This is because the top left block of the saddle point problem now contains the augmentation term, which has a very large kernel.
 It is well known that algebraic multi-grid methods do not work well with indefinite problems, and this is what we are observing here. ::
 
-Let uss us consider an alternative approach to the augmented Lagrangian formulation. We begin by constructing the augmented Lagrangian formulation in more numerical linear algebra terms, i.e. ::
+Let us consider an alternative approach to the augmented Lagrangian formulation. We begin by constructing the augmented Lagrangian formulation in more numerical linear algebra terms, i.e. ::
 
    d = BilinearForm((1/gamma)*p*q*dx)
    d.Assemble()
@@ -221,7 +221,6 @@ In fact, since we know that the augmentation block has a lower rank than the Lap
                    printrates=True, initialize=False)
    Draw(gfu)
 
-   
    C = BlockMatrix( [ [apre + apre@(b.mat.T@mpre.mat@b.mat)@apre, None], [None, mGpre.mat] ] )
 
    gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;

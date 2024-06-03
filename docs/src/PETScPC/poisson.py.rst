@@ -18,12 +18,13 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
    from mpi4py.MPI import COMM_WORLD
 
    if COMM_WORLD.rank == 0:
-      mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
+      ngmesh = unit_square.GenerateMesh(maxh=0.1)
+      for _ in range(4):
+         ngmesh.Refine()
+      mesh = Mesh(ngmesh.Distribute(COMM_WORLD))
    else:
       mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
-   for _ in range(5):
-      mesh.Refine()
-   order = 4
+   order = 3
    fes = H1(mesh, order=order, dirichlet="left|right|top|bottom")
    print("Number of degrees of freedom: ", fes.ndof)
    u,v = fes.TnT()
@@ -70,7 +71,11 @@ In this case, we will use as fine space correction, the inverse of the local mat
     return blocks
 
    blocks = VertexPatchBlocks(mesh, fes)
-   blockjac = a.mat.CreateBlockSmoother(blocks)
+   dofs = BitArray(fes.ndof); dofs[:] = True
+   blockjac = PETScPreconditioner(a.mat, dofs, blocks=blocks,
+                                  solverParameters={"pc_type": "asm",
+                                                    "sub_ksp_type": "preonly",
+                                                    "sub_pc_type": "lu"})  
 
 We now isolate the degrees of freedom associated with the vertices and construct a two-level additive Schwarz preconditioner, where the coarse space correction is the inverse of the local matrices associated with the vertices. ::
 
