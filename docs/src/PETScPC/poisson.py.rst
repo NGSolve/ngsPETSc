@@ -94,18 +94,19 @@ We can see that the two-level additive Schwarz preconditioner where the coarse s
 .. table:: Preconditioners performance
    :widths: auto
 
-   ======================================  =================  =================  =================  ==================
-     Preconditioner                          p=1                p=2                p=3                p=4
-   ======================================  =================  =================  =================  ==================
-     HYPRE                                   15 (8.49e-13)      100 (4.81e-8)      100 (3.60e-9)      100 (4.15e-8)
-   ======================================  =================  =================  =================  ==================
-     Two Level Additive Schwarz              59 (1.74e-12)      58 (2.01e-12)      59 (1.72e-12)      59 (1.72e-8)
-   ======================================  =================  =================  =================  ==================
+   ========================================  =================  =================  =================  ==================
+   Preconditioner                            p=1                p=2                p=3                p=4
+   ========================================  =================  =================  =================  ==================
+   HYPRE                                     15 (8.49e-13)      100 (4.81e-8)      100 (3.60e-9)      100 (4.15e-8)
+   ========================================  =================  =================  =================  ==================
+   Two Level Additive Schwarz                59 (1.74e-12)      58 (2.01e-12)      59 (1.72e-12)      59 (1.72e-8)
+   ========================================  =================  =================  =================  ==================
+
    
 We can also use the PETSc preconditioner as an auxiliary space preconditioner.
 Let us consdier the disctinuous Galerkin discretisation of the Poisson problem. ::
 
-   fesDG = L2(mesh, order=3, dgjumps=True)
+   fesDG = L2(mesh, order=order, dgjumps=True)
    u,v = fesDG.TnT()
    aDG = BilinearForm(fesDG)
    jump_u = u-u.Other(); jump_v = v-v.Other()
@@ -128,9 +129,10 @@ Let us consdier the disctinuous Galerkin discretisation of the Poisson problem. 
 We can now use the PETSc PC assembled for the confroming Poisson problem as an auxiliary space preconditioner for the DG discretisation. ::
 
    from ngsPETSc import pc
-   smoother = Preconditioner(aDG, "PETScPC", pc_type="sor")
+   smoother = Preconditioner(aDG, "PETScPC", pc_type="jacobi")
    transform = fes.ConvertL2Operator(fesDG)
    preDG = transform @ pre.mat @ transform.T + smoother.mat
    gfuDG = GridFunction(fesDG)
+   print("-------------------|Auxiliary Space preconditioner p={}|-------------------".format(order))
    gfuDG.vec.data = CG(aDG.mat, rhs=fDG.vec, pre=preDG, printrates=True)
    Draw(gfuDG)

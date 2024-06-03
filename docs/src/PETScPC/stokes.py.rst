@@ -2,7 +2,7 @@ Saddle point problems and PETSc PC
 =======================================
 
 In this tutorial, we explore constructing preconditioners for saddle point problems using `PETSc PC`.
-In particular, we will consider a high-order variant of the Bernardi-Raugel inf-sup stable discretization of the Stokes problem, i.e.
+In particular, we will consider a Bernardi-Raugel inf-sup stable discretization of the Stokes problem, i.e.
 
 .. math::       
    
@@ -33,8 +33,8 @@ Such a discretization can easily be constructed using NGSolve as follows: ::
    else:
       mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
    nu = Parameter(1.0)
-   V = VectorH1(mesh, order=4, dirichlet="wall|inlet|cyl", autoupdate=True)
-   Q = L2(mesh, order=2, autoupdate=True)
+   V = VectorH1(mesh, order=2, dirichlet="wall|inlet|cyl", autoupdate=True)
+   Q = L2(mesh, order=0, autoupdate=True)
    u,v = V.TnT(); p,q = Q.TnT()
    a = BilinearForm(nu*InnerProduct(Grad(u),Grad(v))*dx)
    a.Assemble()
@@ -134,9 +134,9 @@ To resolve this issue we resort to an augmented Lagrangian formulation, i.e.
       (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad q\in L^2(\Omega)
    \end{cases}
 
-This formulation can easily be constructed adding a new velocity block in the `BlockMatrix`, as follows: ::
+This formulation can easily be constructed by adding a new velocity block in the `BlockMatrix`, as follows: ::
 
-   gamma = Parameter(1e5)
+   gamma = Parameter(1e6)
    aG = BilinearForm(nu*InnerProduct(Grad(u),Grad(v))*dx+gamma*div(u)*div(v)*dx)
    aG.Assemble()
    aGpre = Preconditioner(aG, "PETScPC", pc_type="lu")
@@ -159,8 +159,8 @@ Notice that so far we have been inverting the matrix corresponding to the Laplac
 This is not ideal for large problems, and we can use a `Hypre` preconditioner for the Laplacian block. ::
 
    smoother = aG.mat.CreateBlockSmoother(blocks)
-   preH = PETScPreconditioner(aG.mat, vertexdofs, solverParameters={"pc_type":"gamg"})
-   twolvpre = preH + blockjac
+   preHG = PETScPreconditioner(aG.mat, vertexdofs, solverParameters={"pc_type":"gamg"})
+   twolvpre = preHG + smoother
    C = BlockMatrix( [ [twolvpre, None], [None, mGpre] ] )
    gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
    gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
@@ -172,15 +172,63 @@ This is not ideal for large problems, and we can use a `Hypre` preconditioner fo
 Our first attempt at using a `HYPRE` preconditioner for the Laplacian block did not converge. This is because the top left block of the saddle point problem now contains the augmentation term, which has a very large kernel.
 It is well known that algebraic multi-grid methods do not work well with indefinite problems, and this is what we are observing here. ::
 
+Let uss us consider an alternative approach to the augmented Lagrangian formulation. We begin by constructing the augmented Lagrangian formulation in more numerical linear algebra terms, i.e. ::
 
-   smoother = aG.mat.CreateBlockSmoother(blocks)
-   preH = PETScPreconditioner(a.mat, V.FreeDofs(), solverParameters={"pc_type":"lu"})
-   twolvpre = preH + preH@ b.mat.T@ Sinv @ b.mat @preH
+   d = BilinearForm((1/gamma)*p*q*dx)
+   d.Assemble()
+   dpre = PETScPreconditioner(d.mat, Q.FreeDofs(), solverParameters={"pc_type":"lu"})
+   aG = a.mat + b.mat.T@dpre@b.mat
+   aG = coo_matrix(aG.ToDense().NumPy())
+   aG = la.SparseMatrixd.CreateFromCOO(indi=aG.row, 
+                                         indj=aG.col,
+                                         values=aG.data,
+                                         h=aG.shape[0],
+                                         w=aG.shape[1])
+   K = BlockMatrix( [ [aG, b.mat.T], [b.mat, None] ] )
+   pre = PETScPreconditioner(aG, V.FreeDofs(), solverParameters={"pc_type":"lu"})
+   C = BlockMatrix( [ [pre, None], [None, mGpre.mat] ] )
 
-   C = BlockMatrix( [ [twolvpre, None], [None, mGpre] ] )
    gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
    gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
-   print("-----------|Augmented Two Level Additivew Schwarz (Hypre + Vertex Patch)|-----------")
-   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10, maxsteps=200,
+   sol = BlockVector( [gfu.vec, gfp.vec] )
+
+   print("-----------|Boffi--Lovadina Augmentation LU|-----------")
+   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
+                   printrates=True, initialize=False)
+   Draw(gfu)
+
+We can now think of a more efficient way to invert the matrix corresponding to the augmentation term.
+In fact, since we know that the augmentation block has a lower rank than the Laplacian block, we can use the Sherman-Morrisson-Woodbory formula to invert the augmentation block. ::
+
+   SM = (d.mat + b.mat@apre@b.mat.T).ToDense().NumPy()
+   SM = coo_matrix(SM)
+   SM = la.SparseMatrixd.CreateFromCOO(indi=SM.row, 
+                                         indj=SM.col,
+                                         values=SM.data,
+                                         h=SM.shape[0],
+                                         w=SM.shape[1])
+   
+   SMinv = PETScPreconditioner(SM, Q.FreeDofs(), solverParameters={"pc_type":"lu"})
+
+   C = BlockMatrix( [ [apre - apre@b.mat.T@SMinv@b.mat@apre, None], [None, mGpre.mat] ] )
+
+   gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
+   gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
+   sol = BlockVector( [gfu.vec, gfp.vec] )
+
+   print("-----------|Boffi--Lovadina Augmentation Sherman-Morrisson-Woodbory|-----------")
+   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
+                   printrates=True, initialize=False)
+   Draw(gfu)
+
+   
+   C = BlockMatrix( [ [apre + apre@(b.mat.T@mpre.mat@b.mat)@apre, None], [None, mGpre.mat] ] )
+
+   gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
+   gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
+   sol = BlockVector( [gfu.vec, gfp.vec] )
+
+   print("-----------|Boffi--Lovadina Augmentation Sherman-Morrisson-Woodbory|-----------")
+   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-13,
                    printrates=True, initialize=False)
    Draw(gfu)
