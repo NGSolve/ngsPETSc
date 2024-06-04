@@ -24,7 +24,7 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
       mesh = Mesh(ngmesh.Distribute(COMM_WORLD))
    else:
       mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
-   order = 4
+   order = 3
    fes = H1(mesh, order=order, dirichlet="left|right|top|bottom")
    print("Number of degrees of freedom: ", fes.ndof)
    u,v = fes.TnT()

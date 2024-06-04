@@ -17,6 +17,7 @@ Welcome to ngsPETSc's documentation!
    :caption: PETSc PC
 
    PETScPC/poisson.py
+   PETScPC/stokes.py
 
 .. toctree::
    :maxdepth: 1

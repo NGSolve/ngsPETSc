@@ -1,5 +1,5 @@
-Saddle point problems and PETSc PC
-=======================================
+Preconditioning the Stokes problem 
+===================================
 
 In this tutorial, we explore constructing preconditioners for saddle point problems using `PETSc PC`.
 In particular, we will consider a Bernardi-Raugel inf-sup stable discretization of the Stokes problem, i.e.
@@ -142,10 +142,10 @@ We can also construct a multi-grid preconditioner for the top left block of the 
    C = BlockMatrix( [ [twolvpre, None], [None, mpre] ] )
    gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
    gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
-   print("-----------|Mass & Two Level Additivew Schwarz|-----------")
+   print("-----------|Mass & Two Level Additive Schwarz|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-8,
                    maxsteps=100, printrates=True, initialize=False)
-   
+ 
 .. list-table:: Preconditioners performance
    :widths: auto
    :header-rows: 1
@@ -156,7 +156,7 @@ We can also construct a multi-grid preconditioner for the top left block of the 
      - 4 (9.15e-14)
    * - Mass & LU
      - 66 (2.45e-08)
-   * - Mass & Two Level Additivew Schwarz
+   * - Mass & Two Level Additive Schwarz
      - 100 (4.68e-06)
    
 The mass matrix as a preconditioner doesn't seem to be ideal, in fact, our Krylov solver took many iterations to converge with a direct LU factorization of the velocity block and did not converge at all with `HYPRE`.
@@ -189,24 +189,60 @@ This formulation can easily be constructed by adding a new velocity block in the
                    printrates=True, initialize=False)
    Draw(gfu)
 
+Using an augmented Lagrangian formulation, we were able to converge in only two iterations.
+This is because the augmented Lagrangian formulation improves the spectral equivalence of the mass matrix of the pressure space and the Schur complement.
+ 
+.. list-table:: Preconditioners performance
+   :widths: auto
+   :header-rows: 1
+
+   * - Preconditioner
+     - Iterations
+   * - Schur complement
+     - 4 (9.15e-14)
+   * - Mass & LU
+     - 66 (2.45e-08)
+   * - Mass & Two Level Additive Schwarz
+     - 100 (4.68e-06)
+   * - Augmented Lagrangian LU
+     - 2 (9.24e-8)
+
 Notice that so far we have been inverting the matrix corresponding to the Laplacian block using a direct LU factorization.
 This is not ideal for large problems, and we can use a `Hypre` preconditioner for the Laplacian block. ::
 
    smoother = aG.mat.CreateBlockSmoother(blocks)
-   preHG = PETScPreconditioner(aG.mat, vertexdofs, solverParameters={"pc_type":"gamg"})
+   preHG = PETScPreconditioner(aG.mat, vertexdofs, solverParameters={"pc_type":"hypre"})
    twolvpre = preHG + smoother
    C = BlockMatrix( [ [twolvpre, None], [None, mGpre] ] )
    gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
    gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
-   print("-----------|Augmented Two Level Additivew Schwarz|-----------")
+   print("-----------|Augmented Two Level Additive Schwarz|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                    printrates=True, initialize=False)
    Draw(gfu)
 
-Our first attempt at using a `HYPRE` preconditioner for the Laplacian block did not converge. This is because the top left block of the saddle point problem now contains the augmentation term, which has a very large kernel.
-It is well known that algebraic multi-grid methods do not work well with indefinite problems, and this is what we are observing here. ::
+Our first attempt at using a `HYPRE` preconditioner for the Laplacian block did not converge.
 
-Let us consider an alternative approach to the augmented Lagrangian formulation. We begin by constructing the augmented Lagrangian formulation in more numerical linear algebra terms, i.e. ::
+.. list-table:: Preconditioners performance
+   :widths: auto
+   :header-rows: 1
+
+   * - Preconditi¬oner
+     - Iterations
+   * - Schur complement
+     - 4 (9.15e-14)
+   * - Mass & LU
+     - 66 (2.45e-08)
+   * - Mass & Two Level Additive Schwarz
+     - 100 (4.68e-06)
+   * - Augmented Lagrangian LU
+     - 2 (9.24e-08)
+   * - Augmented Two Level Additive Schwarz
+     - 100 (1.06e-03)
+
+This is because the top left block of the saddle point problem now contains the augmentation term, which has a very large kernel.
+It is well known that algebraic multi-grid methods do not work well with indefinite problems, and this is what we are observing here.
+We begin by constructing the augmented Lagrangian formulation in more numerical linear algebra terms, i.e. ::
 
    d = BilinearForm((1/gamma)*p*q*dx)
    d.Assemble()
@@ -265,3 +301,25 @@ In fact, since we know that the augmentation block has a lower rank than the Lap
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-13,
                    printrates=True, initialize=False)
    Draw(gfu)
+
+We see that a purely algebraic approach based on the Sherman-Morrisson-Woodbory formula is more efficient for the augmented Lagrangian formulation, then a naive two-level additive Schwarz approach.
+
+.. list-table:: Preconditioners performance
+   :widths: auto
+   :header-rows: 1
+
+   * - Preconditioner
+     - Iterations
+   * - Schur complement
+     - 4 (9.15e-14)
+   * - Mass & LU
+     - 66 (2.45e-08)
+   * - Mass & Two Level Additive Schwarz
+     - 100 (4.68e-06)
+   * - Augmented Lagrangian LU
+     - 2 (9.24e-08)
+   * - Augmented Two Level Additive Schwarz
+     - 100 (1.06e-03)
+   * - Augmentation Schermon-Morrisson-Woodbory
+     - 84 (1.16e-07)
+
