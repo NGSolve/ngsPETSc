@@ -9,7 +9,7 @@ In particular, we will consider a Bernardi-Raugel inf-sup stable discretization 
    \text{find } (\vec{u},p) \in [H^1_{0}(\Omega)]^d\times L^2(\Omega) \text{ s.t. }
    
    \begin{cases} 
-      (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)}  = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad v\in H^1_{0}(\Omega)\\
+      (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)}  = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad \forany v\in H^1_{0}(\Omega)\\
       (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad q\in L^2(\Omega)
    \end{cases}
 
@@ -73,7 +73,7 @@ We can construct the Schur complement preconditioner using the following code: :
                    printrates=True, initialize=False)
    Draw(gfu)
 
-The Schur complement preconditioner converge in a few iterations, but it is not very efficient since we need to invert the Schur complement.
+The Schur complement preconditioner converges in a few iterations, but it is not very efficient since we need to invert the Schur complement.
 
 .. list-table:: Preconditioners performance
    :widths: auto
@@ -164,7 +164,7 @@ To resolve this issue we resort to an augmented Lagrangian formulation, i.e.
 
 .. math::
    \begin{cases} 
-      (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)} + \gamma (\nabla\cdot \vec{u},\nabla\cdot\vec{v})_{L^2(\Omega)} = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad v\in H^1_{0}(\Omega)\\
+      (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)} + \gamma (\nabla\cdot \vec{u},\nabla\cdot\vec{v})_{L^2(\Omega)} = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad \forany v\in H^1_{0}(\Omega)\\
       (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad q\in L^2(\Omega)
    \end{cases}
 
@@ -242,7 +242,24 @@ Our first attempt at using a `HYPRE` preconditioner for the Laplacian block did 
 
 This is because the top left block of the saddle point problem now contains the augmentation term, which has a very large kernel.
 It is well known that algebraic multi-grid methods do not work well with indefinite problems, and this is what we are observing here.
-We begin by constructing the augmented Lagrangian formulation in more numerical linear algebra terms, i.e. ::
+We begin by constructing the augmented Lagrangian formulation in more numerical linear algebra terms, i.e. 
+
+.. math::
+   \begin{bmatrix}
+      A + B^T (\gamma M^{-1}) B & B^T \\
+      B & 0
+   \end{bmatrix}
+   \begin{bmatrix}
+      u \\
+      p
+   \end{bmatrix}
+   =
+   \begin{bmatrix}
+      f \\
+      0
+   \end{bmatrix}
+
+We can construct this linear algebra problem inside NGSolve as follows ::
 
    d = BilinearForm((1/gamma)*p*q*dx)
    d.Assemble()
@@ -268,7 +285,13 @@ We begin by constructing the augmented Lagrangian formulation in more numerical 
    Draw(gfu)
 
 We can now think of a more efficient way to invert the matrix corresponding to the augmentation term.
-In fact, since we know that the augmentation block has a lower rank than the Laplacian block, we can use the Sherman-Morrisson-Woodbory formula to invert the augmentation block. ::
+In fact, since we know that the augmentation block has a lower rank than the Laplacian block, we can use the Sherman-Morrisson-Woodbory formula to invert the augmentation block.
+
+.. math::
+   (A + B^T(\gamma M^{-1})B)^{-1} = A^{-1} - A^{-1}B^T(\frac{1}{\gamma}M^{-1} + BA^{-1}B^T)^{-1}BA^{-1}
+
+We will do this in two different ways first we will invert the :math:`(\frac{1}{\gamma}M^{-1} + BA^{-1}B^T)` block using a direct LU factorization.
+Then we will notice that since the penalisation parameter is large we can ignore the :math:`\frac{1}{\gamma}M^{-1}` term and use the mass matrix since it is spectrally to the Schur complement. ::
 
    SM = (d.mat + b.mat@apre@b.mat.T).ToDense().NumPy()
    SM = coo_matrix(SM)
