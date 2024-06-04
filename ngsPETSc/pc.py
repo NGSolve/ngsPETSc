@@ -58,8 +58,12 @@ class PETScPreconditioner(BaseMatrix):
                 self.ises = [PETSc.IS().createGeneral([0], comm=PETSc.COMM_SELF)]
             else:
                 lgmap = petscMat.getLGMap()[0] #TODO: Fiox this only works for rc
-                self.ises = [lgmap.applyIS(PETSc.IS().createGeneral(list(block),
-                             comm=PETSc.COMM_SELF)) for block in blocks]
+                if self.petscPreconditioner.getComm().size > 1:
+                    self.ises = [lgmap.applyIS(PETSc.IS().createGeneral(list(block),
+                                 comm=PETSc.COMM_SELF)) for block in blocks]
+                else:
+                    self.ises = [PETSc.IS().createGeneral(list(block),
+                                 comm=PETSc.COMM_SELF) for block in blocks]
             self.asmpc = PETSc.PC().create(comm=self.petscPreconditioner.getComm())
             self.asmpc.incrementTabLevel(1, parent=self.petscPreconditioner)
             self.asmpc.setOptionsPrefix(optionsPrefix)

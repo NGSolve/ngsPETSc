@@ -24,7 +24,7 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
       mesh = Mesh(ngmesh.Distribute(COMM_WORLD))
    else:
       mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
-   order = 3
+   order = 4
    fes = H1(mesh, order=order, dirichlet="left|right|top|bottom")
    print("Number of degrees of freedom: ", fes.ndof)
    u,v = fes.TnT()
@@ -47,7 +47,7 @@ In this tutorial, we will use the Krylov solver implemented inside NGSolve to so
 
 We see that the HYPRE preconditioner is quite effective for the Poisson problem discretised using linear elements, but it is not as effective for higher-order elements.
 
-.. list-table:: Title
+.. list-table:: Preconditioners performance HYPRE
    :widths: auto
    :header-rows: 1
 
@@ -57,10 +57,10 @@ We see that the HYPRE preconditioner is quite effective for the Poisson problem 
      - p=3
      - p=4
    * - HYPRE
-     - 15 (8.49e-13)
-     - 100 (4.81e-8)
-     - 100 (3.60e-9)
-     - 100 (4.15e-8)
+     - 10 (1.57e-12)
+     - 70 (2.22e-13)
+     - 42 (3.96e-13)
+     - 70 (1.96e-13)
 
 To overcome this issue we will use a two-level additive Schwarz preconditioner.
 In this case, we will use as fine space correction, the inverse of the local matrices associated with the patch of a vertex. ::
@@ -102,20 +102,29 @@ We now isolate the degrees of freedom associated with the vertices and construct
 
 We can see that the two-level additive Schwarz preconditioner where the coarse space correction is performed using HYPRE is more effective than using just HYPRE preconditioner for higher-order elements.
 
-.. table:: Preconditioners performance
+.. list-table:: Preconditioners performance HYPRE and Two Level Additive Schwarz
    :widths: auto
+   :header-rows: 1
 
-   ========================================  =================  =================  =================  ==================
-   Preconditioner                            p=1                p=2                p=3                p=4
-   ========================================  =================  =================  =================  ==================
-   HYPRE                                     15 (8.49e-13)      100 (4.81e-8)      100 (3.60e-9)      100 (4.15e-8)
-   ========================================  =================  =================  =================  ==================
-   Two Level Additive Schwarz                59 (1.74e-12)      58 (2.01e-12)      59 (1.72e-12)      59 (1.72e-8)
-   ========================================  =================  =================  =================  ==================
-
+   * - Preconditioner
+     - p=1
+     - p=2
+     - p=3
+     - p=4
+   * - HYPRE
+     - 10 (1.57e-12)
+     - 70 (2.22e-13)
+     - 42 (3.96e-13)
+     - 70 (1.96e-13)
+   * - Additive Schwarz
+     - 44 (1.96e-12)
+     - 45 (1.28e-12)
+     - 45 (1.29e-12)
+     - 45 (1.45e-12)
+       
    
 We can also use the PETSc preconditioner as an auxiliary space preconditioner.
-Let us consdier the disctinuous Galerkin discretisation of the Poisson problem. ::
+Let us consider the discontinuous Galerkin discretisation of the Poisson problem. ::
 
    fesDG = L2(mesh, order=order, dgjumps=True)
    u,v = fesDG.TnT()
@@ -137,7 +146,7 @@ Let us consdier the disctinuous Galerkin discretisation of the Poisson problem. 
    aDG.Assemble()
    fDG.Assemble()
 
-We can now use the PETSc PC assembled for the confroming Poisson problem as an auxiliary space preconditioner for the DG discretisation. ::
+We can now use the PETSc PC assembled for the conforming Poisson problem as an auxiliary space preconditioner for the DG discretisation. ::
 
    from ngsPETSc import pc
    smoother = Preconditioner(aDG, "PETScPC", pc_type="jacobi")
