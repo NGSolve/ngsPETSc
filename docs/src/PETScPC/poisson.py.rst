@@ -47,14 +47,20 @@ In this tutorial, we will use the Krylov solver implemented inside NGSolve to so
 
 We see that the HYPRE preconditioner is quite effective for the Poisson problem discretised using linear elements, but it is not as effective for higher-order elements.
 
-.. table:: Preconditioners performance
+.. list-table:: Title
    :widths: auto
+   :header-rows: 1
 
-   ==================  =================  =================  =================  =================
-     Preconditioner      p=1                p=2                p=3                p=4
-   ==================  =================  =================  =================  =================
-     HYPRE               15 (8.49e-13)      100 (4.81e-8)      100 (3.60e-9)      100 (4.15e-8)
-   ==================  =================  =================  =================  =================
+   * - Preconditioner
+     - p=1
+     - p=2
+     - p=3
+     - p=4
+   * - HYPRE
+     - 15 (8.49e-13)
+     - 100 (4.81e-8)
+     - 100 (3.60e-9)
+     - 100 (4.15e-8)
 
 To overcome this issue we will use a two-level additive Schwarz preconditioner.
 In this case, we will use as fine space correction, the inverse of the local matrices associated with the patch of a vertex. ::
