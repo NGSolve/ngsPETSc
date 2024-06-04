@@ -1,5 +1,5 @@
-Preconditioning the Poisson problem
-=====================================
+Vertex Patch smoothing for p-Multigrid preconditioners for the Poisson problem
+===============================================================================
 
 In this tutorial, we explore using `PETSc PC` as a preconditioner inside NGSolve preconditioning infrastructure.
 We will focus our attention on the Poisson problem, and we will consider different preconditioning strategies.

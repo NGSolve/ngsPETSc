@@ -1,7 +1,7 @@
-Preconditioning the Stokes problem 
-===================================
+Boffi-Lovadina Augmentation for Bernardi-Raugel discretization of the Stokes problem
+======================================================================================
 
-In this tutorial, we explore constructing preconditioners for saddle point problems using `PETSc PC`.
+In this tutorial, we explore constructing preconditioners for Bernardi-Raugel discretizations of the Stokes problem with Boffi-Lovadina augmentation.
 In particular, we will consider a Bernardi-Raugel inf-sup stable discretization of the Stokes problem, i.e.
 
 .. math::       
@@ -9,8 +9,8 @@ In particular, we will consider a Bernardi-Raugel inf-sup stable discretization 
    \text{find } (\vec{u},p) \in [H^1_{0}(\Omega)]^d\times L^2(\Omega) \text{ s.t. }
    
    \begin{cases} 
-      (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)}  = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad \forany v\in H^1_{0}(\Omega)\\
-      (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad q\in L^2(\Omega)
+      (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)}  = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad \forall v\in H^1_{0}(\Omega)\\
+      (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad \froall q\in L^2(\Omega)
    \end{cases}
 
 Such a discretization can easily be constructed using NGSolve as follows: ::
@@ -33,8 +33,8 @@ Such a discretization can easily be constructed using NGSolve as follows: ::
    else:
       mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
    nu = Parameter(1.0)
-   V = VectorH1(mesh, order=4, dirichlet="wall|inlet|cyl", autoupdate=True)
-   Q = L2(mesh, order=2, autoupdate=True)
+   V = VectorH1(mesh, order=2, dirichlet="wall|inlet|cyl", autoupdate=True)
+   Q = L2(mesh, order=0, autoupdate=True)
    u,v = V.TnT(); p,q = Q.TnT()
    a = BilinearForm(nu*InnerProduct(Grad(u),Grad(v))*dx)
    a.Assemble()
@@ -164,8 +164,8 @@ To resolve this issue we resort to an augmented Lagrangian formulation, i.e.
 
 .. math::
    \begin{cases} 
-      (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)} + \gamma (\nabla\cdot \vec{u},\nabla\cdot\vec{v})_{L^2(\Omega)} = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad \forany v\in H^1_{0}(\Omega)\\
-      (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad q\in L^2(\Omega)
+      (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)} + \gamma (\nabla\cdot \vec{u},\nabla\cdot\vec{v})_{L^2(\Omega)} = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad \forall v\in H^1_{0}(\Omega)\\
+      (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad \forall q\in L^2(\Omega)
    \end{cases}
 
 This formulation can easily be constructed by adding a new velocity block in the `BlockMatrix`, as follows: ::
@@ -184,7 +184,7 @@ This formulation can easily be constructed by adding a new velocity block in the
    gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
    sol = BlockVector( [gfu.vec, gfp.vec] )
 
-   print("-----------|Augmented LU|-----------")
+   print("-----------|Boffi--Lovadina Augmentation LU|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                    printrates=True, initialize=False)
    Draw(gfu)
@@ -216,7 +216,7 @@ This is not ideal for large problems, and we can use a `Hypre` preconditioner fo
    C = BlockMatrix( [ [twolvpre, None], [None, mGpre] ] )
    gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
    gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
-   print("-----------|Augmented Two Level Additive Schwarz|-----------")
+   print("-----------|Boffi--Lovadina Augmentation Two Level Additive Schwarz|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                    printrates=True, initialize=False)
    Draw(gfu)
@@ -345,4 +345,3 @@ We see that a purely algebraic approach based on the Sherman-Morrisson-Woodbory 
      - 100 (1.06e-03)
    * - Augmentation Schermon-Morrisson-Woodbory
      - 84 (1.16e-07)
-
