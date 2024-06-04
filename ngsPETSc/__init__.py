@@ -1,8 +1,6 @@
 '''
 ngsPETSc is a NGSolve/Netgen interface to PETSc
 '''
-import warnings
-
 from ngsPETSc.plex import *
 
 __all__ = []
@@ -31,7 +29,6 @@ if dolfinx:
 try:
     import ngsolve
 except ImportError:
-    warnings.warn("No NGSolve installed, only working with Netgen.")
     ngsolve = None
 
 if ngsolve:
