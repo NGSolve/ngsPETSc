@@ -73,6 +73,17 @@ We can construct the Schur complement preconditioner using the following code: :
                    printrates=True, initialize=False)
    Draw(gfu)
 
+The Schur complement preconditioner converge in a few iterations, but it is not very efficient since we need to invert the Schur complement.
+
+.. list-table:: Preconditioners performance
+   :widths: auto
+   :header-rows: 1
+
+   * - Preconditioner
+     - Iterations
+   * - Schur complement
+     - 4 (9.15e-14)
+
 Notice that the Schur complement is dense hence inverting it is not a good idea. Not only that but to perform the inversion of the Schur complement had to write a lot of "boilerplate" code.
 Since our discretization is inf-sup stable it is possible to prove that the mass matrix of the pressure space is spectrally equivalent to the Schur complement.
 This means that we can use the mass matrix of the pressure space as a preconditioner for the Schur complement.
@@ -93,6 +104,17 @@ We will also invert the Laplacian block using a `PETSc PC` of type `LU`. ::
                    maxsteps=100, printrates=True, initialize=False)
    Draw(gfu)
 
+.. list-table:: Preconditioners performance
+   :widths: auto
+   :header-rows: 1
+
+   * - Preconditioner
+     - Iterations
+   * - Schur complement
+     - 4 (9.15e-14)
+   * - Mass & LU
+     - 66 (2.45e-08)
+   
 We can also construct a multi-grid preconditioner for the top left block of the saddle point problem, as we have seen in :doc:`poisson.py`. ::
 
    def DoFInfo(mesh, fes):
@@ -124,7 +146,19 @@ We can also construct a multi-grid preconditioner for the top left block of the 
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-8,
                    maxsteps=100, printrates=True, initialize=False)
    
+.. list-table:: Preconditioners performance
+   :widths: auto
+   :header-rows: 1
 
+   * - Preconditioner
+     - Iterations
+   * - Schur complement
+     - 4 (9.15e-14)
+   * - Mass & LU
+     - 66 (2.45e-08)
+   * - Mass & Two Level Additivew Schwarz
+     - 100 (4.68e-06)
+   
 The mass matrix as a preconditioner doesn't seem to be ideal, in fact, our Krylov solver took many iterations to converge with a direct LU factorization of the velocity block and did not converge at all with `HYPRE`.
 To resolve this issue we resort to an augmented Lagrangian formulation, i.e.
 
