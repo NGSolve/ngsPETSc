@@ -47,6 +47,9 @@ A discretization of this energy leads to a non-linear problem that we solve usin
     a += Variation(NeoHooke(C(u)).Compile()*dx)
     a += ((Id(3)+Grad(u.Trace()))*force)*v*ds("top")
 
+Once we have defined the energy and the weak form, we can solve the non-linear problem using `PETSc SNES`.
+In particular, we will use a Newton method with line search, and precondition the linear solves with a direct solver. ::
+
     from ngsPETSc import NonLinearSolver
     gfu_petsc = GridFunction(fes)
     gfu_ngs = GridFunction(fes)
@@ -89,4 +92,3 @@ We compare the performance of the two solvers, in the following table:
      - 10
 
 This suggests that while NGS non-linear solver when finely tuned performs as well as PETSc SNES, it is more sensitive to the choice of the damping factor. In this case, a damping factor of 0.3 was found to be the best choice.
-"""

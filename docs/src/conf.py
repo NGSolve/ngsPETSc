@@ -26,7 +26,7 @@ extensions = ['sphinx.ext.autodoc', 'sphinx_autodoc_typehints', 'jupyter_sphinx.
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
-
+mathjax3_config = {'chtml': {'displayAlign': 'left'}}
 html_sourcelink_suffix = ''
 nbsphinx_prolog = r"""
 {% set docname = env.doc2path(env.docname, base='').replace('i-tutorials/', '') %}

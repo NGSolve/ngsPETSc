@@ -4,12 +4,12 @@ Vertex Patch smoothing for Augmented Lagrangian formulations of the Oseen proble
 In this tutorial, we will see how to use an augmented Lagrangian formulation to precondition the Oseen problem, i.e.
 
 .. math::
-   
-   \text{Given }\vec{\beta}\in \mathbb{R}^3 \text{ find } (\vec{u},p) \in [H^1_{0}(\Omega)]^d\times L^2(\Omega) \text{ s.t. }
-   
+
+   \text{Given } \vec{\beta} \in \mathbb{R}^3 \text{ find } (\vec{u}, p) \in [H^1_{0}(\Omega)]^d \times L^2(\Omega) \text{ s.t. }
+
    \begin{cases} 
-      \nu (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)} -(\nabla \vec{u}\vec{\beta},\vec{v})_{L^2(\Omega)} + (div(\vec{u}),div(\vec{v}))_{L^2(\Omega)}  = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad \forall v\in H^1_{0}(\Omega)\\
-      (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad \froall q\in L^2(\Omega)
+      \nu (\nabla \vec{u}, \nabla \vec{v})_{L^2(\Omega)} + (\nabla \cdot \vec{v}, p)_{L^2(\Omega)} - (\nabla \vec{u} \vec{\beta}, \vec{v})_{L^2(\Omega)} + \gamma (\text{div}(\vec{u}), \text{div}(\vec{v}))_{L^2(\Omega)} = (\vec{f}, \vec{v})_{L^2(\Omega)} \quad \forall v \in H^1_{0}(\Omega) \\
+      (\nabla \cdot \vec{u}, q)_{L^2(\Omega)} = 0 \quad \forall q \in L^2(\Omega)
    \end{cases}
 
 Let us begin defining the parameters of the problem. ::

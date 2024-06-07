@@ -10,7 +10,7 @@ In particular, we will consider a Bernardi-Raugel inf-sup stable discretization 
    
    \begin{cases} 
       (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)}  = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad \forall v\in H^1_{0}(\Omega)\\
-      (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad \froall q\in L^2(\Omega)
+      (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad \forall q\in L^2(\Omega)
    \end{cases}
 
 Such a discretization can easily be constructed using NGSolve as follows: ::
