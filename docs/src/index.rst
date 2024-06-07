@@ -24,7 +24,7 @@ Welcome to ngsPETSc's documentation!
    :maxdepth: 1
    :caption: PETSc SNES
 
-   PETScSNES/beam.py
+   PETScSNES/hyperelasticity.py
 
 .. toctree::
    :maxdepth: 1
