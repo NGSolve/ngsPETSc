@@ -1,5 +1,5 @@
-# Saddle point problems and PETSc PC
-# =======================================
+# Preconditioning the Stokes problem 
+# ===================================
 #
 # In this tutorial, we explore constructing preconditioners for saddle point problems using `PETSc PC`.
 # In particular, we will consider a Bernardi-Raugel inf-sup stable discretization of the Stokes problem, i.e.
@@ -9,7 +9,7 @@
 #    \text{find } (\vec{u},p) \in [H^1_{0}(\Omega)]^d\times L^2(\Omega) \text{ s.t. }
 #   
 #    \begin{cases} 
-#       (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)}  = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad v\in H^1_{0}(\Omega)\\
+#       (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)}  = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad \forany v\in H^1_{0}(\Omega)\\
 #       (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad q\in L^2(\Omega)
 #    \end{cases}
 #
@@ -28,13 +28,13 @@ if COMM_WORLD.rank == 0:
    shape.edges.Min(X).name="inlet"
    shape.edges.Max(X).name="outlet"
    geo = OCCGeometry(shape, dim=2)
-   ngmesh = geo.GenerateMesh(maxh=0.05)
+   ngmesh = geo.GenerateMesh(maxh=0.1)
    mesh = Mesh(ngmesh.Distribute(COMM_WORLD))
 else:
    mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
 nu = Parameter(1.0)
-V = VectorH1(mesh, order=2, dirichlet="wall|inlet|cyl", autoupdate=True)
-Q = L2(mesh, order=0, autoupdate=True)
+V = VectorH1(mesh, order=4, dirichlet="wall|inlet|cyl", autoupdate=True)
+Q = L2(mesh, order=3, autoupdate=True)
 u,v = V.TnT(); p,q = Q.TnT()
 a = BilinearForm(nu*InnerProduct(Grad(u),Grad(v))*dx)
 a.Assemble()
@@ -54,10 +54,10 @@ K = BlockMatrix( [ [a.mat, b.mat.T], [b.mat, None] ] )
 from ngsPETSc.pc import *
 apre = Preconditioner(a, "PETScPC", pc_type="lu")
 S = (b.mat @ apre.mat @ b.mat.T).ToDense().NumPy()
-from numpy.linalg import inv
+from numpy.linalg import pinv
 from scipy.sparse import coo_matrix
 from ngsolve.la import SparseMatrixd 
-Sinv = coo_matrix(inv(S))
+Sinv = coo_matrix(pinv(S))
 Sinv = la.SparseMatrixd.CreateFromCOO(indi=Sinv.row, 
                                       indj=Sinv.col,
                                       values=Sinv.data,
@@ -73,6 +73,17 @@ solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-8,
                 printrates=True, initialize=False)
 Draw(gfu)
 
+# The Schur complement preconditioner converges in a few iterations, but it is not very efficient since we need to invert the Schur complement.
+#
+# .. list-table:: Preconditioners performance
+#    :widths: auto
+#    :header-rows: 1
+#
+#    * - Preconditioner
+#      - Iterations
+#    * - Schur complement
+#      - 4 (9.15e-14)
+#
 # Notice that the Schur complement is dense hence inverting it is not a good idea. Not only that but to perform the inversion of the Schur complement had to write a lot of "boilerplate" code.
 # Since our discretization is inf-sup stable it is possible to prove that the mass matrix of the pressure space is spectrally equivalent to the Schur complement.
 # This means that we can use the mass matrix of the pressure space as a preconditioner for the Schur complement.
@@ -88,23 +99,78 @@ gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
 gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
 sol = BlockVector( [gfu.vec, gfp.vec] )
 
-print("-----------|Mass LU|-----------")
+print("-----------|Mass & LU|-----------")
 solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-8,
                 maxsteps=100, printrates=True, initialize=False)
 Draw(gfu)
 
-# The mass matrix as a preconditioner doesn't seem to be ideal, in fact, our Krylov solver took many iterations to converge.
+# .. list-table:: Preconditioners performance
+#    :widths: auto
+#    :header-rows: 1
+#
+#    * - Preconditioner
+#      - Iterations
+#    * - Schur complement
+#      - 4 (9.15e-14)
+#    * - Mass & LU
+#      - 66 (2.45e-08)
+#   
+# We can also construct a multi-grid preconditioner for the top left block of the saddle point problem, as we have seen in :doc:`poisson.py`. ::
+
+def DoFInfo(mesh, fes):
+   blocks = []
+   freedofs = fes.FreeDofs()
+   vertexdofs = BitArray(fes.ndof)
+   vertexdofs[:] = False
+   for v in mesh.vertices:
+      vdofs = set()
+      vdofs |= set(d for d in fes.GetDofNrs(v) if freedofs[d])
+      for ed in mesh[v].edges:
+         vdofs |= set(d for d in fes.GetDofNrs(ed) if freedofs[d])
+      for fc in mesh[v].faces:
+         vdofs |= set(d for d in fes.GetDofNrs(fc) if freedofs[d])
+      blocks.append(vdofs)
+      for d in fes.GetDofNrs(v):
+         vertexdofs[d] = True
+   vertexdofs &= fes.FreeDofs()
+   return vertexdofs, blocks 
+
+vertexdofs, blocks = DoFInfo(mesh, V)
+blockjac = a.mat.CreateBlockSmoother(blocks)
+preH = PETScPreconditioner(a.mat, vertexdofs, solverParameters={"pc_type":"hypre"})
+twolvpre = preH + blockjac
+C = BlockMatrix( [ [twolvpre, None], [None, mpre] ] )
+gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
+gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
+print("-----------|Mass & Two Level Additive Schwarz|-----------")
+solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-8,
+                maxsteps=100, printrates=True, initialize=False)
+ 
+# .. list-table:: Preconditioners performance
+#    :widths: auto
+#    :header-rows: 1
+#
+#    * - Preconditioner
+#      - Iterations
+#    * - Schur complement
+#      - 4 (9.15e-14)
+#    * - Mass & LU
+#      - 66 (2.45e-08)
+#    * - Mass & Two Level Additive Schwarz
+#      - 100 (4.68e-06)
+#   
+# The mass matrix as a preconditioner doesn't seem to be ideal, in fact, our Krylov solver took many iterations to converge with a direct LU factorization of the velocity block and did not converge at all with `HYPRE`.
 # To resolve this issue we resort to an augmented Lagrangian formulation, i.e.
 #
 # .. math::
 #    \begin{cases} 
-#       (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)} + \gamma (\nabla\cdot \vec{u},\nabla\cdot\vec{v})_{L^2(\Omega)} = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad v\in H^1_{0}(\Omega)\\
+#       (\nabla \vec{u},\nabla \vec{v})_{L^2(\Omega)} + (\nabla\cdot \vec{v}, p)_{L^2(\Omega)} + \gamma (\nabla\cdot \vec{u},\nabla\cdot\vec{v})_{L^2(\Omega)} = (\vec{f},\vec{v})_{L^2(\Omega)} \qquad \forany v\in H^1_{0}(\Omega)\\
 #       (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad q\in L^2(\Omega)
 #    \end{cases}
 #
-# This formulation can easily be adding an augmentation block in the `BlockMatrix`, as follows: ::
+# This formulation can easily be constructed by adding a new velocity block in the `BlockMatrix`, as follows: ::
 
-gamma = Parameter(1e6)
+gamma = Parameter(1e8)
 aG = BilinearForm(nu*InnerProduct(Grad(u),Grad(v))*dx+gamma*div(u)*div(v)*dx)
 aG.Assemble()
 aGpre = Preconditioner(aG, "PETScPC", pc_type="lu")
@@ -119,53 +185,163 @@ gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
 sol = BlockVector( [gfu.vec, gfp.vec] )
 
 print("-----------|Augmented LU|-----------")
-solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-11,
+solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                 printrates=True, initialize=False)
 Draw(gfu)
 
+# Using an augmented Lagrangian formulation, we were able to converge in only two iterations.
+# This is because the augmented Lagrangian formulation improves the spectral equivalence of the mass matrix of the pressure space and the Schur complement.
+# 
+# .. list-table:: Preconditioners performance
+#    :widths: auto
+#    :header-rows: 1
+#
+#    * - Preconditioner
+#      - Iterations
+#    * - Schur complement
+#      - 4 (9.15e-14)
+#    * - Mass & LU
+#      - 66 (2.45e-08)
+#    * - Mass & Two Level Additive Schwarz
+#      - 100 (4.68e-06)
+#    * - Augmented Lagrangian LU
+#      - 2 (9.24e-8)
+#
 # Notice that so far we have been inverting the matrix corresponding to the Laplacian block using a direct LU factorization.
-# As our mesh becomes finer and finer this is no longer a viable option. To overcome this issue we can try inverting the matrix via `HYPRE`. ::
+# This is not ideal for large problems, and we can use a `Hypre` preconditioner for the Laplacian block. ::
 
-aGpre = Preconditioner(aG, "PETScPC", pc_type="hypre")
-C = BlockMatrix( [ [aGpre.mat, None], [None, mGpre.mat] ] )
+smoother = aG.mat.CreateBlockSmoother(blocks)
+preHG = PETScPreconditioner(aG.mat, vertexdofs, solverParameters={"pc_type":"hypre"})
+twolvpre = preHG + smoother
+C = BlockMatrix( [ [twolvpre, None], [None, mGpre] ] )
 gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
 gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
-sol = BlockVector( [gfu.vec, gfp.vec] )
-
-print("-----------|Augmented HYPRE|-----------")
+print("-----------|Augmented Two Level Additive Schwarz|-----------")
 solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                 printrates=True, initialize=False)
 Draw(gfu)
 
-# To overcome this issue we will use a two-level additive Schwarz preconditioner for the Laplacian block.
-# As fine space correction, we will use a vertex patch smoother while as coarse space correction we will use a direct LU factorization on the vertex degrees of freedom. ::
+# Our first attempt at using a `HYPRE` preconditioner for the Laplacian block did not converge.
+#
+# .. list-table:: Preconditioners performance
+#    :widths: auto
+#    :header-rows: 1
+#
+#    * - Preconditi¬oner
+#      - Iterations
+#    * - Schur complement
+#      - 4 (9.15e-14)
+#    * - Mass & LU
+#      - 66 (2.45e-08)
+#    * - Mass & Two Level Additive Schwarz
+#      - 100 (4.68e-06)
+#    * - Augmented Lagrangian LU
+#      - 2 (9.24e-08)
+#    * - Augmented Two Level Additive Schwarz
+#      - 100 (1.06e-03)
+#
+# This is because the top left block of the saddle point problem now contains the augmentation term, which has a very large kernel.
+# It is well known that algebraic multi-grid methods do not work well with indefinite problems, and this is what we are observing here.
+# We begin by constructing the augmented Lagrangian formulation in more numerical linear algebra terms, i.e. 
+#
+# .. math::
+#    \begin{bmatrix}
+#       A + B^T (\gamma M^{-1}) B & B^T \\
+#       B & 0
+#    \end{bmatrix}
+#    \begin{bmatrix}
+#       u \\
+#       p
+#    \end{bmatrix}
+#    =
+#    \begin{bmatrix}
+#       f \\
+#       0
+#    \end{bmatrix}
+#
+# We can construct this linear algebra problem inside NGSolve as follows ::
 
-from xfem import P2Prolongation
-preCoarse = PETScPreconditioner(aG.mat, V.FreeDofs(), solverParameters={"pc_type": "lu"})
-mesh.Refine()
-aG.Assemble()
-prol = P2Prolongation(mesh).Operator(1)
-preH = prol@ preCoarse @ prol.T
-def VertexPatchBlocks(mesh, fes):
-   blocks = []
-   freedofs = fes.FreeDofs()
-   for v in mesh.vertices:
-      vdofs = set()
-      for el in mesh[v].elements:
-         vdofs |= set(d for d in fes.GetDofNrs(el) if freedofs[d])
-      blocks.append(vdofs)
-   return blocks
-blocks = VertexPatchBlocks(mesh, V)
-jacobi = aG.mat.CreateBlockSmoother(blocks)
-pre = preH + jacobi
+d = BilinearForm((1/gamma)*p*q*dx)
+d.Assemble()
+dpre = PETScPreconditioner(d.mat, Q.FreeDofs(), solverParameters={"pc_type":"lu"})
+aG = a.mat + b.mat.T@dpre@b.mat
+aG = coo_matrix(aG.ToDense().NumPy())
+aG = la.SparseMatrixd.CreateFromCOO(indi=aG.row, 
+                                      indj=aG.col,
+                                      values=aG.data,
+                                      h=aG.shape[0],
+                                      w=aG.shape[1])
+K = BlockMatrix( [ [aG, b.mat.T], [b.mat, None] ] )
+pre = PETScPreconditioner(aG, V.FreeDofs(), solverParameters={"pc_type":"lu"})
 C = BlockMatrix( [ [pre, None], [None, mGpre.mat] ] )
+
 gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
 gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
 sol = BlockVector( [gfu.vec, gfp.vec] )
 
-print("-----------|Augmented Additive-Schwarz|-----------")
+print("-----------|Boffi--Lovadina Augmentation LU|-----------")
 solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                 printrates=True, initialize=False)
 Draw(gfu)
 
+# We can now think of a more efficient way to invert the matrix corresponding to the augmentation term.
+# In fact, since we know that the augmentation block has a lower rank than the Laplacian block, we can use the Sherman-Morrisson-Woodbory formula to invert the augmentation block.
+#
+# .. math::
+#    (A + B^T(\gamma M^{-1})B)^{-1} = A^{-1} - A^{-1}B^T(\frac{1}{\gamma}M^{-1} + BA^{-1}B^T)^{-1}BA^{-1}
+#
+# We will do this in two different ways first we will invert the :math:`(\frac{1}{\gamma}M^{-1} + BA^{-1}B^T)` block using a direct LU factorization.
+# Then we will notice that since the penalisation parameter is large we can ignore the :math:`\frac{1}{\gamma}M^{-1}` term and use the mass matrix since it is spectrally to the Schur complement. ::
 
+SM = (d.mat + b.mat@apre@b.mat.T).ToDense().NumPy()
+SM = coo_matrix(SM)
+SM = la.SparseMatrixd.CreateFromCOO(indi=SM.row, 
+                                      indj=SM.col,
+                                      values=SM.data,
+                                      h=SM.shape[0],
+                                      w=SM.shape[1])
+
+SMinv = PETScPreconditioner(SM, Q.FreeDofs(), solverParameters={"pc_type":"lu"})
+
+C = BlockMatrix( [ [apre - apre@b.mat.T@SMinv@b.mat@apre, None], [None, mGpre.mat] ] )
+
+gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
+gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
+sol = BlockVector( [gfu.vec, gfp.vec] )
+
+print("-----------|Boffi--Lovadina Augmentation Sherman-Morrisson-Woodbory|-----------")
+solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
+                printrates=True, initialize=False)
+Draw(gfu)
+
+C = BlockMatrix( [ [apre + apre@(b.mat.T@mpre.mat@b.mat)@apre, None], [None, mGpre.mat] ] )
+
+gfu.vec.data[:] = 0; gfp.vec.data[:] = 0;
+gfu.Set(uin, definedon=mesh.Boundaries("inlet"))
+sol = BlockVector( [gfu.vec, gfp.vec] )
+
+print("-----------|Boffi--Lovadina Augmentation Sherman-Morrisson-Woodbory|-----------")
+solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-13,
+                printrates=True, initialize=False)
+Draw(gfu)
+
+# We see that a purely algebraic approach based on the Sherman-Morrisson-Woodbory formula is more efficient for the augmented Lagrangian formulation, then a naive two-level additive Schwarz approach.
+#
+# .. list-table:: Preconditioners performance
+#    :widths: auto
+#    :header-rows: 1
+#
+#    * - Preconditioner
+#      - Iterations
+#    * - Schur complement
+#      - 4 (9.15e-14)
+#    * - Mass & LU
+#      - 66 (2.45e-08)
+#    * - Mass & Two Level Additive Schwarz
+#      - 100 (4.68e-06)
+#    * - Augmented Lagrangian LU
+#      - 2 (9.24e-08)
+#    * - Augmented Two Level Additive Schwarz
+#      - 100 (1.06e-03)
+#    * - Augmentation Schermon-Morrisson-Woodbory
+#      - 84 (1.16e-07)

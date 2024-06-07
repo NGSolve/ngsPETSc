@@ -18,6 +18,13 @@ Welcome to ngsPETSc's documentation!
 
    PETScPC/poisson.py
    PETScPC/stokes.py
+   PETScPC/oseen.py
+
+.. toctree::
+   :maxdepth: 1
+   :caption: PETSc SNES
+
+   PETScSNES/beam.py
 
 .. toctree::
    :maxdepth: 1

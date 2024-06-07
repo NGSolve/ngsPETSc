@@ -1,5 +1,5 @@
-# Preconditioning the Poisson problem
-# =====================================
+# Vertex Patch smoothing for p-Multigrid preconditioners for the Poisson problem
+# ===============================================================================
 #
 # In this tutorial, we explore using `PETSc PC` as a preconditioner inside NGSolve preconditioning infrastructure.
 # We will focus our attention on the Poisson problem, and we will consider different preconditioning strategies.
@@ -18,12 +18,13 @@ import netgen.meshing as ngm
 from mpi4py.MPI import COMM_WORLD
 
 if COMM_WORLD.rank == 0:
-   mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
+   ngmesh = unit_square.GenerateMesh(maxh=0.1)
+   for _ in range(4):
+      ngmesh.Refine()
+   mesh = Mesh(ngmesh.Distribute(COMM_WORLD))
 else:
    mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
-for _ in range(5):
-   mesh.Refine()
-order = 4
+order = 2
 fes = H1(mesh, order=order, dirichlet="left|right|top|bottom")
 print("Number of degrees of freedom: ", fes.ndof)
 u,v = fes.TnT()
@@ -45,24 +46,23 @@ gfu.vec.data = CG(a.mat, rhs=f.vec, pre=pre.mat, printrates=True)
 Draw(gfu)
 
 # We see that the HYPRE preconditioner is quite effective for the Poisson problem discretised using linear elements, but it is not as effective for higher-order elements.
-# .. list-table:: Title
-#    :widths: 25 25 50
+#
+# .. list-table:: Preconditioners performance HYPRE
+#    :widths: auto
 #    :header-rows: 1
 #
 #    * - Preconditioner
 #      - p=1
 #      - p=2
 #      - p=3
+#      - p=4
 #    * - HYPRE
-#      - 15 (8.49e-13)
-#      - 100 (4.81e-8)
-#      - 100 (3.60e-9)
-#    * - Two Level Additive Schwarz
-#      - 59 (1.74e-12)
-#      - 58 (2.01e-12)
-#      - 59 (1.72e-12)
+#      - 10 (1.57e-12)
+#      - 70 (2.22e-13)
+#      - 42 (3.96e-13)
+#      - 70 (1.96e-13)
 #
-# We can use PETSc preconditioner as one of the building blocks of a more complex preconditioner. For example, we can construct an additive Schwarz preconditioner.
+# To overcome this issue we will use a two-level additive Schwarz preconditioner.
 # In this case, we will use as fine space correction, the inverse of the local matrices associated with the patch of a vertex. ::
 
 def VertexPatchBlocks(mesh, fes):
@@ -77,7 +77,11 @@ def VertexPatchBlocks(mesh, fes):
  return blocks
 
 blocks = VertexPatchBlocks(mesh, fes)
-blockjac = a.mat.CreateBlockSmoother(blocks)
+dofs = BitArray(fes.ndof); dofs[:] = True
+blockjac = ASMPreconditioner(a.mat, dofs, blocks=blocks,
+                               solverParameters={"pc_type": "asm",
+                                                 "sub_ksp_type": "preonly",
+                                                 "sub_pc_type": "lu"})  
 
 # We now isolate the degrees of freedom associated with the vertices and construct a two-level additive Schwarz preconditioner, where the coarse space correction is the inverse of the local matrices associated with the vertices. ::
 
@@ -96,36 +100,59 @@ pretwo = preCoarse + blockjac
 print("-------------------|Additive Schwarz p={}|-------------------".format(order))
 gfu.vec.data = CG(a.mat, rhs=f.vec, pre=pretwo, printrates=True)
 
-
+# We can see that the two-level additive Schwarz preconditioner where the coarse space correction is performed using HYPRE is more effective than using just HYPRE preconditioner for higher-order elements.
+#
+# .. list-table:: Preconditioners performance HYPRE and Two Level Additive Schwarz
+#    :widths: auto
+#    :header-rows: 1
+#
+#    * - Preconditioner
+#      - p=1
+#      - p=2
+#      - p=3
+#      - p=4
+#    * - HYPRE
+#      - 10 (1.57e-12)
+#      - 70 (2.22e-13)
+#      - 42 (3.96e-13)
+#      - 70 (1.96e-13)
+#    * - Additive Schwarz
+#      - 44 (1.96e-12)
+#      - 45 (1.28e-12)
+#      - 45 (1.29e-12)
+#      - 45 (1.45e-12)
+#       
+#   
 # We can also use the PETSc preconditioner as an auxiliary space preconditioner.
-# Let us consdier the disctinuous Galerkin discretisation of the Poisson problem.
-#
-#    fesDG = L2(mesh, order=3, dgjumps=True)
-#    u,v = fesDG.TnT()
-#    aDG = BilinearForm(fesDG)
-#    jump_u = u-u.Other(); jump_v = v-v.Other()
-#    n = specialcf.normal(2)
-#    mean_dudn = 0.5*n * (grad(u)+grad(u.Other()))
-#    mean_dvdn = 0.5*n * (grad(v)+grad(v.Other()))
-#    alpha = 4
-#    h = specialcf.mesh_size
-#    aDG = BilinearForm(fesDG)
-#    aDG += grad(u)*grad(v) * dx
-#    aDG += alpha*3**2/h*jump_u*jump_v * dx(skeleton=True)
-#    aDG += alpha*3**2/h*u*v * ds(skeleton=True)
-#    aDG += (-mean_dudn*jump_v -mean_dvdn*jump_u)*dx(skeleton=True)
-#    aDG += (-n*grad(u)*v-n*grad(v)*u)*ds(skeleton=True)
-#    fDG = LinearForm(fesDG)
-#    fDG += 1*v * dx
-#    aDG.Assemble()
-#    fDG.Assemble()
-#
-# We can now use the PETSc PC assembled for the confroming Poisson problem as an auxiliary space preconditioner for the DG discretisation.
-#
-#    from ngsPETSc import pc
-#    smoother = Preconditioner(aDG, "PETScPC", pc_type="sor")
-#    transform = fes.ConvertL2Operator(fesDG)
-#    preDG = transform @ pre.mat @ transform.T + smoother.mat
-#    gfuDG = GridFunction(fesDG)
-#    gfuDG.vec.data = CG(aDG.mat, rhs=fDG.vec, pre=preDG, printrates=True)
-#    Draw(gfuDG)
+# Let us consider the discontinuous Galerkin discretisation of the Poisson problem. ::
+
+fesDG = L2(mesh, order=order, dgjumps=True)
+u,v = fesDG.TnT()
+aDG = BilinearForm(fesDG)
+jump_u = u-u.Other(); jump_v = v-v.Other()
+n = specialcf.normal(2)
+mean_dudn = 0.5*n * (grad(u)+grad(u.Other()))
+mean_dvdn = 0.5*n * (grad(v)+grad(v.Other()))
+alpha = 4
+h = specialcf.mesh_size
+aDG = BilinearForm(fesDG)
+aDG += grad(u)*grad(v) * dx
+aDG += alpha*3**2/h*jump_u*jump_v * dx(skeleton=True)
+aDG += alpha*3**2/h*u*v * ds(skeleton=True)
+aDG += (-mean_dudn*jump_v -mean_dvdn*jump_u)*dx(skeleton=True)
+aDG += (-n*grad(u)*v-n*grad(v)*u)*ds(skeleton=True)
+fDG = LinearForm(fesDG)
+fDG += 1*v * dx
+aDG.Assemble()
+fDG.Assemble()
+
+# We can now use the PETSc PC assembled for the conforming Poisson problem as an auxiliary space preconditioner for the DG discretisation. ::
+
+from ngsPETSc import pc
+smoother = Preconditioner(aDG, "PETScPC", pc_type="jacobi")
+transform = fes.ConvertL2Operator(fesDG)
+preDG = transform @ pre.mat @ transform.T + smoother.mat
+gfuDG = GridFunction(fesDG)
+print("-------------------|Auxiliary Space preconditioner p={}|-------------------".format(order))
+gfuDG.vec.data = CG(aDG.mat, rhs=fDG.vec, pre=preDG, printrates=True)
+Draw(gfuDG)
