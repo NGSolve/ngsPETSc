@@ -16,7 +16,6 @@ In particular, we will consider a Bernardi-Raugel inf-sup stable discretization 
 Such a discretization can easily be constructed using NGSolve as follows: ::
 
    from ngsolve import *
-   from ngsolve import BilinearForm as BF
    from netgen.occ import *
    import netgen.gui
    import netgen.meshing as ngm

@@ -24,7 +24,7 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
       mesh = Mesh(ngmesh.Distribute(COMM_WORLD))
    else:
       mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
-   order = 3
+   order = 2
    fes = H1(mesh, order=order, dirichlet="left|right|top|bottom")
    print("Number of degrees of freedom: ", fes.ndof)
    u,v = fes.TnT()
@@ -78,7 +78,7 @@ In this case, we will use as fine space correction, the inverse of the local mat
 
    blocks = VertexPatchBlocks(mesh, fes)
    dofs = BitArray(fes.ndof); dofs[:] = True
-   blockjac = PETScPreconditioner(a.mat, dofs, blocks=blocks,
+   blockjac = ASMPreconditioner(a.mat, dofs, blocks=blocks,
                                   solverParameters={"pc_type": "asm",
                                                     "sub_ksp_type": "preonly",
                                                     "sub_pc_type": "lu"})  
