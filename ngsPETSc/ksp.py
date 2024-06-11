@@ -4,9 +4,26 @@ system solver (KSP) interface for NGSolve
 '''
 from petsc4py import PETSc
 
-from ngsolve import la, GridFunction
+from ngsolve import la, BilinearForm, FESpace, BitArray
 
 from ngsPETSc import Matrix, VectorMapping
+
+def createFromBilinearForm(a, freeDofs, solverParameters, optionsPrefix):
+    """
+    This function creates a PETSc matrix from an NGSolve bilinear form
+    """
+    a.Assemble()
+    #Setting deafult matrix type
+    if "mat_type" not in solverParameters:
+        solverParameters["mat_type"] = "aij"
+    #Assembling matrix if not of type Python
+    if solverParameters["mat_type"] not in ["python"]:
+        if hasattr(a.mat, "row_pardofs"):
+            dofs = a.mat.row_pardofs
+        else:
+            dofs = None
+        mat = Matrix(a.mat, (dofs, freeDofs, None), solverParameters["mat_type"])
+    return (a.mat, mat.mat)
 
 class KrylovSolver():
     """
@@ -14,79 +31,69 @@ class KrylovSolver():
     variational problem, i.e. a(u,v) = (f,v)
     Inspired by Firedrake linear solver class.
 
-    :arg a: bilinear form a: V x V -> K
+    :arg a: either the bilinear form, ngs Matrix or a petsc4py matrix
 
-    :arg fes: finite element space V
+    :arg dofsDescr: either finite element space
 
-    :arg p: bilinear form to be used for preconditioning
+    :arg p: either the bilinear form, ngs Matrix or petsc4py matrix actin as a preconditioner
 
-    :arg solverParameters: parameters to be passed to the KSP solver
+    :arg solverParameters: parameters to be passed to the KS P solver
 
     :arg optionsPrefix: special solver options prefix for this specific Krylov solver
 
     """
-    def __init__(self, a, fes, p=None, solverParameters=None, optionsPrefix=None, nullspace=None):
-        a.Assemble()
-        Amat = a.mat
-        if p is not None:
-            p.Assemble()
-            Pmat = p.mat
+    def __init__(self, a, dofsDescr=None, p=None, solverParameters=None, optionsPrefix=None, nullspace=None):
+        # Grabbing parallel information
+        if isinstance(dofsDescr, FESpace):
+            freeDofs = dofsDescr.FreeDofs()
+        elif isinstance(dofsDescr, BitArray):
+            freeDofs = dofsDescr
         else:
-            Pmat = None
-        if not isinstance(Amat, (la.SparseMatrixd,la.ParallelMatrix)):
-            raise TypeError("Provided operator is a '%s', not an la.SparseMatrixd"
-                            % type(Amat).__name__)
-        if Pmat is not None and not isinstance(Pmat, la.SparseMatrixd, la.ParallelMatrix):
-            raise TypeError("Provided preconditioner is a '%s', not an la.SparseMatrixd"
-                            % type(Pmat).__name__)
-
+            raise ValueError("dofsDescr must be either FESpace or BitArray")
+        parse = {BilinearForm: createFromBilinearForm}
+        #Construct operator        
+        for key in parse:
+            if isinstance(a, key):
+                ngsA, pscA = parse[key](a, freeDofs, solverParameters, optionsPrefix)
+        if p is not None:
+            for key in parse:
+                if isinstance(p, key):
+                    ngsP, pscP = parse[key](p, freeDofs, solverParameters, optionsPrefix)
+        else:
+            ngsP = ngsA; pscP = pscA
+        #Construct vector mapping
+        if hasattr(ngsA, "row_pardofs"):
+            dofs = ngsA.row_pardofsù
+        else:
+            dofs = None
+        self.mapping = VectorMapping((dofs,freeDofs,{"bsize":ngsA.local_mat.entrysizes}))
+        #Fixing PETSc options
         options_object = PETSc.Options()
         if solverParameters is not None:
             for optName, optValue in solverParameters.items():
                 options_object[optName] = optValue
 
-	#Creating the PETSc Matrix
-        A = Matrix(Amat, fes).mat
-        A.setOptionsPrefix(optionsPrefix)
-        A.setFromOptions()
-        if nullspace is not None:
-            if nullspace.near:
-                A.setNearNullSpace(nullspace.nullspace)
-            else:
-                A.setNullSpace(nullspace.nullspace)
-        P = A
-        if Pmat is not None:
-            P = Matrix(Pmat, fes).mat
-            P.setOptionsPrefix(optionsPrefix)
-            P.setFromOptions()
+        #Creating the PETSc Matrix
+        pscA.setOptionsPrefix(optionsPrefix)
+        pscA.setFromOptions()
+        pscP.setOptionsPrefix(optionsPrefix)
+        pscP.setFromOptions()
 
-        self.ksp = PETSc.KSP().create(comm=A.getComm())
-        self.ksp.setOperators(A=A, P=P)
+        #Setting up KSP
+        self.ksp = PETSc.KSP().create(comm=pscA.getComm())
+        self.ksp.setOperators(A=pscA, P=pscP)
         self.ksp.setOptionsPrefix(optionsPrefix)
         self.ksp.setFromOptions()
+        self.pscX, self.pscB = pscA.createVecs()
 
-        self.upsc, self.fpsc = A.createVecs()
+    def solve(self, b, x):
+        """
+        This function solves the linear system
 
-        self.vecMap = VectorMapping(fes)
-        self.fes = fes
-
-    def solve(self, f):
-        '''
-        This function solves the linear system using a PETSc KSP.
-
-        :arg f: the data of the linear system
-
-        '''
-        f.Assemble()
-        u = GridFunction(self.fes)
-        self.vecMap.petscVec(f.vec, self.fpsc)
-        self.ksp.solve(self.fpsc, self.upsc)
-        self.vecMap.ngsVec(self.upsc, u.vec)
-        return  u
-
-    def view(self):
-        '''
-        This function display PETSc KSP info
-
-        '''
-        self.ksp.view()
+        :arg b: right hand side of the linear system
+        :arg x: solution of the linear system
+        """
+        self.mapping.petscVec(x, self.pscX)
+        self.mapping.petscVec(b, self.pscB)
+        self.ksp.solve(self.pscB, self.pscX)
+        self.mapping.ngsVec(self.pscX, x)
