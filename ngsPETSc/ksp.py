@@ -6,7 +6,7 @@ from petsc4py import PETSc
 from ngsolve import la, BilinearForm, FESpace, BitArray, Projector
 from ngsPETSc import Matrix, VectorMapping, PETScPreconditioner
 
-def createFromBilinearForm(a, freeDofs, solverParameters, optionsPrefix):
+def createFromBilinearForm(a, freeDofs, solverParameters):
     """
     This function creates a PETSc matrix from an NGSolve bilinear form
     """
@@ -23,7 +23,7 @@ def createFromBilinearForm(a, freeDofs, solverParameters, optionsPrefix):
         mat = Matrix(a.mat, (dofs, freeDofs, None), solverParameters["mat_type"])
     return (a.mat, mat.mat)
 
-def createFromMatrix(a, freeDofs, solverParameters, optionsPrefix):
+def createFromMatrix(a, freeDofs, solverParameters):
     """
     This function creates a PETSc matrix from an NGSolve bilinear form
     """
@@ -39,7 +39,7 @@ def createFromMatrix(a, freeDofs, solverParameters, optionsPrefix):
         mat = Matrix(a, (dofs, freeDofs, None), solverParameters["mat_type"])
     return (a, mat.mat)
 
-def createFromPC(a, freeDofs, solverParameters, optionsPrefix):
+def createFromPC(a, freeDofs, solverParameters):
     class Wrap():
         def __init__(self, a, freeDofs):
             self.mapping = VectorMapping((a.dofs,freeDofs,{"bsize": 1}))
@@ -78,7 +78,7 @@ class KrylovSolver():
     :arg optionsPrefix: special solver options prefix for this specific Krylov solver
 
     """
-    def __init__(self, a, dofsDescr=None, p=None, solverParameters=None, optionsPrefix=None, nullspace=None):
+    def __init__(self, a, dofsDescr=None, p=None, solverParameters=None, optionsPrefix="", nullspace=None):
         # Grabbing parallel information
         if isinstance(dofsDescr, FESpace):
             freeDofs = dofsDescr.FreeDofs()
@@ -93,11 +93,11 @@ class KrylovSolver():
         #Construct operator        
         for key in parse:
             if isinstance(a, key):
-                ngsA, pscA = parse[key](a, freeDofs, solverParameters, optionsPrefix)
+                ngsA, pscA = parse[key](a, freeDofs, solverParameters)
         if p is not None:
             for key in parse:
                 if isinstance(p, key):
-                    ngsP, pscP = parse[key](p, freeDofs, solverParameters, optionsPrefix)
+                    ngsP, pscP = parse[key](p, freeDofs, solverParameters)
         else:
             ngsP = ngsA; pscP = pscA
         #Construct vector mapping
@@ -124,6 +124,7 @@ class KrylovSolver():
         self.ksp.setOptionsPrefix(optionsPrefix)
         self.ksp.setFromOptions()
         self.pscX, self.pscB = pscA.createVecs()
+        self.ksp.setUp()
 
     def solve(self, b, x):
         """

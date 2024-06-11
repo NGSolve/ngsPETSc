@@ -2,10 +2,7 @@
 This module contains all the function and class needed to wrap a PETSc Nullspace in NGSolve
 '''
 from petsc4py import PETSc
-
-
 from ngsPETSc import VectorMapping
-
 
 class NullSpace:
     '''

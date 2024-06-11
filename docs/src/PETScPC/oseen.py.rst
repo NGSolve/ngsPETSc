@@ -139,8 +139,9 @@ We try a multiplicative preconditioner instead ::
          w[:] = 0
          dofs = BitArray(self.fes.ndof); dofs[:] = True
          smooth = KrylovSolver(self.a, dofs, p=smoother, 
-                              solverParameters={"ksp_type": "gmres", 
-                                                "ksp_max_it": 10, 
+                              solverParameters={"ksp_type": "fgmres", 
+                                                "ksp_max_it": 10,
+                                                "ksp_view": '',
                                                 "pc_type": "mat"})
          w += GMRes(self.a.mat, d, pre=smoother, x=w, maxsteps = 10, printrates=False)
          r = d.CreateVector()
