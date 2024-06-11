@@ -3,10 +3,8 @@ This module contains all the functions related to the PETSc linear
 system solver (KSP) interface for NGSolve
 '''
 from petsc4py import PETSc
-
-from ngsolve import la, BilinearForm, FESpace, BitArray
-
-from ngsPETSc import Matrix, VectorMapping
+from ngsolve import la, BilinearForm, FESpace, BitArray, Projector
+from ngsPETSc import Matrix, VectorMapping, PETScPreconditioner
 
 def createFromBilinearForm(a, freeDofs, solverParameters, optionsPrefix):
     """
@@ -24,6 +22,44 @@ def createFromBilinearForm(a, freeDofs, solverParameters, optionsPrefix):
             dofs = None
         mat = Matrix(a.mat, (dofs, freeDofs, None), solverParameters["mat_type"])
     return (a.mat, mat.mat)
+
+def createFromMatrix(a, freeDofs, solverParameters, optionsPrefix):
+    """
+    This function creates a PETSc matrix from an NGSolve bilinear form
+    """
+    #Setting deafult matrix type
+    if "mat_type" not in solverParameters:
+        solverParameters["mat_type"] = "aij"
+    #Assembling matrix if not of type Python
+    if solverParameters["mat_type"] not in ["python"]:
+        if hasattr(a, "row_pardofs"):
+            dofs = a.row_pardofs
+        else:
+            dofs = None
+        mat = Matrix(a, (dofs, freeDofs, None), solverParameters["mat_type"])
+    return (a, mat.mat)
+
+def createFromPC(a, freeDofs, solverParameters, optionsPrefix):
+    class Wrap():
+        def __init__(self, a, freeDofs):
+            self.mapping = VectorMapping((a.dofs,freeDofs,{"bsize": 1}))
+            self.ngX = a.CreateVector()
+            self.ngY = a.CreateVector()
+            self.prj = Projector(mask=a.actingDofs, range=True)
+        def mult(self, mat, X, Y):
+            self.mapping.ngsVec(X, self.prj*self.ngX)
+            a.Mult(self.ngX, self.ngY)
+            self.mapping.petscVec(self.prj*self.ngY, Y)
+    
+    pscA = PETSc.Mat().create(comm=PETSc.COMM_WORLD) #TODO: Fix this
+    pscA.setSizes(sum(freeDofs))
+    pscA.setType(PETSc.Mat.Type.PYTHON)
+    pscA.setPythonContext(Wrap)
+    pscA.setUp()
+    return (a.ngsMat, pscA)
+
+
+            
 
 class KrylovSolver():
     """
@@ -50,7 +86,10 @@ class KrylovSolver():
             freeDofs = dofsDescr
         else:
             raise ValueError("dofsDescr must be either FESpace or BitArray")
-        parse = {BilinearForm: createFromBilinearForm}
+        parse = {BilinearForm: createFromBilinearForm,
+                 la.SparseMatrixd: createFromMatrix,
+                 la.ParallelMatrix: createFromMatrix,
+                 PETScPreconditioner: createFromPC}
         #Construct operator        
         for key in parse:
             if isinstance(a, key):
@@ -63,7 +102,7 @@ class KrylovSolver():
             ngsP = ngsA; pscP = pscA
         #Construct vector mapping
         if hasattr(ngsA, "row_pardofs"):
-            dofs = ngsA.row_pardofsù
+            dofs = ngsA.row_pardofs
         else:
             dofs = None
         self.mapping = VectorMapping((dofs,freeDofs,{"bsize":ngsA.local_mat.entrysizes}))

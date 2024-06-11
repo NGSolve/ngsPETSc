@@ -123,6 +123,7 @@ Notice that while the smoother is very similar to the one used in :doc:`poisson.
 We try a multiplicative preconditioner instead ::
 
    from ngsPETSc import KrylovSolver
+   from ngsolve.krylovspace import GMRes
    class MGPreconditioner(BaseMatrix):
       def __init__ (self, fes, a, coarsepre, smoother):
          super().__init__()
@@ -134,9 +135,14 @@ We try a multiplicative preconditioner instead ::
 
       def Mult (self, d, w):
          prj = Projector(mask=self.fes.FreeDofs(), range=True) 
-         smoother = prj @ self.smoother @ prj.T
+         smoother.setActingDofs(self.fes.FreeDofs())
          w[:] = 0
-         w += smoother*(d-self.a.mat*w)
+         dofs = BitArray(self.fes.ndof); dofs[:] = True
+         smooth = KrylovSolver(self.a, dofs, p=smoother, 
+                              solverParameters={"ksp_type": "gmres", 
+                                                "ksp_max_it": 10, 
+                                                "pc_type": "mat"})
+         w += GMRes(self.a.mat, d, pre=smoother, x=w, maxsteps = 10, printrates=False)
          r = d.CreateVector()
          r.data = d - self.a.mat * w
          w += self.prol @ self.coarsepre @ self.prol.T * r

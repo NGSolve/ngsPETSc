@@ -6,8 +6,6 @@ from petsc4py import PETSc
 from ngsolve import BaseMatrix, comp
 from ngsPETSc import Matrix, VectorMapping
 
-
-
 class PETScPreconditioner(BaseMatrix):
     '''
     This class creates a Netgen/NGSolve BaseMatrix corresponding to a PETSc PC  
@@ -35,6 +33,7 @@ class PETScPreconditioner(BaseMatrix):
             dofs = self.ngsMat.row_pardofs
         else:
             dofs = None
+        self.dofs = dofs
         self.vecMap = VectorMapping((dofs,freeDofs,{"bsize":self.ngsMat.local_mat.entrysizes}))
         petscMat = Matrix(self.ngsMat, (dofs, freeDofs, None), matType).mat
         self.lgmap = petscMat.getLGMap()[0] #TODO: Fiox this only works for rc
@@ -88,6 +87,9 @@ class PETScPreconditioner(BaseMatrix):
         self.vecMap.petscVec(x,self.petscVecX)
         self.petscPreconditioner.applyTranspose(self.petscVecX, self.petscVecY)
         self.vecMap.ngsVec(self.petscVecY, y)
+        
+    def setActingDofs(self, dofs):
+        self.actingDofs = dofs
 
 def createPETScPreconditioner(mat, freeDofs, solverParameters):
     '''
