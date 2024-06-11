@@ -65,7 +65,9 @@ We construct a classical h-multigird using the `hoprolongation` flag when constr
    a.Assemble(); b.Assemble(); mG.Assemble();
    f.Assemble(); g.Assemble();
    prol = V.Prolongation().Operator(1)
-   apre = prol @ aCoarsePre @ prol.T
+   smoother = PETScPreconditioner(a.mat, V.FreeDofs(),
+                                  solverParameters={"pc_type": "jacobi"})
+   apre = prol @ aCoarsePre @ prol.T + smoother
    mGpre = PETScPreconditioner(mG.mat, Q.FreeDofs(),
                                        solverParameters={"pc_type":"lu"})
 
@@ -78,7 +80,7 @@ We construct a classical h-multigird using the `hoprolongation` flag when constr
    sol = BlockVector( [gfu.vec, gfp.vec] )
    rhs = BlockVector( [f.vec, g.vec] )
 
-   print("-----------|h-Multigird|-----------")
+   print("-----------|Additive h-Multigird|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                    maxsteps=100, printrates=True, initialize=False)
    Draw(gfu)
@@ -113,7 +115,45 @@ Notice that while the smoother is very similar to the one used in :doc:`poisson.
    sol = BlockVector( [gfu.vec, gfp.vec] )
    rhs = BlockVector( [f.vec, g.vec] )
 
-   print("-----------|h-Multigird|-----------")
+   print("-----------|Additive h-Multigird + Vertex star relaxetion|-----------")
+   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
+                   maxsteps=100, printrates=True, initialize=False)
+   Draw(gfu)
+
+We try a multiplicative preconditioner instead ::
+
+   from ngsPETSc import KrylovSolver
+   class MGPreconditioner(BaseMatrix):
+      def __init__ (self, fes, a, coarsepre, smoother):
+         super().__init__()
+         self.fes = fes
+         self.a = a
+         self.coarsepre = coarsepre
+         self.smoother = smoother
+         self.prol = fes.Prolongation().Operator(1)
+
+      def Mult (self, d, w):
+         prj = Projector(mask=self.fes.FreeDofs(), range=True) 
+         smoother = prj @ self.smoother @ prj.T
+         w[:] = 0
+         w += smoother*(d-self.a.mat*w)
+         r = d.CreateVector()
+         r.data = d - self.a.mat * w
+         w += self.prol @ self.coarsepre @ self.prol.T * r
+
+      def Shape (self):
+            return self.mat.shape
+      def CreateVector (self, col):
+            return self.mat.CreateVector(col)
+
+   ml_pre = MGPreconditioner(V, a, aCoarsePre, smoother)
+   C = BlockMatrix( [ [ml_pre, None], [None, mGpre] ] )
+   gfu.vec.data[:] = 0; gfp.vec.data[:] = 0
+   gfu.Set(uin, definedon=mesh.Boundaries("top"))
+   sol = BlockVector( [gfu.vec, gfp.vec] )
+   rhs = BlockVector( [f.vec, g.vec] )
+
+   print("-----------|Multiplicative h-Multigird + Vertex star GMRES relaxetion|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                    maxsteps=100, printrates=True, initialize=False)
    Draw(gfu)
