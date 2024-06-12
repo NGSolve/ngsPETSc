@@ -30,9 +30,9 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
    m = BilinearForm(-1*u*v*dx, symmetric=True)
    m.Assemble()
 
-We then proceed to solve the eigenvalue problem using `SLEPc EPS` using ngsPETSc's `EigenSolver` class. 
+We then proceed to solve the eigenvalue problem using `SLEPc EPS` which is wrapped by ngsPETSc's :code:`EigenSolver` class. 
 In particular, we will use SLEPc implementation of a locally optimal block preconditioned conjugate gradient.
-Notice that we have assembled the mass matrix so that it is symmetric negative definite, this is because ngsPETSc `Eigensolver` requires you to write all eigenvalue problems as a polynomial eigenvalue problem, i.e.
+Notice that we have assembled the mass matrix so that it is symmetric negative definite, this is because ngsPETSc :code:`Eigensolver` requires  all eigenvalue problems to be written as a polynomial eigenvalue problem, i.e.
 
 .. math::
    A\vec{U} - \lambda M\vec{U} = 0
@@ -47,8 +47,8 @@ where :math:`A` and :math:`M` are the stiffness and mass matrices, respectively.
    modes, _ = solver.eigenFunctions(list(range(10)))
    Draw(modes)
 
-Notice that we can access a single eigenvalue using `solver.eigenValue(i)` and the corresponding eigenfunction using `solver.eigenFunction(i)`.
-If we use `solver.eigenFunctions(indices)` we can access the first 10 eigenfunctions as a multi-dimensional array and we can obtain the corresponding eigenvalues using `solver.eigenValues(indices)`.
+Notice that we can access a single eigenvalue using :code:`solver.eigenValue(i)` and the corresponding eigenfunction using :code:`solver.eigenFunction(i)`.
+If we use :code:`solver.eigenFunctions(indices)` we can access the first 10 eigenfunctions as a multi-dimensional array and we can obtain the corresponding eigenvalues using :code:`solver.eigenValues(indices)`.
 We now consider a mixed formulation of the Laplace eigenvalue problem, i.e.
 
 .. math::
@@ -74,10 +74,10 @@ We can discretise this problem using NGSolve as follows: ::
    m.Assemble()
 
 We can then solve the eigenvalue problem using `SLEPc EPS` using ngsPETSc's `EigenSolver` class.
-Since the mass matrix now has a large kernel, hence is no longer symmetric positive definite, we can not use LOBPCG as a solver.
+The mass matrix now has a large kernel, hence is no longer symmetric positive definite, therefore we can not use LOBPCG as a solver.
 Instead, we will use a Krylov-Schur solver with a shift-and-invert spectral transformation to target the smallest eigenvalues.
-Notice that because we are using a shift-and-invert spectral transformation we only need to invert the stiffness matrix which has a trivial kernel because we are using an inf-sup discretisation.
-If we tried to use an simple shift transformation to target the largest eigenvalues we would have run into the error caused by trying to invert a singular matrix.::
+Notice that because we are using a shift-and-invert spectral transformation we only need to invert the stiffness matrix which has a trivial kernel since we are using an inf-sup discretisation.
+If we tried to use a simple shift transformation to target the largest eigenvalues we would have run into the error of trying to invert a singular matrix.::
    
    solver = EigenSolver((m, a), W, 10,
                         solverParameters={"eps_type":"krylovschur", 

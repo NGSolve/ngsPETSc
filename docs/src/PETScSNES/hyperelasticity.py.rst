@@ -74,7 +74,7 @@ In particular, we will use a Newton method with line search, and precondition th
         gfu_history_ngs.AddMultiDimComponent(gfu_ngs.vec)
         gfu_history_petsc.AddMultiDimComponent(gfu_petsc.vec)
 
-We compare the performance of the two solvers, in the following table:
+We compare the performance of the `PETSc SNES` solvers and the one of `NGSolve` own implementation of Newton's method:
 
 .. list-table:: Performance of different non-linear solvers
    :widths: auto

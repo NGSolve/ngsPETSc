@@ -83,7 +83,7 @@ The Schur complement preconditioner converges in a few iterations, but it is not
    * - Schur complement
      - 4 (9.15e-14)
 
-Notice that the Schur complement is dense hence inverting it is not a good idea. Not only that but to perform the inversion of the Schur complement had to write a lot of "boilerplate" code.
+Notice that the Schur complement is dense hence inverting it is not a good idea. Not only that but to perform the inversion of the Schur complement we had to write a lot of "boilerplate" code.
 Since our discretization is inf-sup stable it is possible to prove that the mass matrix of the pressure space is spectrally equivalent to the Schur complement.
 This means that we can use the mass matrix of the pressure space as a preconditioner for the Schur complement.
 Notice that we still need to invert the mass matrix and we will do so using a `PETSc PC` of type Jacobi, which is the exact inverse since we are using `P0` elements.
@@ -167,7 +167,7 @@ To resolve this issue we resort to an augmented Lagrangian formulation, i.e.
       (\nabla\cdot \vec{u},q)_{L^2(\Omega)} = 0 \qquad \forall q\in L^2(\Omega)
    \end{cases}
 
-This formulation can easily be constructed by adding a new velocity block in the `BlockMatrix`, as follows: ::
+This formulation can easily be constructed in NGSolve, as follows: ::
 
    gamma = Parameter(1e6)
    aG = BilinearForm(nu*InnerProduct(Grad(u),Grad(v))*dx+gamma*div(u)*div(v)*dx)
@@ -189,7 +189,7 @@ This formulation can easily be constructed by adding a new velocity block in the
    Draw(gfu)
 
 Using an augmented Lagrangian formulation, we were able to converge in only two iterations.
-This is because the augmented Lagrangian formulation improves the spectral equivalence of the mass matrix of the pressure space and the Schur complement.
+This is because the augmented Lagrangian formulation improves the spectral equivalence between the mass matrix of the pressure space and the Schur complement.
  
 .. list-table:: Preconditioners performance
    :widths: auto
@@ -258,7 +258,7 @@ We begin by constructing the augmented Lagrangian formulation in more numerical 
       0
    \end{bmatrix}
 
-We can construct this linear algebra problem inside NGSolve as follows ::
+We can construct this linear algebra problem inside NGSolve as follows: ::
 
    d = BilinearForm((1/gamma)*p*q*dx)
    d.Assemble()
@@ -283,8 +283,7 @@ We can construct this linear algebra problem inside NGSolve as follows ::
                    printrates=True, initialize=False)
    Draw(gfu)
 
-We can now think of a more efficient way to invert the matrix corresponding to the augmentation term.
-In fact, since we know that the augmentation block has a lower rank than the Laplacian block, we can use the Sherman-Morrisson-Woodbory formula to invert the augmentation block.
+Since the augmentation block has a lower rank than the Laplacian block, we can use the Sherman-Morrisson-Woodbory formula to invert the augmentation block.
 
 .. math::
    (A + B^T(\gamma M^{-1})B)^{-1} = A^{-1} - A^{-1}B^T(\frac{1}{\gamma}M^{-1} + BA^{-1}B^T)^{-1}BA^{-1}

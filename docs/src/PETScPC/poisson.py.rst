@@ -1,8 +1,7 @@
 Vertex Patch smoothing for p-Multigrid preconditioners for the Poisson problem
 ===============================================================================
 
-In this tutorial, we explore using `PETSc PC` as a preconditioner inside NGSolve preconditioning infrastructure.
-We will focus our attention on the Poisson problem, and we will consider different preconditioning strategies.
+In this tutorial, we explore using `PETSc PC` as a building block inside NGSolve preconditioning infrastructure.
 Not all the preconditioning strategies are equally effective for all the discretizations of the Poisson problem, and this demo is intended to provide a starting point for the exploration of the preconditioning strategies rather than providing a definitive answer.
 We begin by creating a discretisation of the Poisson problem using H1 elements, in particular, we consider the usual variational formulation
 
@@ -122,37 +121,3 @@ We can see that the two-level additive Schwarz preconditioner where the coarse s
      - 45 (1.29e-12)
      - 45 (1.45e-12)
        
-   
-We can also use the PETSc preconditioner as an auxiliary space preconditioner.
-Let us consider the discontinuous Galerkin discretisation of the Poisson problem. ::
-
-   fesDG = L2(mesh, order=order, dgjumps=True)
-   u,v = fesDG.TnT()
-   aDG = BilinearForm(fesDG)
-   jump_u = u-u.Other(); jump_v = v-v.Other()
-   n = specialcf.normal(2)
-   mean_dudn = 0.5*n * (grad(u)+grad(u.Other()))
-   mean_dvdn = 0.5*n * (grad(v)+grad(v.Other()))
-   alpha = 4
-   h = specialcf.mesh_size
-   aDG = BilinearForm(fesDG)
-   aDG += grad(u)*grad(v) * dx
-   aDG += alpha*3**2/h*jump_u*jump_v * dx(skeleton=True)
-   aDG += alpha*3**2/h*u*v * ds(skeleton=True)
-   aDG += (-mean_dudn*jump_v -mean_dvdn*jump_u)*dx(skeleton=True)
-   aDG += (-n*grad(u)*v-n*grad(v)*u)*ds(skeleton=True)
-   fDG = LinearForm(fesDG)
-   fDG += 1*v * dx
-   aDG.Assemble()
-   fDG.Assemble()
-
-We can now use the PETSc PC assembled for the conforming Poisson problem as an auxiliary space preconditioner for the DG discretisation. ::
-
-   from ngsPETSc import pc
-   smoother = Preconditioner(aDG, "PETScPC", pc_type="jacobi")
-   transform = fes.ConvertL2Operator(fesDG)
-   preDG = transform @ pre.mat @ transform.T + smoother.mat
-   gfuDG = GridFunction(fesDG)
-   print("-------------------|Auxiliary Space preconditioner p={}|-------------------".format(order))
-   gfuDG.vec.data = CG(aDG.mat, rhs=fDG.vec, pre=preDG, printrates=True)
-   Draw(gfuDG)

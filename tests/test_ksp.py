@@ -22,11 +22,14 @@ def test_ksp_preonly_lu():
         mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
     fes = H1(mesh, order=3, dirichlet="left|right|top|bottom")
     u,v = fes.TnT()
-    a = BilinearForm(grad(u)*grad(v)*dx).Assemble()
+    a = BilinearForm(grad(u)*grad(v)*dx)
     solver = KrylovSolver(a, fes.FreeDofs(),
-                          solverParameters={'ksp_type': 'preonly', 'pc_type': 'lu'})
+                          solverParameters={'ksp_type': 'preonly',
+                                            'ksp_monitor': '',
+                                            'pc_type': 'lu',})
     f = LinearForm(fes)
     f += 32 * (y*(1-y)+x*(1-x)) * v * dx
+    f.Assemble()
     gfu = GridFunction(fes)
     solver.solve(f.vec, gfu.vec)
     exact = 16*x*(1-x)*y*(1-y)
@@ -44,9 +47,12 @@ def test_ksp_cg_gamg():
     u,v = fes.TnT()
     a = BilinearForm(grad(u)*grad(v)*dx).Assemble()
     solver = KrylovSolver(a,fes.FreeDofs(),
-                          solverParameters={'ksp_type': 'cg', 'pc_type': 'gamg'})
+                          solverParameters={'ksp_type': 'cg',
+                                            'ksp_monitor': '',
+                                            'pc_type': 'gamg'})
     f = LinearForm(fes)
     f += 32 * (y*(1-y)+x*(1-x)) * v * dx
+    f.Assemble()
     gfu = GridFunction(fes)
     solver.solve(f.vec, gfu.vec)
     exact = 16*x*(1-x)*y*(1-y)
