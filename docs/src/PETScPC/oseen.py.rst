@@ -18,7 +18,7 @@ Let us begin defining the parameters of the problem. ::
    from ngsPETSc import *
    nu = Parameter(1e-4)
    gamma = Parameter(1e6)
-   b = CoefficientFunction((-(y-0.5),x-0.5)) 
+   b = CoefficientFunction((4*(2*y-1)*(1-x)*x, -4*(2*x-1)*(1-y)*y)) 
    #b = CoefficientFunction((0,0)) 
 
 In particular, we will consider a high-order Hood-Taylor discretization of the problem. Such a discretization can easily be constructed using NGSolve as follows: ::
@@ -52,9 +52,7 @@ Let us then construct the augmentation block of the matrix and the pressure mass
 
    mG = BilinearForm((1/nu+gamma)*p*q*dx)
 
-As discussed in :doc:`stokes.py`, the hard part remains the construction of the :math:`(A+\gamma B^TM^{-1}B)^{-1}` to precondition the (1,1) block.
-We begin observing that a classical h-multigird preconditioner is not suitable for this problem, due to the large kernel introduced by the augmentation block.
-We construct a classical h-multigird using the `hoprolongation` flag when constructing the finite element space. ::
+As discussed in :doc:`stokes.py`, the hard part remains the construction of the :math:`(A+\gamma B^TM^{-1}B)^{-1}` to precondition the (1,1) block. ::
 
    from ngsPETSc.pc import * 
    a.Assemble()
@@ -66,27 +64,26 @@ We construct a classical h-multigird using the `hoprolongation` flag when constr
    a.Assemble(); b.Assemble(); mG.Assemble();
    f.Assemble(); g.Assemble();
    prol = V.Prolongation().Operator(1)
-   smoother = PETScPreconditioner(a.mat, V.FreeDofs(),
-                                  solverParameters={"pc_type": "jacobi"})
-   apre = prol @ aCoarsePre @ prol.T + smoother
    mGpre = PETScPreconditioner(mG.mat, Q.FreeDofs(),
                                        solverParameters={"pc_type":"lu"})
-
+   apre = PETScPreconditioner(a.mat, V.FreeDofs(),
+                              solverParameters={"pc_type":"lu"})
    K = BlockMatrix( [ [a.mat, b.mat.T], [b.mat, None] ] )
    C = BlockMatrix( [ [apre, None], [None, mGpre] ] )
    
    uin = CoefficientFunction( (1, 0) )
-   gfu = GridFunction(V); gfp = GridFunction(Q)
+   gfu = GridFunction(V, name="LU"); gfp = GridFunction(Q)
    gfu.Set(uin, definedon=mesh.Boundaries("top"))
    sol = BlockVector( [gfu.vec, gfp.vec] )
    rhs = BlockVector( [f.vec, g.vec] )
 
-   print("-----------|Additive h-Multigird|-----------")
+   print("-----------|LU|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                    maxsteps=100, printrates=True, initialize=False)
+   Draw(gfu)
 
 To overcome this issue we will construct a two-level additive Schwarz preconditioner made of an exact coarse correction and a vertex patch smoother.
-Notice that while the smoother is very similar to the one used in :doc:`poisson.py`, for the coarse correction we are here using h-multigrid and not p-multigrid. :: 
+Notice that while the smoother is very similar to the one used in :doc:`poisson.py`, for the coarse correction we are here using h-multigrid and not p-multigrid. ::
 
    def VertexStarPatchBlocks(mesh, fes):
       blocks = []
@@ -108,7 +105,7 @@ Notice that while the smoother is very similar to the one used in :doc:`poisson.
                                                   "sub_pc_type": "lu"})
    two_lv = apre + smoother
    C = BlockMatrix( [ [two_lv, None], [None, mGpre] ] )
-   
+   gfu = GridFunction(V, name="MG"); gfp = GridFunction(Q)
    gfu.vec.data[:] = 0; gfp.vec.data[:] = 0
    gfu.Set(uin, definedon=mesh.Boundaries("top"))
    sol = BlockVector( [gfu.vec, gfp.vec] )
@@ -132,7 +129,7 @@ We try a multiplicative preconditioner instead ::
       def Mult (self, d, w):
          smoother.setActingDofs(dofs)
          w[:] = 0
-         w += solvers.GMRes(self.a.mat, d, pre=smoother, x=w, maxsteps = 40, printrates=False)
+         w += solvers.GMRes(self.a.mat, d, pre=smoother, x=w, maxsteps = 10, printrates=False)
          r = d.CreateVector()
          r.data = d - self.a.mat * w
          w += self.prol @ self.coarsepre @ self.prol.T * r
@@ -142,8 +139,8 @@ We try a multiplicative preconditioner instead ::
       def CreateVector (self, col):
             return self.a.mat.CreateVector(col)
 
-   #ml_pre = MGPreconditioner(V, a, aCoarsePre, smoother)
-   ml_pre = PETScPreconditioner(a.mat, V.FreeDofs(), solverParameters={"pc_type":"lu"})
+   ml_pre = MGPreconditioner(V, a, aCoarsePre, smoother)
+   #ml_pre = PETScPreconditioner(a.mat, V.FreeDofs(), solverParameters={"pc_type":"lu"})
    C = BlockMatrix( [ [ml_pre, None], [None, mGpre] ] )
    ngsGfu = GridFunction(V, name="ngs"); ngsGfp = GridFunction(Q)
    ngsGfu.vec.data[:] = 0; ngsGfp.vec.data[:] = 0
@@ -163,8 +160,8 @@ We try a multiplicative preconditioner instead ::
    rhs = BlockVector( [f.vec - a.mat*gfu.vec, g.vec] )
    sol = BlockVector( [gfu.vec, gfp.vec] )
    solver = KrylovSolver(K,dofs, p=C,
-                         solverParameters={"ksp_type": "fbcgs",
-                                           "ksp_max_it":10,
+                         solverParameters={"ksp_type": "bcgs",
+                                           "ksp_max_it":30,
                                            "ksp_rtol":1e-10,
                                            "ksp_monitor":None,
                                            "pc_type": "mat"})

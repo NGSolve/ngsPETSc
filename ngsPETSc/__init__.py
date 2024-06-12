@@ -37,12 +37,13 @@ except ImportError:
 if ngsolve:
     from ngsPETSc.mat import *
     from ngsPETSc.vec import *
-    from ngsPETSc.ksp import *
     from ngsPETSc.nullspace import *
     from ngsPETSc.pc import *
-    from ngsPETSc.eps import *
+    from ngsPETSc.ksp import *
     from ngsPETSc.snes import *
+    from ngsPETSc.eps import *
     __all__ = __all__ + ["Matrix","VectorMapping","MeshMapping",
-                         "KrylovSolver","EigenSolver","NullSpace"]
+                         "KrylovSolver","EigenSolver","NullSpace",
+                         "PETScPreconditioner", "NonLinearSolver"]
 
 VERSION = "0.0.5"
