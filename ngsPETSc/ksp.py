@@ -82,7 +82,7 @@ def createFromAction(a, freeDofs, solverParameters):
             self.mapping.ngsVec(X, self.ngX)
             self.a.Mult(self.ngX, self.ngY)
             self.mapping.petscVec(self.ngY, Y)
-        
+
     pythonA = Wrap(a, freeDofs)
     pscA = PETSc.Mat().create(comm=PETSc.COMM_SELF)
     pscA.setSizes([sum(freeDofs), sum(freeDofs)])
