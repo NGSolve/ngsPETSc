@@ -14,6 +14,12 @@ Welcome to ngsPETSc's documentation!
 
 .. toctree::
    :maxdepth: 1
+   :caption: PETSc KSP
+
+   PETScKSP/poisson.py
+
+.. toctree::
+   :maxdepth: 1
    :caption: PETSc PC
 
    PETScPC/poisson.py

@@ -12,15 +12,15 @@ def createFromBilinearForm(a, freeDofs, solverParameters):
     """
     a.Assemble()
     #Setting deafult matrix type
-    if "mat_type" not in solverParameters:
-        solverParameters["mat_type"] = "aij"
+    if "ngs_mat_type" not in solverParameters:
+        solverParameters["ngs_mat_type"] = "aij"
     #Assembling matrix if not of type Python
-    if solverParameters["mat_type"] not in ["python"]:
+    if solverParameters["ngs_mat_type"] not in ["python"]:
         if hasattr(a.mat, "row_pardofs"):
             dofs = a.mat.row_pardofs
         else:
             dofs = None
-        mat = Matrix(a.mat, (dofs, freeDofs, None), solverParameters["mat_type"])
+        mat = Matrix(a.mat, (dofs, freeDofs, None), solverParameters["ngs_mat_type"])
     return (a.mat, mat.mat)
 
 def createFromMatrix(a, freeDofs, solverParameters):
@@ -28,15 +28,15 @@ def createFromMatrix(a, freeDofs, solverParameters):
     This function creates a PETSc matrix from an NGSolve bilinear form
     """
     #Setting deafult matrix type
-    if "mat_type" not in solverParameters:
-        solverParameters["mat_type"] = "aij"
+    if "ngs_mat_type" not in solverParameters:
+        solverParameters["ngs_mat_type"] = "aij"
     #Assembling matrix if not of type Python
-    if solverParameters["mat_type"] not in ["python"]:
+    if solverParameters["ngs_mat_type"] not in ["python"]:
         if hasattr(a, "row_pardofs"):
             dofs = a.row_pardofs
         else:
             dofs = None
-        mat = Matrix(a, (dofs, freeDofs, None), solverParameters["mat_type"])
+        mat = Matrix(a, (dofs, freeDofs, None), solverParameters["ngs_mat_type"])
     return (a, mat.mat)
 
 def createFromPC(a, freeDofs, solverParameters):
