@@ -40,31 +40,66 @@ def createFromMatrix(a, freeDofs, solverParameters):
     return (a, mat.mat)
 
 def createFromPC(a, freeDofs, solverParameters):
-    class Wrap():
+    class Wrap(object):
         def __init__(self, a, freeDofs):
-            self.mapping = VectorMapping((a.dofs,freeDofs,{"bsize": 1}))
-            self.ngX = a.CreateVector()
-            self.ngY = a.CreateVector()
+            if hasattr(a.ngsMat, "row_pardofs"):
+                dofs = a.ngsMat.row_pardofs
+            else:
+                dofs = None
+            self.a = a
+            self.mapping = VectorMapping((dofs,freeDofs,{"bsize": [1]}))
+            self.ngX = a.CreateColVector()
+            self.ngY = a.CreateColVector()
             self.prj = Projector(mask=a.actingDofs, range=True)
+
         def mult(self, mat, X, Y):
-            self.mapping.ngsVec(X, self.prj*self.ngX)
-            a.Mult(self.ngX, self.ngY)
-            self.mapping.petscVec(self.prj*self.ngY, Y)
-    
-    pscA = PETSc.Mat().create(comm=PETSc.COMM_WORLD) #TODO: Fix this
-    pscA.setSizes(sum(freeDofs))
-    pscA.setType(PETSc.Mat.Type.PYTHON)
-    pscA.setPythonContext(Wrap)
+            self.mapping.ngsVec(X, (self.prj*self.ngX).Evaluate())
+            self.a.Mult(self.ngX, self.ngY)
+            self.mapping.petscVec((self.prj*self.ngY).Evaluate(), Y)
+        
+    #Grabbing comm information
+    if hasattr(a.ngsMat, "row_pardofs"):
+        comm = a.ngsMat.row_pardofs.comm.mpi4py
+    else:
+        comm = PETSc.COMM_SELF
+    pythonA = Wrap(a, freeDofs)
+    pscA = PETSc.Mat().create(comm=comm)
+    pscA.setSizes([sum(freeDofs), sum(freeDofs)])
+    pscA.setType("python")
+    pscA.setPythonContext(pythonA)
     pscA.setUp()
     return (a.ngsMat, pscA)
 
+def createFromAction(a, freeDofs, solverParameters):
+    class Wrap(object):
+        def __init__(self, a, freeDofs):
+            self.a = a
+            self.mapping = VectorMapping((None,freeDofs,{"bsize": [1]}))
+            self.ngX = a.CreateColVector()
+            self.ngY = a.CreateColVector()
 
-            
+        def mult(self, mat, X, Y):
+            self.mapping.ngsVec(X, self.ngX)
+            self.a.Mult(self.ngX, self.ngY)
+            self.mapping.petscVec(self.ngY, Y)
+        
+    pythonA = Wrap(a, freeDofs)
+    pscA = PETSc.Mat().create(comm=PETSc.COMM_SELF)
+    pscA.setSizes([sum(freeDofs), sum(freeDofs)])
+    pscA.setType("python")
+    pscA.setPythonContext(pythonA)
+    pscA.setUp()
+    return (a, pscA)
+
+parse = {BilinearForm: createFromBilinearForm,
+         la.SparseMatrixd: createFromMatrix,
+         la.ParallelMatrix: createFromMatrix,
+         PETScPreconditioner: createFromPC,
+         la.BaseMatrix: createFromAction}
 
 class KrylovSolver():
     """
-    This class creates a PETSc Krylov Solver (KSP) from NGSolve
-    variational problem, i.e. a(u,v) = (f,v)
+    This class creates a PETSc Krylov Solver (KSP) for NGSolve.
     Inspired by Firedrake linear solver class.
 
     :arg a: either the bilinear form, ngs Matrix or a petsc4py matrix
@@ -78,18 +113,14 @@ class KrylovSolver():
     :arg optionsPrefix: special solver options prefix for this specific Krylov solver
 
     """
-    def __init__(self, a, dofsDescr=None, p=None, solverParameters=None, optionsPrefix="", nullspace=None):
-        # Grabbing parallel information
+    def __init__(self, a, dofsDescr, p=None, nullspace=None, optionsPrefix="", solverParameters=None):
+        # Grabbing dofs information
         if isinstance(dofsDescr, FESpace):
             freeDofs = dofsDescr.FreeDofs()
         elif isinstance(dofsDescr, BitArray):
             freeDofs = dofsDescr
         else:
             raise ValueError("dofsDescr must be either FESpace or BitArray")
-        parse = {BilinearForm: createFromBilinearForm,
-                 la.SparseMatrixd: createFromMatrix,
-                 la.ParallelMatrix: createFromMatrix,
-                 PETScPreconditioner: createFromPC}
         #Construct operator        
         for key in parse:
             if isinstance(a, key):
@@ -98,25 +129,34 @@ class KrylovSolver():
             for key in parse:
                 if isinstance(p, key):
                     ngsP, pscP = parse[key](p, freeDofs, solverParameters)
+                    break
         else:
             ngsP = ngsA; pscP = pscA
+        
         #Construct vector mapping
         if hasattr(ngsA, "row_pardofs"):
             dofs = ngsA.row_pardofs
         else:
             dofs = None
-        self.mapping = VectorMapping((dofs,freeDofs,{"bsize":ngsA.local_mat.entrysizes}))
+        if hasattr(ngsA.local_mat, "entrysizes"):
+            entrysize = ngsA.local_mat.entrysizes
+        else:
+            entrysize = [1]
+        
+        self.mapping = VectorMapping((dofs,freeDofs,{"bsize":entrysize}))
         #Fixing PETSc options
         options_object = PETSc.Options()
         if solverParameters is not None:
             for optName, optValue in solverParameters.items():
                 options_object[optName] = optValue
 
-        #Creating the PETSc Matrix
+        #Setting PETSc Options
         pscA.setOptionsPrefix(optionsPrefix)
         pscA.setFromOptions()
-        pscP.setOptionsPrefix(optionsPrefix)
-        pscP.setFromOptions()
+
+        #Setting up nullspace
+        if nullspace is not None:
+            pscA.setNullSpace(nullspace.nullspace)
 
         #Setting up KSP
         self.ksp = PETSc.KSP().create(comm=pscA.getComm())
@@ -124,7 +164,6 @@ class KrylovSolver():
         self.ksp.setOptionsPrefix(optionsPrefix)
         self.ksp.setFromOptions()
         self.pscX, self.pscB = pscA.createVecs()
-        self.ksp.setUp()
 
     def solve(self, b, x):
         """

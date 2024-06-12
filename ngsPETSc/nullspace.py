@@ -28,9 +28,10 @@ class NullSpace:
                 else:
                     petscVec  = self.vecMap.petscVec(vec)
                     petscNullspace.append(petscVec)
-        elif isinstance(nullspace, str):
-            if nullspace == "constant":
+        elif isinstance(span, str):
+            if span == "constant":
                 constant = True
+                petscNullspace = []
             else:
                 raise ValueError("Invalid nullspace string")
         else:

@@ -33,10 +33,9 @@ class PETScPreconditioner(BaseMatrix):
             dofs = self.ngsMat.row_pardofs
         else:
             dofs = None
-        self.dofs = dofs
         self.vecMap = VectorMapping((dofs,freeDofs,{"bsize":self.ngsMat.local_mat.entrysizes}))
         petscMat = Matrix(self.ngsMat, (dofs, freeDofs, None), matType).mat
-        self.lgmap = petscMat.getLGMap()[0] #TODO: Fiox this only works for rc
+        self.lgmap = petscMat.getLGMap()[0]
         if nullspace is not None:
             if nullspace.near:
                 petscMat.mat.setNearNullSpace(nullspace.nullspace)
@@ -162,6 +161,5 @@ class ASMPreconditioner(PETScPreconditioner):
         else:
             self.petscPreconditioner.applyTranspose(self.petscVecX, self.petscVecY)
         self.vecMap.ngsVec(self.petscVecY, y)
-
 
 comp.RegisterPreconditioner ("PETScPC", createPETScPreconditioner)

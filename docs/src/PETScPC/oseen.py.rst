@@ -17,8 +17,9 @@ Let us begin defining the parameters of the problem. ::
    from ngsolve import *
    from ngsPETSc import *
    nu = Parameter(1e-4)
-   gamma = Parameter(1e4)
-   b = CoefficientFunction((0,0))
+   gamma = Parameter(1e6)
+   b = CoefficientFunction((-(y-0.5),x-0.5)) 
+   #b = CoefficientFunction((0,0)) 
 
 In particular, we will consider a high-order Hood-Taylor discretization of the problem. Such a discretization can easily be constructed using NGSolve as follows: ::
 
@@ -83,11 +84,9 @@ We construct a classical h-multigird using the `hoprolongation` flag when constr
    print("-----------|Additive h-Multigird|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                    maxsteps=100, printrates=True, initialize=False)
-   Draw(gfu)
-
 
 To overcome this issue we will construct a two-level additive Schwarz preconditioner made of an exact coarse correction and a vertex patch smoother.
-Notice that while the smoother is very similar to the one used in :doc:`poisson.py`, for the coarse correction we are here using h-multigrid and not p-multigrid. ::
+Notice that while the smoother is very similar to the one used in :doc:`poisson.py`, for the coarse correction we are here using h-multigrid and not p-multigrid. :: 
 
    def VertexStarPatchBlocks(mesh, fes):
       blocks = []
@@ -118,12 +117,9 @@ Notice that while the smoother is very similar to the one used in :doc:`poisson.
    print("-----------|Additive h-Multigird + Vertex star relaxetion|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                    maxsteps=100, printrates=True, initialize=False)
-   Draw(gfu)
 
 We try a multiplicative preconditioner instead ::
 
-   from ngsPETSc import KrylovSolver
-   from ngsolve.krylovspace import GMRes
    class MGPreconditioner(BaseMatrix):
       def __init__ (self, fes, a, coarsepre, smoother):
          super().__init__()
@@ -134,16 +130,9 @@ We try a multiplicative preconditioner instead ::
          self.prol = fes.Prolongation().Operator(1)
 
       def Mult (self, d, w):
-         prj = Projector(mask=self.fes.FreeDofs(), range=True) 
-         smoother.setActingDofs(self.fes.FreeDofs())
+         smoother.setActingDofs(dofs)
          w[:] = 0
-         dofs = BitArray(self.fes.ndof); dofs[:] = True
-         smooth = KrylovSolver(self.a, dofs, p=smoother, 
-                              solverParameters={"ksp_type": "fgmres", 
-                                                "ksp_max_it": 10,
-                                                "ksp_view": '',
-                                                "pc_type": "mat"})
-         w += GMRes(self.a.mat, d, pre=smoother, x=w, maxsteps = 10, printrates=False)
+         w += solvers.GMRes(self.a.mat, d, pre=smoother, x=w, maxsteps = 40, printrates=False)
          r = d.CreateVector()
          r.data = d - self.a.mat * w
          w += self.prol @ self.coarsepre @ self.prol.T * r
@@ -151,16 +140,38 @@ We try a multiplicative preconditioner instead ::
       def Shape (self):
             return self.mat.shape
       def CreateVector (self, col):
-            return self.mat.CreateVector(col)
+            return self.a.mat.CreateVector(col)
 
-   ml_pre = MGPreconditioner(V, a, aCoarsePre, smoother)
+   #ml_pre = MGPreconditioner(V, a, aCoarsePre, smoother)
+   ml_pre = PETScPreconditioner(a.mat, V.FreeDofs(), solverParameters={"pc_type":"lu"})
    C = BlockMatrix( [ [ml_pre, None], [None, mGpre] ] )
-   gfu.vec.data[:] = 0; gfp.vec.data[:] = 0
-   gfu.Set(uin, definedon=mesh.Boundaries("top"))
-   sol = BlockVector( [gfu.vec, gfp.vec] )
+   ngsGfu = GridFunction(V, name="ngs"); ngsGfp = GridFunction(Q)
+   ngsGfu.vec.data[:] = 0; ngsGfp.vec.data[:] = 0
+   ngsGfu.Set(uin, definedon=mesh.Boundaries("top"))
+   sol = BlockVector( [ngsGfu.vec, ngsGfp.vec] )
    rhs = BlockVector( [f.vec, g.vec] )
 
-   print("-----------|Multiplicative h-Multigird + Vertex star GMRES relaxetion|-----------")
+   print("-----------|NGS MinRES Multiplicative h-Multigird + Vertex star GMRES relaxetion|-----------")
    solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
                    maxsteps=100, printrates=True, initialize=False)
-   Draw(gfu)
+   Draw(ngsGfu)
+   print("-----------|PETSc Multiplicative h-Multigird + Vertex star GMRES relaxetion|-----------")
+   dofs = BitArray(V.ndof+Q.ndof); dofs[:] = True
+   gfu = GridFunction(V); gfp = GridFunction(Q)
+   gfu.vec.data[:] = 0; gfp.vec.data[:] = 0
+   gfu.Set(uin, definedon=mesh.Boundaries("top"))
+   rhs = BlockVector( [f.vec - a.mat*gfu.vec, g.vec] )
+   sol = BlockVector( [gfu.vec, gfp.vec] )
+   solver = KrylovSolver(K,dofs, p=C,
+                         solverParameters={"ksp_type": "fbcgs",
+                                           "ksp_max_it":10,
+                                           "ksp_rtol":1e-10,
+                                           "ksp_monitor":None,
+                                           "pc_type": "mat"})
+   solver.solve(rhs, sol)
+   gfu0 = GridFunction(V, name="PETSc")
+   gfu0.vec.data[:]= 0
+   gfu0.Set(uin, definedon=mesh.Boundaries("top"))
+   gfu0.vec.data += gfu.vec
+   Draw(gfu0)
+   print ("L2-error:", sqrt(Integrate((gfu0-ngsGfu)**2, mesh)))

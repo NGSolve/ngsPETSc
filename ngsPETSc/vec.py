@@ -71,14 +71,24 @@ class VectorMapping:
         vector, if None new PETSc vector is generated, by deafault None.
 
         '''
-        if petscVec is None:
-            petscVec = self.pVec.duplicate()
-        ngsVec.Distribute()
-        self.sVec.placeArray(ngsVec.FV().NumPy())
-        petscVec.set(0)
-        self.ngsToPETScScat.scatter(self.sVec, petscVec, addv=PETSc.InsertMode.ADD,
-                                    mode=PETSc.ScatterMode.FORWARD)
-        self.sVec.resetArray()
+        if hasattr(ngsVec, "nblocks"):
+            if petscVec is None:
+                petscVec = self.pVec.duplicate()
+            indexSum = 0
+            for i in range(ngsVec.nblocks):
+                ngsVec[i].Distribute()
+                I = list(range(indexSum, indexSum + ngsVec[i].size))
+                petscVec.setValues(I, ngsVec[i].FV().NumPy())
+                indexSum += ngsVec[i].size
+        else:
+            if petscVec is None:
+                petscVec = self.pVec.duplicate()
+            ngsVec.Distribute()
+            self.sVec.placeArray(ngsVec.FV().NumPy())
+            petscVec.set(0)
+            self.ngsToPETScScat.scatter(self.sVec, petscVec, addv=PETSc.InsertMode.ADD,
+                                        mode=PETSc.ScatterMode.FORWARD)
+            self.sVec.resetArray()
         return petscVec
 
     def ngsVec(self, petscVec, ngsVec=None):
@@ -93,8 +103,15 @@ class VectorMapping:
         if ngsVec is None:
             ngsVec = la.CreateParallelVector(self.dofs,la.PARALLEL_STATUS.CUMULATED)
         ngsVec[:] = 0
-        self.sVec.placeArray(ngsVec.FV().NumPy())
-        self.ngsToPETScScat.scatter(petscVec, self.sVec, addv=PETSc.InsertMode.INSERT,
-                                    mode=PETSc.ScatterMode.REVERSE)
-        self.sVec.resetArray()
+        if hasattr(ngsVec, "nblocks"):
+            indexSum = 0
+            for i in range(ngsVec.nblocks):
+                I = list(range(indexSum, indexSum + ngsVec[i].size))
+                ngsVec[i].FV().NumPy()[:] = petscVec.getValues(I)
+                indexSum += ngsVec[i].size
+        else:
+            self.sVec.placeArray(ngsVec.FV().NumPy())
+            self.ngsToPETScScat.scatter(petscVec, self.sVec, addv=PETSc.InsertMode.INSERT,
+                                        mode=PETSc.ScatterMode.REVERSE)
+            self.sVec.resetArray()
         return ngsVec
