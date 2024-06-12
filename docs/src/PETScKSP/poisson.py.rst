@@ -3,8 +3,7 @@ Solving the Poisson problem with different preconditioning strategies
 
 In this tutorial, we explore using `PETSc KSP` as an out-of-the-box solver inside NGSolve.
 We will focus our attention on the Poisson problem, and we will consider different solvers and preconditioning strategies.
-Not all the preconditioning strategies are equally effective for all the discretizations of the Poisson problem, and this demo is intended to provide a starting point for the exploration of the preconditioning strategies rather than providing a definitive answer.
-We begin by creating a discretisation of the Poisson problem using H1 elements, in particular, we consider the usual variational formulation
+In particular, we will show how to use `MUMPS` as a direct solver, `ILU` as an incomplete LU factorisation, `AMG` as an Algebraic MultiGrid preconditioner, and `BDDC` as a Balancing Domain Decomposition preconditioner.
 
 .. math::
 
@@ -38,7 +37,7 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
 Now that we have a discretisation of the we use ngsPETSc `KrylovSolver` to solve the linear system.
 `KrylovSolver` wraps the PETSc KSP object.
 We begin showing how to use an LU factorisation as a direct solver, in particular, we use `MUMPS` to perform the factorisation in parallel.
-Let us discuss the solver options, i.e. the `ksp_type` set to `preonly` enforces the use of a direct solver, `pc_type` enforces that we use a direct LU factorisation, while `pc_factor_mat_solver_type` enforces the use of `MUMPS`. ::
+Let us discuss the solver options, i.e. the flag :code:`ksp_type` set to :code:`preonly` enforces the use of a direct solver, :code:`pc_type` enforces that we use a direct LU factorisation, lastly :code:`pc_factor_mat_solver_type` enforces the use of `MUMPS`. ::
 
     from ngsPETSc import KrylovSolver
     solver = KrylovSolver(a, fes.FreeDofs(), 
@@ -52,8 +51,8 @@ Let us discuss the solver options, i.e. the `ksp_type` set to `preonly` enforces
     Draw(gfu)
 
 We can also use an interative solver with an incomplete LU factorisation as a preconditioner.
-We have now switched to an interative solver setting the `ksp_type` flag to `cg`, while we enforce the use of an incomplete LU using the flag `pc_type`.
-We have also used the flag `ksp_monitor` to view the residual at each linear iteration. ::
+We have now switched to an interative solver setting the :code:`ksp_type` flag to :cdode:`cg`, while we enforce the use of an incomplete LU using once again the flag :code:`pc_type`.
+We have also added the flag :code:`ksp_monitor` to view the residual at each linear iteration. ::
 
     solver = KrylovSolver(a, fes.FreeDofs(), 
                           solverParameters={"ksp_type": "cg",
@@ -74,7 +73,8 @@ We have also used the flag `ksp_monitor` to view the residual at each linear ite
    * - PETSc ILU
      - 166
 
-We can also use an Algebraic MultiGrid preconditioner, in particular we PETSc own implementation of AMG. ::
+We can also use an Algebraic MultiGrid preconditioner, in particular we PETSc own implementation of AMG.
+We do this changing the falg :code:`pc_type` to :code:`gamg` ::
 
     solver = KrylovSolver(a, fes.FreeDofs(), 
                           solverParameters={"ksp_type": "cg", 
@@ -96,8 +96,9 @@ We can also use an Algebraic MultiGrid preconditioner, in particular we PETSc ow
    * - PETSc GAMG
      - 35
 
-We can also use PETSc `BDDC` preconditioner, once again we will enforce this option via the `pc_type` flag.
-We will also use the `ksp_rtol` flag to obtain a more accurate solution of the linear system. ::
+We can also use PETSc `BDDC` preconditioner.
+Once again we will enforce this option via the flag :code:`pc_type` flag.
+We will also use the flag :code:`ksp_rtol` to obtain a more accurate solution of the linear system. ::
 
     solver = KrylovSolver(a, fes.FreeDofs(), 
                           solverParameters={"ksp_type": "cg", 
