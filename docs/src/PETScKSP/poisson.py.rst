@@ -47,22 +47,25 @@ Let us discuss the solver options, i.e. the flag :code:`ksp_type` set to :code:`
     gfu = GridFunction(fes)
     solver.solve(f.vec, gfu.vec)
     exact = 16*x*(1-x)*y*(1-y)
-    print ("L2-error:", sqrt (Integrate ( (gfu-exact)*(gfu-exact), mesh)))
+    print ("LU L2-error:", sqrt (Integrate ( (gfu-exact)*(gfu-exact), mesh)))
     Draw(gfu)
 
 We can also use an interative solver with an incomplete LU factorisation as a preconditioner.
 We have now switched to an interative solver setting the :code:`ksp_type` flag to :cdode:`cg`, while we enforce the use of an incomplete LU using once again the flag :code:`pc_type`.
 We have also added the flag :code:`ksp_monitor` to view the residual at each linear iteration. ::
 
-    solver = KrylovSolver(a, fes.FreeDofs(), 
-                          solverParameters={"ksp_type": "cg",
-                                            "ksp_monitor": "",
-                                            "pc_type": "ilu",
-                                            "pc_factor_mat_solver_type": "petsc"})
-    gfu = GridFunction(fes)
-    solver.solve(f.vec, gfu.vec)
-    print ("L2-error:", sqrt (Integrate ( (gfu-exact)*(gfu-exact), mesh)))
-    Draw(gfu)
+    if COMM_WORLD.Get_size() == 1:
+      solver = KrylovSolver(a, fes.FreeDofs(), 
+                            solverParameters={"ksp_type": "cg",
+                                              "ksp_monitor": "",
+                                              "pc_type": "ilu",
+                                              "pc_factor_mat_solver_type": "petsc"})
+      gfu = GridFunction(fes)
+      solver.solve(f.vec, gfu.vec)
+      print ("ILU L2-error:", sqrt (Integrate ( (gfu-exact)*(gfu-exact), mesh)))
+      Draw(gfu)
+    else:
+      print("ILU preconditioner is not available in parallel")
 
 .. list-table:: Preconditioners performance
    :widths: auto
@@ -82,7 +85,7 @@ We do this changing the falg :code:`pc_type` to :code:`gamg` ::
                                             "pc_type": "gamg"})
     gfu = GridFunction(fes)
     solver.solve(f.vec, gfu.vec)
-    print ("L2-error:", sqrt (Integrate ( (gfu-exact)*(gfu-exact), mesh)))
+    print ("GAMG L2-error:", sqrt (Integrate ( (gfu-exact)*(gfu-exact), mesh)))
     Draw(gfu)
 
 .. list-table:: Preconditioners performance
@@ -108,7 +111,7 @@ We will also use the flag :code:`ksp_rtol` to obtain a more accurate solution of
                                             "ksp_rtol": 1e-10})
     gfu = GridFunction(fes)
     solver.solve(f.vec, gfu.vec)
-    print ("L2-error:", sqrt (Integrate ( (gfu-exact)*(gfu-exact), mesh)))
+    print ("BDDC L2-error:", sqrt (Integrate ( (gfu-exact)*(gfu-exact), mesh)))
     Draw(gfu)
 
 .. list-table:: Preconditioners performance
@@ -129,3 +132,23 @@ We will also use the flag :code:`ksp_rtol` to obtain a more accurate solution of
      - 14
 
 We see that for an increasing number of subdomains :math:`N` the number of iterations increases.
+Notice that in all the cases we have considered so far ngsPETSc :code:`KrylovSolver` had to create a PETSc matrix from the NGSolve matrix in order to assemble the required preconditioners.
+If we have already some knowledge of the preconditioner we want to use, we can use :code:`KrylovSolver` in a matrix-free fashion.
+This will result in a faster setup time and less memory usage. 
+For example, we can use :code:`KrylovSolver`: in a matrix-free fashion with the element-wise BDDC preconditioner implemented in NGSolve.
+Notice that because in NGSolve one needs to "register" the preconditioner before assembling the associated matrix we will have to redefine the :code:`BilinearForm` associated with the Poisson problem. :: 
+
+
+    a = BilinearForm(grad(u)*grad(v)*dx)
+    el_bddc = Preconditioner(a, "local")
+    a.Assemble()
+    solver = KrylovSolver(a.mat, fes.FreeDofs(), p=el_bddc.mat,
+                          solverParameters={"ksp_type": "cg", 
+                                            "ksp_monitor": "",
+                                            "pc_type": "mat",
+                                            "ngs_mat_type": "python",
+                                            "ksp_rtol": 1e-10})
+    gfu = GridFunction(fes)
+    solver.solve(f.vec, gfu.vec)
+    print ("Element-wise BDDC L2-error:", sqrt (Integrate ( (gfu-exact)*(gfu-exact), mesh)))
+    Draw(gfu)
