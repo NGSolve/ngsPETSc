@@ -16,10 +16,10 @@ Let us begin defining the parameters of the problem. ::
 
    from ngsolve import *
    from ngsPETSc import *
-   nu = Parameter(1e-4)
-   gamma = Parameter(1e6)
+   nu = Parameter(1e-3)
+   gamma = Parameter(1e8)
    b = CoefficientFunction((4*(2*y-1)*(1-x)*x, -4*(2*x-1)*(1-y)*y)) 
-   #b = CoefficientFunction((0,0)) 
+   uin = CoefficientFunction((1,0))
 
 In particular, we will consider a high-order Hood-Taylor discretization of the problem. Such a discretization can easily be constructed using NGSolve as follows: ::
 
@@ -32,7 +32,7 @@ In particular, we will consider a high-order Hood-Taylor discretization of the p
       shape = Rectangle(1,1).Face()
       shape.edges.Max(Y).name="top"
       geo = OCCGeometry(shape, dim=2)
-      ngmesh = geo.GenerateMesh(maxh=0.3)
+      ngmesh = geo.GenerateMesh(maxh=0.1)
       mesh = Mesh(ngmesh.Distribute(COMM_WORLD))
    else:
       mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
@@ -62,6 +62,7 @@ We first invert this block using a direct LU factorisation so that we can see wh
    for l in range(2):
       if l != 0: mesh.Refine()
    V.Update(); Q.Update()
+   dofs = BitArray(V.ndof+Q.ndof); dofs[:] = True
    a.Assemble(); b.Assemble(); mG.Assemble();
    f.Assemble(); g.Assemble();
    prol = V.Prolongation().Operator(1)
@@ -72,25 +73,40 @@ We first invert this block using a direct LU factorisation so that we can see wh
    K = BlockMatrix( [ [a.mat, b.mat.T], [b.mat, None] ] )
    C = BlockMatrix( [ [apre, None], [None, mGpre] ] )
    
-   uin = CoefficientFunction( (1, 0) )
-   luGfu = GridFunction(V, name="LUVel"); luGfp = GridFunction(Q, name="LUPres")
-   luGfu.Set(uin, definedon=mesh.Boundaries("top"))
-   sol = BlockVector( [luGfu.vec, luGfp.vec] )
-   rhs = BlockVector( [f.vec, g.vec] )
-
    print("-----------|LU|-----------")
-   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
-                   maxsteps=10, printrates=True, initialize=False)
-   Draw(luGfu)
+   gfu = GridFunction(V, name='PETScVel'); gfp = GridFunction(Q, name='PETScPres')
+   gfu.vec.data[:] = 0; gfp.vec.data[:] = 0
+   gfu.Set(uin, definedon=mesh.Boundaries("top"))
+   rhs = BlockVector( [f.vec, g.vec] )   
+   sol = BlockVector( [gfu.vec, gfp.vec] )
+   rhs -= K * sol
+   solver = KrylovSolver(K,dofs, p=C,
+                         solverParameters={"ksp_type": "gmres",
+                                           "ksp_max_it":100,
+                                           "ksp_monitor_true_residual": None,
+                                           "ksp_rtol": 1e-8,
+                                           "pc_type": "mat"
+                                           })
+   solver.solve(rhs, sol)
+   gfu0 = GridFunction(V, name="PETSc0"); gfp0 = GridFunction(Q)
+   gfu0.vec.data[:]= 0
+   gfu0.Set(uin, definedon=mesh.Boundaries("top"))
+   sol0 = BlockVector( [gfu0.vec, gfp0.vec] )
+   sol += sol0
+   gfu.vec.data = sol[0]
 
 .. list-table:: Preconditioners performance
    :widths: auto
    :header-rows: 1
 
-   * - Preconditioner
-     - Iterations
-   * - LU
-     - 2 (4.07e-8)
+   * - mesh diameter
+     - LU
+   * - 0.1 
+     - 2 (2.43e-8)
+   * - 0.05 
+     - 3 (1.35e-11)
+   * - 0.025 
+     - 3 (1.44e-10)
 
 To overcome this issue of inverting the agumented (1,1) block, we will construct a two-level additive Schwarz preconditioner made of an exact coarse correction and a vertex patch smoother, similar to what we have done in :doc:`stokes.py`_.
 Notice that while the smoother is very similar to the one used in :doc:`stokes.py`, for the coarse correction we are here using h-multigrid and not p-multigrid. ::
@@ -115,29 +131,47 @@ Notice that while the smoother is very similar to the one used in :doc:`stokes.p
                                                   "sub_pc_type": "lu"})
    two_lv = apre + smoother
    C = BlockMatrix( [ [two_lv, None], [None, mGpre] ] )
-   gfu = GridFunction(V, name="MG"); gfp = GridFunction(Q)
+   print("-----------|Additive h-Multigird + Vertex star smoothing|-----------")
+   gfu = GridFunction(V, name='PETScVel'); gfp = GridFunction(Q, name='PETScPres')
    gfu.vec.data[:] = 0; gfp.vec.data[:] = 0
    gfu.Set(uin, definedon=mesh.Boundaries("top"))
+   rhs = BlockVector( [f.vec, g.vec] )   
    sol = BlockVector( [gfu.vec, gfp.vec] )
-   rhs = BlockVector( [f.vec, g.vec] )
-
-   print("-----------|Additive h-Multigird + Vertex star smoothing|-----------")
-   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
-                   maxsteps=10, printrates=True, initialize=False)
+   rhs -= K * sol
+   dofs = BitArray(V.ndof+Q.ndof); dofs[:] = True
+   solver = KrylovSolver(K,dofs, p=C,
+                         solverParameters={"ksp_type": "gmres",
+                                           "ksp_max_it":100,
+                                           "ksp_monitor_true_residual": None,
+                                           "ksp_rtol": 1e-11,
+                                           "pc_type": "mat"
+                                           })
+   solver.solve(rhs, sol)
+   gfu0 = GridFunction(V, name="PETSc0"); gfp0 = GridFunction(Q)
+   gfu0.vec.data[:]= 0
+   gfu0.Set(uin, definedon=mesh.Boundaries("top"))
+   sol0 = BlockVector( [gfu0.vec, gfp0.vec] )
+   sol += sol0
+   gfu.vec.data = sol[0]
 
 .. list-table:: Preconditioners performance
    :widths: auto
    :header-rows: 1
 
-   * - Preconditioner
-     - Iterations
-   * - LU
-     - 2 (4.07e-8)
-   * - Additive h-Multigird + Vertex star smoothing
-     - 100 (2.08)  
+   * - mesh diameter
+     - LU
+     - Additive h-Multigird + Vertex star smoothing
+   * - 0.1 
+     - 2 (2.43e-8)
+     - 38 (1.69e-6)
+   * - 0.05 
+     - 3 (1.35e-11)
+     - 25 (1.65e-6)
+   * - 0.025 
+     - 3 (1.44e-10)
+     - 43 (1.22e-6)
 
-The two-level additive Schwarz preconditioner doesn't seem to be very effective.
-For this reason, we decided to opt for a multiplicative multigrid preconditioner where we smoothing step is conducted using NGSolve's own :code:`GMRes`. ::
+We can also decide to opt for a multiplicative multigrid preconditioner where we smoothing step is conducted using NGSolve's own :code:`GMRes`. ::
 
    class MGPreconditioner(BaseMatrix):
       def __init__ (self, fes, a, coarsepre, smoother):
@@ -146,19 +180,17 @@ For this reason, we decided to opt for a multiplicative multigrid preconditioner
          self.a = a
          self.coarsepre = coarsepre
          self.smoother = smoother
-      
-      def prol(self, lv):
-         return self.fes.Prolongation().Operator(lv)
+         self.prol = fes.Prolongation().Operator(1)
 
       def Mult (self, d, w):
          smoother.setActingDofs(self.fes.FreeDofs())
          w[:] = 0
          w += solvers.GMRes(self.a.mat, d, pre=smoother, x=w, maxsteps = 10, printrates=False)
+         #w += smoother * (self.a.mat * w-d)
          r = d.CreateVector()
          r.data = d - self.a.mat * w
-         w += self.prol(1) @ self.coarsepre @ self.prol(1).T * r
+         w += self.prol @ self.coarsepre @ self.prol.T * r
          r.data = d - self.a.mat * w
-         #w += smoother * (self.a.mat * w-d)
 
       def Shape (self):
             return self.mat.shape
@@ -169,47 +201,20 @@ For this reason, we decided to opt for a multiplicative multigrid preconditioner
    S = BlockMatrix( [ [IdentityMatrix(V.ndof), -ml_pre@b.mat.T], [None, IdentityMatrix(Q.ndof)]] )
    ST = BlockMatrix( [ [IdentityMatrix(V.ndof), None], [-b.mat@ml_pre, IdentityMatrix(Q.ndof)]] )
    C = S@BlockMatrix( [ [ml_pre, None], [None, mGpre] ] )@ST
-   ngsGfu = GridFunction(V, name="ngs"); ngsGfp = GridFunction(Q)
-   ngsGfu.vec.data[:] = 0; ngsGfp.vec.data[:] = 0
-   ngsGfu.Set(uin, definedon=mesh.Boundaries("top"))
-   sol = BlockVector( [ngsGfu.vec, ngsGfp.vec] )
-   rhs = BlockVector( [f.vec, g.vec] )
 
-   print("-----------|NGS MinRES Multiplicative h-Multigird + Vertex star GMRES relaxetion|-----------")
-   solvers.MinRes (mat=K, pre=C, rhs=rhs, sol=sol, tol=1e-10,
-                   maxsteps=10, printrates=True, initialize=False)
-   Draw(ngsGfu)
-
-.. list-table:: Preconditioners performance
-   :widths: auto
-   :header-rows: 1
-
-   * - Preconditioner
-     - Iterations
-   * - LU
-     - 2 (4.07e-8)
-   * - Additive h-Multigird + Vertex star smoothing
-     - 100 (2.08)  
-   * - Multiplicative h-Multigird + Vertex star smoothing
-     - 100 (0.09)  
-
-::
-
-   print("-----------|PETSc Multiplicative h-Multigird + Vertex star GMRES relaxetion|-----------")
-   dofs = BitArray(V.ndof+Q.ndof); dofs[:] = True
+   print("-----------|Multiplicative h-Multigird + Vertex star smoothing|-----------")
    gfu = GridFunction(V, name='PETScVel'); gfp = GridFunction(Q, name='PETScPres')
    gfu.vec.data[:] = 0; gfp.vec.data[:] = 0
    gfu.Set(uin, definedon=mesh.Boundaries("top"))
    rhs = BlockVector( [f.vec, g.vec] )   
    sol = BlockVector( [gfu.vec, gfp.vec] )
    rhs -= K * sol
- 
+   
    solver = KrylovSolver(K,dofs, p=C,
-                         solverParameters={"ksp_type": "lgmres",
+                         solverParameters={"ksp_type": "gmres",
                                            "ksp_max_it":100,
-                                           "ksp_rtol": 1e-14,
-                                           #"ksp_monitor":  None,
                                            "ksp_monitor_true_residual": None,
+                                           "ksp_rtol": 1e-11,
                                            "pc_type": "mat"
                                            })
    solver.solve(rhs, sol)
@@ -220,3 +225,26 @@ For this reason, we decided to opt for a multiplicative multigrid preconditioner
    sol += sol0
    gfu.vec.data = sol[0]
    Draw(gfu)
+
+
+.. list-table:: Preconditioners performance
+   :widths: auto
+   :header-rows: 1
+
+   * - mesh diameter
+     - LU
+     - Additive h-Multigird + Vertex star smoothing
+     - Multiplicative h-Multigird + Vertex star smoothing
+   * - 0.1 
+     - 2 (2.43e-8)
+     - 38 (1.69e-6)
+     - 18 (4.37e-7)
+   * - 0.05 
+     - 3 (1.35e-11)
+     - 26 (1.65e-06)
+     - 38 (9.84e-07)
+   * - 0.025 
+     - 3 (1.44e-10)
+     - 43 (1.22e-06)
+     - 19 (2.53e-07)
+

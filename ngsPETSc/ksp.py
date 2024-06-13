@@ -156,7 +156,10 @@ class KrylovSolver():
 
         #Setting up nullspace
         if nullspace is not None:
-            pscA.setNullSpace(nullspace.nullspace)
+            if isinstance(nullspace, PETSc.NullSpace):
+                pscA.setNullSpace(nullspace)
+            else:
+                pscA.setNullSpace(nullspace.nullspace)
 
         #Setting up KSP
         self.ksp = PETSc.KSP().create(comm=pscA.getComm())
