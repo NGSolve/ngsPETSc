@@ -32,7 +32,7 @@ In particular, we will consider a high-order Hood-Taylor discretization of the p
       shape = Rectangle(1,1).Face()
       shape.edges.Max(Y).name="top"
       geo = OCCGeometry(shape, dim=2)
-      ngmesh = geo.GenerateMesh(maxh=0.1)
+      ngmesh = geo.GenerateMesh(maxh=0.05)
       mesh = Mesh(ngmesh.Distribute(COMM_WORLD))
    else:
       mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
@@ -160,7 +160,7 @@ Notice that while the smoother is very similar to the one used in :doc:`stokes.p
 
    * - mesh diameter
      - LU
-     - Additive h-Multigird + Vertex star smoothing
+     - Additive h-Multigird + Vertex star
    * - 0.1 
      - 2 (2.43e-8)
      - 38 (1.69e-6)
@@ -231,10 +231,10 @@ We can also decide to opt for a multiplicative multigrid preconditioner where we
    :widths: auto
    :header-rows: 1
 
-   * - mesh diameter
+   * - h
      - LU
-     - Additive h-Multigird + Vertex star smoothing
-     - Multiplicative h-Multigird + Vertex star smoothing
+     - Additive h-Multigird + Vertex star
+     - Multiplicative h-Multigird + Vertex star
    * - 0.1 
      - 2 (2.43e-8)
      - 38 (1.69e-6)
@@ -242,7 +242,7 @@ We can also decide to opt for a multiplicative multigrid preconditioner where we
    * - 0.05 
      - 3 (1.35e-11)
      - 26 (1.65e-06)
-     - 38 (9.84e-07)
+     - 15 (2.38e-07)
    * - 0.025 
      - 3 (1.44e-10)
      - 43 (1.22e-06)
