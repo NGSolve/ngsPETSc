@@ -4,7 +4,7 @@ system solver (KSP) interface for NGSolve
 '''
 from petsc4py import PETSc
 from ngsolve import la, BilinearForm, FESpace, BitArray, Projector
-from ngsPETSc import Matrix, VectorMapping, PETScPreconditioner
+from ngsPETSc import Matrix, VectorMapping, PETScPreconditioner, NullSpace
 
 def createFromBilinearForm(a, freeDofs, solverParameters):
     """
@@ -150,6 +150,9 @@ class KrylovSolver():
 
     :arg p: either the bilinear form, ngs Matrix or petsc4py matrix actin as a preconditioner
 
+    :arg nullspace: either a PETSc NullSpace or ngsPETSc PETSc Preconditioner
+    or touple of ngsPETSc PETSc Preconditioner.
+
     :arg solverParameters: parameters to be passed to the KS P solver
 
     :arg optionsPrefix: special solver options prefix for this specific Krylov solver
@@ -202,10 +205,28 @@ class KrylovSolver():
 
         #Setting up nullspace
         if nullspace is not None:
+            if isinstance(nullspace, (list, tuple)):
+                for ns in nullspace:
+                    if isinstance(ns, PETSc.NullSpace):
+                        pscA.setNullSpace(ns)
+                    elif isinstance(ns, NullSpace):
+                        if ns.near:
+                            pscA.setNearNullSpace(ns.nullspace)
+                        else:
+                            pscA.setNullSpace(ns.nullspace)
+                    else:
+                        raise ValueError("nullspace must be either \
+                                         PETSc.NullSpace or NullSpace")
             if isinstance(nullspace, PETSc.NullSpace):
                 pscA.setNullSpace(nullspace)
+            elif isinstance(nullspace, NullSpace):
+                if nullspace.near:
+                    pscA.setNearNullSpace(nullspace.nullspace)
+                else:
+                    pscA.setNullSpace(nullspace.nullspace)
             else:
-                pscA.setNullSpace(nullspace.nullspace)
+                raise ValueError("nullspace must be either \
+                                    PETSc.NullSpace or NullSpace")
 
         #Setting up KSP
         self.ksp = PETSc.KSP().create(comm=pscA.getComm())

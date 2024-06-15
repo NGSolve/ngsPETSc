@@ -24,6 +24,7 @@ Welcome to ngsPETSc's documentation!
    :caption: PETSc KSP
 
    PETScKSP/poisson.py
+   PETScKSP/elasticity.py
 
 .. toctree::
    :maxdepth: 1

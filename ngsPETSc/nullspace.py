@@ -36,4 +36,20 @@ class NullSpace:
                 raise ValueError("Invalid nullspace string")
         else:
             raise ValueError("Invalid nullspace type")
+            # Create vector space basis and orthogonalize
+        self.constant = constant
+        self.orthonormalize(petscNullspace)
         self.nullspace = PETSc.NullSpace().create(constant=constant, vectors=petscNullspace)
+    def orthonormalize(self, basis):
+        """Orthonormalize the basis."""
+        for i, vec in enumerate(basis):
+            alphas = []
+            for vec_ in basis[:i]:
+                alphas.append(vec.dot(vec_))
+            for alpha, vec_ in zip(alphas, basis[:i]):
+                vec.axpy(-alpha, vec_)
+            if self.constant:
+                # Subtract constant mode
+                alpha = vec.sum()
+                vec.array -= alpha
+            vec.normalize()
