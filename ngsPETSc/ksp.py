@@ -21,7 +21,8 @@ def createFromBilinearForm(a, freeDofs, solverParameters):
         else:
             dofs = None
         mat = Matrix(a.mat, (dofs, freeDofs, None), solverParameters["ngs_mat_type"])
-    return (a.mat, mat.mat)
+        return (a.mat, mat.mat)
+    raise ValueError("ngs_mat_type {} is not supported.".format(solverParameters["ngs_mat_type"]))
 
 def createFromMatrix(a, freeDofs, solverParameters):
     """
@@ -40,32 +41,42 @@ def createFromMatrix(a, freeDofs, solverParameters):
         pscMat = mat.mat
     elif solverParameters["ngs_mat_type"] == "python":
         _, pscMat = createFromAction(a, freeDofs, solverParameters)
-    return (a, pscMat)
+        return (a, pscMat)
+    raise ValueError("ngs_mat_type {} is not supported.".format(solverParameters["ngs_mat_type"]))
 
 def createFromPC(a, freeDofs, solverParameters):
+    """
+    This function creates a PETSc matrix from an ngsPETSc PETSc Preconditioner
+    """
     class Wrap(object):
-        def __init__(self, a, freeDofs):
-            if hasattr(a.ngsMat, "row_pardofs"):
-                dofs = a.ngsMat.row_pardofs
-            else:
-                dofs = None
+        """
+        This class wraps a PETSc Preconditioner as PETSc Python matrix
+        """
+        def __init__(self, a, dofs, freeDofs):
             self.a = a
             self.mapping = VectorMapping((dofs,freeDofs,{"bsize": [1]}))
             self.ngX = a.CreateColVector()
             self.ngY = a.CreateColVector()
             self.prj = Projector(mask=a.actingDofs, range=True)
 
-        def mult(self, mat, X, Y):
+        def mult(self, mat, X, Y): #pylint: disable=W0613
+            """
+            PETSc matrix-vector product
+            """
             self.mapping.ngsVec(X, (self.prj*self.ngX).Evaluate())
             self.a.Mult(self.ngX, self.ngY)
             self.mapping.petscVec((self.prj*self.ngY).Evaluate(), Y)
-        
     #Grabbing comm information
-    if hasattr(a.ngsMat, "row_pardofs"):
-        comm = a.ngsMat.row_pardofs.comm.mpi4py
+    if hasattr(a, "row_pardofs"):
+        dofs = a.row_pardofs
+        comm = dofs.comm.mpi4py
+    elif "dofs" in solverParameters:
+        dofs = solverParameters["dofs"]
+        comm = dofs.comm.mpi4py
     else:
+        dofs = None
         comm = PETSc.COMM_SELF
-    pythonA = Wrap(a, freeDofs)
+    pythonA = Wrap(a, dofs, freeDofs)
     pscA = PETSc.Mat().create(comm=comm)
     pscA.setSizes([sum(freeDofs), sum(freeDofs)])
     pscA.setType("python")
@@ -74,7 +85,13 @@ def createFromPC(a, freeDofs, solverParameters):
     return (a.ngsMat, pscA)
 
 def createFromAction(a, freeDofs, solverParameters):
+    """
+    This function creates a matrix free PETSc matrix from an NGSolve matrix
+    """
     class Wrap(object):
+        """
+        This class wraps an NGSolve matrix as PETSc Python matrix
+        """
         def __init__(self, a, dofs, freeDofs, comm):
             self.a = a
             self.dofs = dofs
@@ -84,7 +101,10 @@ def createFromAction(a, freeDofs, solverParameters):
             self.ngX = a.CreateColVector()
             self.ngY = a.CreateColVector()
 
-        def mult(self, mat, X, Y):
+        def mult(self, mat, X, Y): #pylint: disable=W0613
+            """
+            PETSc matrix-vector product
+            """
             self.mapping.ngsVec(X, self.ngX)
             self.a.Mult(self.ngX, self.ngY)
             self.mapping.petscVec(self.ngY, Y)
@@ -135,7 +155,8 @@ class KrylovSolver():
     :arg optionsPrefix: special solver options prefix for this specific Krylov solver
 
     """
-    def __init__(self, a, dofsDescr, p=None, nullspace=None, optionsPrefix="", solverParameters=None):
+    def __init__(self, a, dofsDescr, p=None, nullspace=None, optionsPrefix="",
+                 solverParameters=None):
         # Grabbing dofs information
         if isinstance(dofsDescr, FESpace):
             freeDofs = dofsDescr.FreeDofs()
@@ -143,20 +164,22 @@ class KrylovSolver():
             freeDofs = dofsDescr
         else:
             raise ValueError("dofsDescr must be either FESpace or BitArray")
-        #Construct operator        
-        for key in parse:
+        #Construct operator
+        pscA = None
+        for key in parse: #pylint: disable=C0206
             if isinstance(a, key):
                 ngsA, pscA = parse[key](a, freeDofs, solverParameters)
+        if pscA is None:
+            raise ValueError("a of type {} not supported.".format(type(a)))
         if p is not None:
-            for key in parse:
+            for key in parse:  #pylint: disable=C0206
                 if isinstance(p, key):
                     if hasattr(ngsA, "row_pardofs"):
                         solverParameters["dofs"] = ngsA.row_pardofs
-                    ngsP, pscP = parse[key](p, freeDofs, solverParameters)
+                    _, pscP = parse[key](p, freeDofs, solverParameters)
                     break
         else:
-            ngsP = ngsA; pscP = pscA
-        
+            pscP = pscA
         #Construct vector mapping
         if hasattr(ngsA, "row_pardofs"):
             dofs = ngsA.row_pardofs
@@ -166,7 +189,6 @@ class KrylovSolver():
             entrysize = ngsA.local_mat.entrysizes
         else:
             entrysize = [1]
-        
         self.mapping = VectorMapping((dofs,freeDofs,{"bsize":entrysize}))
         #Fixing PETSc options
         options_object = PETSc.Options()

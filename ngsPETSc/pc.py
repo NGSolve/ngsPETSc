@@ -86,8 +86,12 @@ class PETScPreconditioner(BaseMatrix):
         self.vecMap.petscVec(x,self.petscVecX)
         self.petscPreconditioner.applyTranspose(self.petscVecX, self.petscVecY)
         self.vecMap.ngsVec(self.petscVecY, y)
-        
+
     def setActingDofs(self, dofs):
+        '''
+        Set the acting dofs of the preconditioner
+        :arg dofs: dofs that the preconditioner is acting on
+        '''
         self.actingDofs = dofs
 
 def createPETScPreconditioner(mat, freeDofs, solverParameters):
@@ -108,8 +112,9 @@ class ASMPreconditioner(PETScPreconditioner):
     '''
     This class creates a Netgen/NGSolve BaseMatrix corresponding to a PETSc ASM PC
     '''
-    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix="", nullspace=None, matType="aij", blocks=None):
-        
+    def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix="",
+                 nullspace=None, matType="aij", blocks=None):
+
         if "sub_pc_type" not in solverParameters:
             solverParameters["sub_pc_type"] = "lu"
         if "sub_pc_factor_mat_ordering_type"  not in solverParameters:

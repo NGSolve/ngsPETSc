@@ -17,7 +17,7 @@ import netgen.meshing as ngm
 from mpi4py.MPI import COMM_WORLD
 import pytest
 
-from ngsPETSc.pc import PETScPreconditioner, ASMPreconditioner
+from ngsPETSc.pc import PETScPreconditioner
 
 def test_pc():
     '''
