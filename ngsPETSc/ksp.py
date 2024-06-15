@@ -93,14 +93,19 @@ def createFromAction(a, freeDofs, solverParameters):
         dofs = a.row_pardofs
         comm = dofs.comm.mpi4py
         entrysize = a.local_mat.entrysizes[0]
+        _, rnumberGlobal = dofs.EnumerateGlobally(freeDofs) #samrc
+    elif "dofs" in solverParameters:
+        dofs = solverParameters["dofs"]
+        comm = dofs.comm.mpi4py
+        entrysize = dofs.entrysize
+        _, rnumberGlobal = dofs.EnumerateGlobally(freeDofs) #samrc
     else:
         dofs = None
         comm = PETSc.COMM_SELF
         entrysize = 1
-    _, rnumberGlobal = dofs.EnumerateGlobally(freeDofs) #samrc
+        rnumberGlobal = sum(freeDofs)
     pythonA = Wrap(a, dofs, freeDofs, comm)
     pscA = PETSc.Mat().create(comm=comm)
-    print(comm.Get_rank(),sum(freeDofs))
     pscA.setSizes(size=(rnumberGlobal*entrysize,
                         rnumberGlobal*entrysize), bsize=entrysize)
     pscA.setType("python")
@@ -145,6 +150,8 @@ class KrylovSolver():
         if p is not None:
             for key in parse:
                 if isinstance(p, key):
+                    if hasattr(ngsA, "row_pardofs"):
+                        solverParameters["dofs"] = ngsA.row_pardofs
                     ngsP, pscP = parse[key](p, freeDofs, solverParameters)
                     break
         else:

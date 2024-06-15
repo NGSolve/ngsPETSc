@@ -117,7 +117,7 @@ Notice that while the smoother is very similar to the one used in :doc:`stokes.p
    Draw(gfu)
    vtk = VTKOutput(ma=mesh, coefs=[gfu],
                 names = ["velocity"],
-                filename="Oseen_{}".format(nu.Get()),
+                filename="output/Oseen_{}".format(nu.Get()),
                 subdivision=0)
    vtk.Do()
 

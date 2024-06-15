@@ -140,12 +140,12 @@ Notice that because in NGSolve one needs to "register" the preconditioner before
 
 
     a = BilinearForm(grad(u)*grad(v)*dx)
-    el_bddc = Preconditioner(a, "local")
+    el_bddc = Preconditioner(a, "bddc")
     a.Assemble()
-    solver = KrylovSolver(a.mat, fes.FreeDofs(), p=None,
+    solver = KrylovSolver(a.mat, fes.FreeDofs(), p=el_bddc.mat,
                           solverParameters={"ksp_type": "cg", 
                                             "ksp_monitor": "",
-                                            "pc_type": "none",
+                                            "pc_type": "mat",
                                             "ngs_mat_type": "python",
                                             "ksp_rtol": 1e-10})
     gfu = GridFunction(fes)
