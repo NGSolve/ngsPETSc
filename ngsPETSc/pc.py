@@ -105,7 +105,9 @@ def createPETScPreconditioner(mat, freeDofs, solverParameters):
 
 
 class ASMPreconditioner(PETScPreconditioner):
-
+    '''
+    This class creates a Netgen/NGSolve BaseMatrix corresponding to a PETSc ASM PC
+    '''
     def __init__(self, mat, freeDofs, solverParameters=None, optionsPrefix="", nullspace=None, matType="aij", blocks=None):
         
         if "sub_pc_type" not in solverParameters:

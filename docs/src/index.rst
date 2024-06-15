@@ -11,7 +11,7 @@ Welcome to ngsPETSc's documentation!
    :caption: Getting Started
    
    install
-   api
+   autoapi/ngsPETSc/index
 
 .. toctree::
    maxdepth: 1
