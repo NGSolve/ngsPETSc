@@ -11,6 +11,7 @@ Welcome to ngsPETSc's documentation!
    :caption: Getting Started
    
    install
+   api
 
 .. toctree::
    maxdepth: 1
@@ -43,10 +44,6 @@ Welcome to ngsPETSc's documentation!
    :caption: SLEPc EPS
 
    SLEPcEPS/poisson.py
-
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
 
 Indices and tables
 ==================
