@@ -70,7 +70,7 @@ We can now assemble the matrices and the right-hand side of the problem. ::
    K = BlockMatrix( [ [a.mat, b.mat.T], [b.mat, c.mat] ] )
 
 As discussed in :doc:`stokes.py`, the hard part remains the construction of the :math:`(A+\gamma B^TM^{-1}B)^{-1}` to precondition the (1,1) block.
-We will use a two-level additive Schwarz preconditioner made of an exact coarse correction and a vertex patch smoother, similar to what we have done in :doc:`stokes.py`_.
+We will use a two-level additive Schwarz preconditioner made of an exact coarse correction and a vertex patch smoother, similar to what we have done in :doc:`stokes.py`.
 Notice that while the smoother is very similar to the one used in :doc:`stokes.py`, for the coarse correction we are here using h-multigrid and not p-multigrid. ::
 
    def VertexStarPatchBlocks(mesh, fes):
