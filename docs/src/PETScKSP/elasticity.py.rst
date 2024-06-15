@@ -7,7 +7,7 @@ We begin by creating a discretisation for the weak formulation of linear elastic
 
 .. math::
 
-   \text{find } \vec{u}\in [H^1_0(\Omega)]^d \text{ s.t. } a(u,v) := 2\mu \int_{\Omega} \eps(\vec{u}) : eps(\vec{v}) \; d\vec{x} + \lambda \int_\Omega (\nabla \cdot \vec{u})\; d\vec{x} = L(v) := \int_{\Omega} fv\; d\vec{x}\qquad \vec{v}\in [H^1_0(\Omega)]^d.
+   \text{find } \vec{u}\in [H^1_0(\Omega)]^d \text{ s.t. } a(u,v) := 2\mu \int_{\Omega} \epsilon(\vec{u}) : \epsilon(\vec{v}) \; d\vec{x} + \lambda \int_\Omega (\nabla \cdot \vec{u})\; d\vec{x} = L(v) := \int_{\Omega} fv\; d\vec{x}\qquad \vec{v}\in [H^1_0(\Omega)]^d.
 
 Such a discretisation can easily be constructed using NGSolve as follows: ::
 
