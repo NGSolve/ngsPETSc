@@ -37,7 +37,10 @@ def createFromMatrix(a, freeDofs, solverParameters):
         else:
             dofs = None
         mat = Matrix(a, (dofs, freeDofs, None), solverParameters["ngs_mat_type"])
-    return (a, mat.mat)
+        pscMat = mat.mat
+    elif solverParameters["ngs_mat_type"] == "python":
+        _, pscMat = createFromAction(a, freeDofs, solverParameters)
+    return (a, pscMat)
 
 def createFromPC(a, freeDofs, solverParameters):
     class Wrap(object):
@@ -72,9 +75,12 @@ def createFromPC(a, freeDofs, solverParameters):
 
 def createFromAction(a, freeDofs, solverParameters):
     class Wrap(object):
-        def __init__(self, a, freeDofs):
+        def __init__(self, a, dofs, freeDofs, comm):
             self.a = a
-            self.mapping = VectorMapping((None,freeDofs,{"bsize": [1]}))
+            self.dofs = dofs
+            self.freeDofs = freeDofs
+            self.comm = comm
+            self.mapping = VectorMapping((dofs,freeDofs,{"bsize": (1,1)}))
             self.ngX = a.CreateColVector()
             self.ngY = a.CreateColVector()
 
@@ -83,9 +89,20 @@ def createFromAction(a, freeDofs, solverParameters):
             self.a.Mult(self.ngX, self.ngY)
             self.mapping.petscVec(self.ngY, Y)
 
-    pythonA = Wrap(a, freeDofs)
-    pscA = PETSc.Mat().create(comm=PETSc.COMM_SELF)
-    pscA.setSizes([sum(freeDofs), sum(freeDofs)])
+    if hasattr(a, "row_pardofs"):
+        dofs = a.row_pardofs
+        comm = dofs.comm.mpi4py
+        entrysize = a.local_mat.entrysizes[0]
+    else:
+        dofs = None
+        comm = PETSc.COMM_SELF
+        entrysize = 1
+    _, rnumberGlobal = dofs.EnumerateGlobally(freeDofs) #samrc
+    pythonA = Wrap(a, dofs, freeDofs, comm)
+    pscA = PETSc.Mat().create(comm=comm)
+    print(comm.Get_rank(),sum(freeDofs))
+    pscA.setSizes(size=(rnumberGlobal*entrysize,
+                        rnumberGlobal*entrysize), bsize=entrysize)
     pscA.setType("python")
     pscA.setPythonContext(pythonA)
     pscA.setUp()
@@ -168,14 +185,16 @@ class KrylovSolver():
         self.ksp.setFromOptions()
         self.pscX, self.pscB = pscA.createVecs()
 
-    def solve(self, b, x):
+    def solve(self, b, x, mapping=None):
         """
         This function solves the linear system
 
         :arg b: right hand side of the linear system
         :arg x: solution of the linear system
         """
-        self.mapping.petscVec(x, self.pscX)
-        self.mapping.petscVec(b, self.pscB)
+        if mapping is None:
+            mapping = self.mapping
+        mapping.petscVec(x, self.pscX)
+        mapping.petscVec(b, self.pscB)
         self.ksp.solve(self.pscB, self.pscX)
-        self.mapping.ngsVec(self.pscX, x)
+        mapping.ngsVec(self.pscX, x)
