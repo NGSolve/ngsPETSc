@@ -45,6 +45,13 @@ Welcome to ngsPETSc's documentation!
 
    SLEPcEPS/poisson.py
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Firedrake
+
+   utils/firedrake/lomesh.py
+   utils/firedrake/homesh.py
+
 Indices and tables
 ==================
 

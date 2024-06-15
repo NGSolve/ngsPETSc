@@ -91,4 +91,9 @@ We compare the performance of the `PETSc SNES` solvers and the one of `NGSolve` 
    * - PETSc SNES
      - 10
 
-This suggests that while NGS non-linear solver when finely tuned performs as well as PETSc SNES, it is more sensitive to the choice of the damping factor. In this case, a damping factor of 0.3 was found to be the best choice.
+This suggests that while NGSolve's non-linear solver when finely tuned performs as well as PETSc SNES, it is more sensitive to the choice of the damping factor. In this case, a damping factor of 0.3 was found to be the best choice.
+
+.. video:: ./twistedBeam.mp4
+    :width: 600
+    :height: 400
+    :loop:

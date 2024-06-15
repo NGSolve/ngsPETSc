@@ -20,7 +20,7 @@ release = '0.0.5'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ['sphinx.ext.autodoc', 'sphinx_autodoc_typehints',"sphinx.ext.mathjax","sphinx.ext.todo",
+extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.video', 'sphinx_autodoc_typehints',"sphinx.ext.mathjax","sphinx.ext.todo",
               "IPython.sphinxext.ipython_console_highlighting", "IPython.sphinxext.ipython_directive",
               "nbsphinx", 'sphinx.ext.autodoc', "autoapi.extension"]
 autosummary_generate = True  # Turn on sphinx.ext.autosummary]

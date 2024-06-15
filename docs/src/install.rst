@@ -89,7 +89,7 @@ We are now fianlly ready to install ngsPETSc:
 Authors
 ----------
 
-Stefano Zampini, Umberto Zerbinati
+Patrick E. Farrell, Stefano Zampini, Umberto Zerbinati
 
 License
 ---------------
