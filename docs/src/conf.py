@@ -24,7 +24,7 @@ extensions = ['sphinx.ext.autodoc', 'sphinx_autodoc_typehints',"sphinx.ext.mathj
               "IPython.sphinxext.ipython_console_highlighting", "IPython.sphinxext.ipython_directive",
               "nbsphinx", 'sphinx.ext.autodoc', "autoapi.extension"]
 autosummary_generate = True  # Turn on sphinx.ext.autosummary]
-autoapi_dirs = ['../../../ngsPETSc']
+autoapi_dirs = ['../../ngsPETSc']
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 mathjax3_config = {'chtml': {'displayAlign': 'left'}}
