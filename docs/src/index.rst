@@ -13,6 +13,12 @@ Welcome to ngsPETSc's documentation!
    install
 
 .. toctree::
+   maxdepth: 1
+   :caption: PETSc Vec and PETSc Mat
+
+   PETScBasic/pinvt.py
+
+.. toctree::
    :maxdepth: 1
    :caption: PETSc KSP
 
@@ -37,8 +43,10 @@ Welcome to ngsPETSc's documentation!
    :caption: SLEPc EPS
 
    SLEPcEPS/poisson.py
-   
 
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
 
 Indices and tables
 ==================

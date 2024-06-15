@@ -22,7 +22,8 @@ release = '0.0.5'
 
 extensions = ['sphinx.ext.autodoc', 'sphinx_autodoc_typehints', 'jupyter_sphinx.execute',"sphinx.ext.mathjax","sphinx.ext.todo",
               "IPython.sphinxext.ipython_console_highlighting", "IPython.sphinxext.ipython_directive",
-              "nbsphinx"]
+              "nbsphinx", 'sphinx.ext.autodoc']
+autosummary_generate = True  # Turn on sphinx.ext.autosummary]
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
