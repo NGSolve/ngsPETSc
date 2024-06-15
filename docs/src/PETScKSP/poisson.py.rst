@@ -51,7 +51,7 @@ Let us discuss the solver options, i.e. the flag :code:`ksp_type` set to :code:`
     Draw(gfu)
 
 We can also use an interative solver with an incomplete LU factorisation as a preconditioner.
-We have now switched to an interative solver setting the :code:`ksp_type` flag to :cdode:`cg`, while we enforce the use of an incomplete LU using once again the flag :code:`pc_type`.
+We have now switched to an interative solver setting the :code:`ksp_type` flag to :code:`cg`, while we enforce the use of an incomplete LU using once again the flag :code:`pc_type`.
 We have also added the flag :code:`ksp_monitor` to view the residual at each linear iteration. ::
 
     if COMM_WORLD.Get_size() == 1:
