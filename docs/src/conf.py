@@ -15,18 +15,19 @@ os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', 
 project = 'ngsPETSc'
 copyright = '2023, Umberto Zerbinati'
 author = 'Umberto Zerbinati'
-release = '0.0.1'
+release = '0.0.5'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ['sphinx.ext.autodoc', 'sphinx_autodoc_typehints', 'jupyter_sphinx.execute',"sphinx.ext.mathjax","sphinx.ext.todo",
+extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.video', 'sphinx_autodoc_typehints',"sphinx.ext.mathjax","sphinx.ext.todo",
               "IPython.sphinxext.ipython_console_highlighting", "IPython.sphinxext.ipython_directive",
-              "nbsphinx"]
-
+              "nbsphinx", 'sphinx.ext.autodoc', "autoapi.extension"]
+autosummary_generate = True  # Turn on sphinx.ext.autosummary]
+autoapi_dirs = ['../../ngsPETSc']
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
-
+mathjax3_config = {'chtml': {'displayAlign': 'left'}}
 html_sourcelink_suffix = ''
 nbsphinx_prolog = r"""
 {% set docname = env.doc2path(env.docname, base='').replace('i-tutorials/', '') %}

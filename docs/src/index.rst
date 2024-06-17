@@ -7,12 +7,51 @@ Welcome to ngsPETSc's documentation!
 ====================================
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 1
+   :caption: Getting Started
    
-   ngsPETSc
-   Tutorials
+   install
+   autoapi/ngsPETSc/index
 
+.. toctree::
+   maxdepth: 1
+   :caption: PETSc Vec and PETSc Mat
+
+   PETScBasic/pinvt.py
+
+.. toctree::
+   :maxdepth: 1
+   :caption: PETSc KSP
+
+   PETScKSP/poisson.py
+   PETScKSP/elasticity.py
+
+.. toctree::
+   :maxdepth: 1
+   :caption: PETSc PC
+
+   PETScPC/poisson.py
+   PETScPC/stokes.py
+   PETScPC/oseen.py
+
+.. toctree::
+   :maxdepth: 1
+   :caption: PETSc SNES
+
+   PETScSNES/hyperelasticity.py
+
+.. toctree::
+   :maxdepth: 1
+   :caption: SLEPc EPS
+
+   SLEPcEPS/poisson.py
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Firedrake
+
+   utils/firedrake/lomesh.py
+   utils/firedrake/homesh.py
 
 Indices and tables
 ==================

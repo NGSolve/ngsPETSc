@@ -80,6 +80,8 @@ sphinxcontrib-jquery
 sphinxcontrib-jsmath
 sphinxcontrib-qthelp
 sphinxcontrib-serializinghtml
+sphinx-autoapi
+sphinxcontrib-video
 stack-data==0.6.2
 tbb==2021.9.0
 tinycss2==1.2.1
