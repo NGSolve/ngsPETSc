@@ -126,7 +126,7 @@ Notice that while the smoother is very similar to the one used in :doc:`stokes.p
    :widths: auto
    :header-rows: 1
 
-   * - Rayleigh number
+   * - Raynolds number
      - 1e-2
      - 1e-3
      - 1e-4
