@@ -21,7 +21,7 @@ class TimeStepper:
         jacobianMatType = solverParameters["ngs_jacobian_mat_type"]
         self.ts = PETSc.TS().create(comm=dofs.comm.mpi4py)
         #Deafult TS setup
-        self.ts.setExactFinalTime(2)
+        self.ts.setExactFinalTime(3)
         self.ts.setMaxSNESFailures(-1)
         #Setting up the options
         options_object = PETSc.Options()
@@ -38,7 +38,6 @@ class TimeStepper:
                 f = GridFunction(self.fes)
                 a = BilinearForm(self.fes)
                 a += self.G
-                a.Assemble()
                 a.Apply(x.vec, f.vec)
                 return f
             self.rhs = rhs
@@ -46,10 +45,9 @@ class TimeStepper:
             def residual(t, x, xdot): #pylint: disable=E0102, E0213
                 res = GridFunction(self.fes)
                 self.t.Set(t)
-                updatedF = F.Replace({self.trial.dt: xdot})
+                updatedF = self.F.Replace({self.trial.dt: xdot})
                 a = BilinearForm(self.fes)
                 a += updatedF
-                a.Assemble()
                 a.Apply(x.vec, res.vec)
                 return  res
             self.residual = residual
@@ -62,13 +60,13 @@ class TimeStepper:
         elif F is not None:
             def jacobian(x, t, xdot): #pylint: disable=E0102,E0213
                 self.t.Set(t)
-                updatedF = F.Replace({self.trial.dt: xdot})
+                updatedF = self.F.Replace({self.trial.dt: xdot})
                 a = BilinearForm(self.fes)
                 a += updatedF
                 a.AssembleLinearization(x.vec)
                 return a.mat
             self.jacobian = jacobian
-            self.second_order = True
+            self.second_order = False
             self.jacobianMatType = jacobianMatType
         else:
             raise ValueError("You need to provide a jacobian function or a variational form F.")
@@ -91,10 +89,14 @@ class TimeStepper:
             self.ts.setRHSFunction(self.petscRhs, pEVec)
         if self.F is not None:
             self.ts.setIFunction(self.petscResidual, pIVec)
+        if self.second_order:
+            pIMat = PETSc.Mat().createConstantDiagonal(self.fes.ndof, 0.0)
+            self.ts.setIJacobian(self.petscJacobian, pIMat)
         self.ts.setTime(self.t0)
         self.ts.setTimeStep(self.dt)
         self.ts.setMaxTime(self.tf)
-        self.ts.setMaxSteps(int((self.tf-self.t0)/self.dt)+1)
+        self.ts.setMaxSteps(int((self.tf-self.t0)/self.dt))
+
         
     def solve(self, x0):
         pscx0 = self.vectorMapping.petscVec(x0.vec)
@@ -148,7 +150,7 @@ class TimeStepper:
         ngsGridFuction = self.residual(t, ngsGridFuction, ngsGridFuctionDot)
         self.vectorMapping.petscVec(ngsGridFuction.vec, petscVec=f)
 
-    def residual(t, x): #pylint: disable=E0102,E0213,E0202
+    def residual(t, x, xdot): #pylint: disable=E0102,E0213,E0202
         '''
         Callback to the residual of the non-linear problem
         
@@ -160,6 +162,7 @@ class TimeStepper:
 
          
     def petscJacobian(self, ts, t, x, xdot, a, J,P):
+        #TODO: We are not using a!
         '''
         This is method is used to wrap the callback to the Jacobian in
         a PETSc compatible way
@@ -175,12 +178,14 @@ class TimeStepper:
         '''
         assert isinstance(ts,PETSc.TS)
         ngsGridFuction = GridFunction(self.fes)
+        ngsGridFuctionDot = GridFunction(self.fes)
         self.vectorMapping.ngsVec(x, ngsVec=ngsGridFuction.vec)
-        mat = self.jacobian(ngsGridFuction, t, xdot)
+        self.vectorMapping.ngsVec(xdot, ngsVec=ngsGridFuctionDot.vec)
+        mat = self.jacobian(ngsGridFuction, t, ngsGridFuctionDot)
         Matrix(mat,self.fes, petscMat=P, matType=self.jacobianMatType)
         Matrix(mat,self.fes, petscMat=J, matType=self.jacobianMatType)
 
-    def jacobian(x): #pylint: disable=E0102,E0213,E0202
+    def jacobian(t, x, xdot): #pylint: disable=E0102,E0213,E0202
         '''
         Callback to the Jacobian of the non-linear problem
         

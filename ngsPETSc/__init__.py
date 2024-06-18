@@ -42,8 +42,10 @@ if ngsolve:
     from ngsPETSc.ksp import *
     from ngsPETSc.snes import *
     from ngsPETSc.eps import *
+    from ngsPETSc.ts import *
     __all__ = __all__ + ["Matrix","VectorMapping","MeshMapping",
                          "KrylovSolver","EigenSolver","NullSpace",
-                         "PETScPreconditioner", "NonLinearSolver"]
+                         "PETScPreconditioner", "NonLinearSolver",
+                         "TimeStepper"]
 
 VERSION = "0.0.5"
