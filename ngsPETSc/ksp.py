@@ -4,7 +4,7 @@ system solver (KSP) interface for NGSolve
 '''
 from petsc4py import PETSc
 
-from ngsolve import la, GridFunction, BaseMatrix
+from ngsolve import la, GridFunction, BaseMatrix, BilinearForm
 
 from ngsPETSc import Matrix, VectorMapping
 
@@ -25,9 +25,15 @@ class KrylovSolver():
     :arg optionsPrefix: special solver options prefix for this specific Krylov solver
 
     """
-    def __init__(self, a, fes, p=None, solverParameters=None, optionsPrefix=None, nullspace=None):
-        a.Assemble()
-        Amat = a.mat
+    def __init__(self, a, fes, p=None, solverParameters=None, optionsPrefix=None, nullspace=None): 
+        if isinstance(BilinearForm):
+            a.Assemble()
+            Amat = a.mat
+        elif isinstance(a, (la.SparseMatrixd, la.ParallelMatrix)):
+            Amat = a
+        else:
+            raise TypeError("Provided operator is a '%s', and this is not supported."
+                            % type(a).__name__)
         if p is not None:
             p.Assemble()
             Pmat = p.mat
