@@ -4,7 +4,7 @@ system solver (KSP) interface for NGSolve
 '''
 from petsc4py import PETSc
 
-from ngsolve import la, GridFunction
+from ngsolve import la, GridFunction, BaseMatrix
 
 from ngsPETSc import Matrix, VectorMapping
 
@@ -45,7 +45,7 @@ class KrylovSolver():
             for optName, optValue in solverParameters.items():
                 options_object[optName] = optValue
 
-	#Creating the PETSc Matrix
+        #Creating the PETSc Matrix
         A = Matrix(Amat, fes).mat
         A.setOptionsPrefix(optionsPrefix)
         A.setFromOptions()
@@ -90,3 +90,44 @@ class KrylovSolver():
 
         '''
         self.ksp.view()
+
+    def asOperator(self, ngsMat):
+        return self.Operator(self.ksp, ngsMat)
+
+    class Operator(BaseMatrix):
+        def __init__(self, ksp, ngsMat):
+            self.ksp = ksp
+            self.ngsMat = ngsMat
+        def Shape(self):
+            '''
+            Shape of the BaseMatrix
+
+            '''
+            return self.ngsMat.shape 
+
+        def CreateVector(self,col):
+            '''
+            Create vector corresponding to the matrix
+
+            :arg col: True if one want a column vector
+
+            '''
+            return self.ngsMat.CreateVector(not col)
+
+        def Mult(self,x,y):
+            '''
+            BaseMatrix multiplication Ax = y
+            :arg x: vector we are multiplying
+            :arg y: vector we are storeing the result in
+
+            '''
+            self.ksp.solve(x,y)
+
+        def MultTrans(self,x,y):
+            '''
+            BaseMatrix multiplication A^T x = y
+            :arg x: vector we are multiplying
+            :arg y: vector we are storeing the result in
+
+            '''
+            raise NotImplementedError("Transpose multiplication not implemented")
