@@ -235,6 +235,9 @@ class KrylovSolver():
         self.ksp.setFromOptions()
         self.pscX, self.pscB = pscA.createVecs()
 
+        #Attaching operator
+        self.ngsA = ngsA
+
     def solve(self, b, x, mapping=None):
         """
         This function solves the linear system
@@ -248,3 +251,38 @@ class KrylovSolver():
         mapping.petscVec(b, self.pscB)
         self.ksp.solve(self.pscB, self.pscX)
         mapping.ngsVec(self.pscX, x)
+    
+    def operator(self):
+        """
+        This function returns the operator of the KSP solver
+        """
+        return KSPOpeator(self)
+
+class KSPOpeator(la.BaseMatrix):
+    """
+    This class wraps a PETSc KSP solver as an NGSolve matrix
+    """
+    def __init__(self, ksp):
+        self.ksp = ksp
+
+    def Shape(self):
+        '''
+        Shape of the BaseMatrix
+
+        '''
+        return self.ksp.ngsA.shape
+
+    def CreateVector(self,col):
+        '''
+        Create vector corresponding to the matrix
+
+        :arg col: True if one want a column vector
+
+        '''
+        return self.ksp.ngsA.CreateVector(not col)
+
+    def Mult(self, x, y):
+        """
+        Matrix-vector product
+        """
+        self.ksp.solve(x, y)
