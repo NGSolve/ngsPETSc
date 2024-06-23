@@ -57,7 +57,10 @@ def createFromPC(a, freeDofs, solverParameters):
             self.mapping = VectorMapping((dofs,freeDofs,{"bsize": [1]}))
             self.ngX = a.CreateColVector()
             self.ngY = a.CreateColVector()
-            self.prj = Projector(mask=a.actingDofs, range=True)
+            if hasattr(a, "actingDofs"):
+                self.prj = Projector(mask=a.actingDofs, range=True)
+            else:
+                self.prj = Projector(mask=freeDofs, range=True)
 
         def mult(self, mat, X, Y): #pylint: disable=W0613
             """
@@ -263,6 +266,7 @@ class KSPOpeator(la.BaseMatrix):
     This class wraps a PETSc KSP solver as an NGSolve matrix
     """
     def __init__(self, ksp):
+        la.BaseMatrix.__init__(self)
         self.ksp = ksp
 
     def Shape(self):
