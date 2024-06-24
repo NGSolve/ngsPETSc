@@ -16,10 +16,7 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
    import numpy as np
    from mpi4py.MPI import COMM_WORLD
 
-   if COMM_WORLD.rank == 0:
-      mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
-   else:
-      mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
+   mesh = Mesh(unit_square.GenerateMesh(maxh=0.1, comm=COMM_WORLD))
 
    order = 3
    fes = H1(mesh, order=order, dirichlet="left|right|top|bottom")
@@ -73,7 +70,7 @@ We can discretise this problem using NGSolve as follows: ::
    m = BilinearForm(1*u*v*dx)
    m.Assemble()
 
-We can then solve the eigenvalue problem using `SLEPc EPS` using ngsPETSc's `EigenSolver` class.
+We can then solve the eigenvalue problem using ngsPETSc's `EigenSolver` class.
 The mass matrix now has a large kernel, hence is no longer symmetric positive definite, therefore we can not use LOBPCG as a solver.
 Instead, we will use a Krylov-Schur solver with a shift-and-invert spectral transformation to target the smallest eigenvalues.
 Notice that because we are using a shift-and-invert spectral transformation we only need to invert the stiffness matrix which has a trivial kernel since we are using an inf-sup discretisation.

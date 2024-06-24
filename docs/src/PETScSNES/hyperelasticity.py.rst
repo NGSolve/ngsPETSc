@@ -8,7 +8,7 @@ We here consider a simple beam with a hyperelastic material model. In particular
     E(u) := \int_{\Omega} \frac{\mu}{2} tr(\mathbb{C}-I)+ \frac{2\mu}{\lambda} \det(\mathbb{C})^{-\frac{\lambda}{2\mu}-1}\, dx + \int_{\partial \Omega} \vec{f} \cdot \vec{u} \, ds
 
 where :math:`\mathbb{C} = F^T F` is the right Cauchy-Green tensor, :math:`F` is the deformation gradient, :math:`\mu` and :math:`\lambda` are the Lamé parameters, and :math:`\vec{f}` is the force applied to the top face of the beam.
-A discretization of this energy leads to a non-linear problem that we solve using `PETSc SNES`. ::
+A simple discretisation of this energy leads to a non-linear problem that we solve using `PETSc SNES`. ::
 
     from ngsolve import *
     import netgen.gui
@@ -43,7 +43,7 @@ A discretization of this energy leads to a non-linear problem that we solve usin
     fes = H1(mesh, order=3, dirichlet="bottom", dim=mesh.dim)
     u,v = fes.TnT()
 
-    a = BilinearForm(fes, symmetric=True)
+    a = BilinearForm(fes)
     a += Variation(NeoHooke(C(u)).Compile()*dx)
     a += ((Id(3)+Grad(u.Trace()))*force)*v*ds("top")
 
@@ -74,7 +74,7 @@ In particular, we will use a Newton method with line search, and precondition th
         gfu_history_ngs.AddMultiDimComponent(gfu_ngs.vec)
         gfu_history_petsc.AddMultiDimComponent(gfu_petsc.vec)
 
-We compare the performance of the `PETSc SNES` solvers and the one of `NGSolve` own implementation of Newton's method:
+We compare the performance of the `PETSc SNES` solvers and of `NGSolve` own implementation of Newton's method:
 
 .. list-table:: Performance of different non-linear solvers
    :widths: auto
