@@ -228,7 +228,7 @@ class FiredrakeMesh:
         else:
             raise ValueError("Mesh format not recognised.")
 
-    def createFromTopology(self, topology, name):
+    def createFromTopology(self, topology, name, comm):
         '''
         Internal method to construct a mesh from a mesh topology, copied from Firedrake.
 
@@ -242,7 +242,7 @@ class FiredrakeMesh:
         cell = cell.reconstruct(geometric_dimension=geometric_dim)
         element = fd.VectorElement("Lagrange", cell, 1)
         # Create mesh object
-        self.firedrakeMesh = fd.MeshGeometry.__new__(fd.MeshGeometry, element)
+        self.firedrakeMesh = fd.MeshGeometry.__new__(fd.MeshGeometry, element, comm)
         self.firedrakeMesh._init_topology(topology)
         self.firedrakeMesh.name = name
         # Adding Netgen mesh and inverse sfBC as attributes
