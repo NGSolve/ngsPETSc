@@ -83,14 +83,14 @@ The Schur complement preconditioner converges in a few iterations, but it is not
    * - Schur complement
      - 4 (9.15e-14)
 
-Notice that the Schur complement is dense hence inverting it is not a good idea. Not only that but to perform the inversion of the Schur complement we had to write a lot of "boilerplate" code.
+In fact, the Schur complement is dense hence inverting it is not a good idea. Furthermore, to perform the inversion of the Schur complement we had to write a lot of "boilerplate" code.
 Since our discretization is inf-sup stable it is possible to prove that the mass matrix of the pressure space is spectrally equivalent to the Schur complement.
 This means that we can use the mass matrix of the pressure space as a preconditioner for the Schur complement.
 Notice that we still need to invert the mass matrix and we will do so using a `PETSc PC` of type Jacobi, which is the exact inverse since we are using `P0` elements.
 We will also invert the Laplacian block using a `PETSc PC` of type `LU`. ::
 
    m = BilinearForm((1/nu)*p*q*dx).Assemble()
-   mpre = Preconditioner(m, "PETScPC", pc_type="lu")
+   mpre = Preconditioner(m, "PETScPC", pc_type="jacobi")
    apre = a.mat.Inverse(V.FreeDofs())
    C = BlockMatrix( [ [apre, None], [None, mpre] ] )
 
@@ -158,7 +158,7 @@ We can also construct a multi-grid preconditioner for the top left block of the 
    * - Mass & Two Level Additive Schwarz
      - 100 (4.68e-06)
    
-The mass matrix as a preconditioner doesn't seem to be ideal, in fact, our Krylov solver took many iterations to converge with a direct LU factorization of the velocity block and did not converge at all with `HYPRE`.
+The preconditioner constructed so far doesn't seem to be ideal, in fact, our Krylov solver took many iterations to converge with a direct LU factorization of the velocity block and did not converge at all with `HYPRE`.
 To resolve this issue we resort to an augmented Lagrangian formulation, i.e.
 
 .. math::
@@ -188,7 +188,7 @@ This formulation can easily be constructed in NGSolve, as follows: ::
                    printrates=True, initialize=False)
    Draw(gfu)
 
-Using an augmented Lagrangian formulation, we were able to converge in only two iterations.
+Using an augmented Lagrangian formulation and a direct inversion of the velocity block, we were able to converge in only two iterations.
 This is because the augmented Lagrangian formulation improves the spectral equivalence between the mass matrix of the pressure space and the Schur complement.
  
 .. list-table:: Preconditioners performance
@@ -207,7 +207,7 @@ This is because the augmented Lagrangian formulation improves the spectral equiv
      - 2 (9.24e-8)
 
 Notice that so far we have been inverting the matrix corresponding to the Laplacian block using a direct LU factorization.
-This is not ideal for large problems, and we can use a `Hypre` preconditioner for the Laplacian block. ::
+This is not ideal for large problems, and we can try to use a `Hypre` preconditioner for the Laplacian block. ::
 
    smoother = aG.mat.CreateBlockSmoother(blocks)
    preHG = PETScPreconditioner(aG.mat, vertexdofs, solverParameters={"pc_type":"hypre"})
@@ -220,7 +220,6 @@ This is not ideal for large problems, and we can use a `Hypre` preconditioner fo
                    printrates=True, initialize=False)
    Draw(gfu)
 
-Our first attempt at using a `HYPRE` preconditioner for the Laplacian block did not converge.
 
 .. list-table:: Preconditioners performance
    :widths: auto
@@ -239,6 +238,8 @@ Our first attempt at using a `HYPRE` preconditioner for the Laplacian block did 
    * - Augmented Two Level Additive Schwarz
      - 100 (1.06e-03)
 
+
+Our first attempt at using a `HYPRE` preconditioner for the Laplacian block did not converge.
 This is because the top left block of the saddle point problem now contains the augmentation term, which has a very large kernel.
 It is well known that algebraic multi-grid methods do not work well with indefinite problems, and this is what we are observing here.
 We begin by constructing the augmented Lagrangian formulation in more numerical linear algebra terms, i.e. 
@@ -289,7 +290,7 @@ Since the augmentation block has a lower rank than the Laplacian block, we can u
    (A + B^T(\gamma M^{-1})B)^{-1} = A^{-1} - A^{-1}B^T(\frac{1}{\gamma}M^{-1} + BA^{-1}B^T)^{-1}BA^{-1}
 
 We will do this in two different ways first we will invert the :math:`(\frac{1}{\gamma}M^{-1} + BA^{-1}B^T)` block using a direct LU factorization.
-Then we will notice that since the penalisation parameter is large we can ignore the :math:`\frac{1}{\gamma}M^{-1}` term and use the mass matrix since it is spectrally to the Schur complement. ::
+Then we will notice that since the penalisation parameter is large we can ignore the :math:`\frac{1}{\gamma}M^{-1}` term and use the mass matrix since it is spectrally equivalent to the Schur complement. ::
 
    SM = (d.mat + b.mat@apre@b.mat.T).ToDense().NumPy()
    SM = coo_matrix(SM)
@@ -323,7 +324,7 @@ Then we will notice that since the penalisation parameter is large we can ignore
                    printrates=True, initialize=False)
    Draw(gfu)
 
-We see that a purely algebraic approach based on the Sherman-Morrisson-Woodbory formula is more efficient for the augmented Lagrangian formulation, then a naive two-level additive Schwarz approach.
+We see that a purely algebraic approach based on the Sherman-Morrisson-Woodbory formula is more efficient for the augmented Lagrangian formulation than a naive two-level additive Schwarz approach.
 
 .. list-table:: Preconditioners performance
    :widths: auto
