@@ -254,7 +254,7 @@ class KrylovSolver():
         mapping.petscVec(b, self.pscB)
         self.ksp.solve(self.pscB, self.pscX)
         mapping.ngsVec(self.pscX, x)
-    
+
     def operator(self):
         """
         This function returns the operator of the KSP solver

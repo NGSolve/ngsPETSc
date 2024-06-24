@@ -7,8 +7,14 @@ from ngsolve import GridFunction, BilinearForm
 from ngsPETSc import VectorMapping, Matrix
 
 class TimeStepper:
-
-    def __init__(self, fes, info, G=None, F=None, residual=None, jacobian=None, solverParameters=None, optionsPrefix=None):
+    """
+    This class wraps the PETSc TS time-stepping routines.
+    NOTE: Still a work in progress, need to add the connection with the
+          mass matrix for explicit time-stepping schemes and compute the
+          Jacobian using the variational form F.
+    """
+    def __init__(self, fes, info, G=None, F=None, residual=None,
+                 jacobian=None, solverParameters=None, optionsPrefix=None):
         self.fes = fes
         dofs = fes.ParallelDofs()
         self.second_order = False
@@ -97,8 +103,11 @@ class TimeStepper:
         self.ts.setMaxTime(self.tf)
         self.ts.setMaxSteps(int((self.tf-self.t0)/self.dt))
 
-        
     def solve(self, x0):
+        """
+        This method is used to solve the time-stepping problem
+        :arg x0: initial data as an NGSolve grid function
+        """
         pscx0 = self.vectorMapping.petscVec(x0.vec)
         self.ts.solve(pscx0)
         self.vectorMapping.ngsVec(pscx0, ngsVec=x0.vec)
@@ -160,9 +169,7 @@ class TimeStepper:
         '''
         raise NotImplementedError("No residual has been implemented yet.")
 
-         
-    def petscJacobian(self, ts, t, x, xdot, a, J,P):
-        #TODO: We are not using a!
+    def petscJacobian(self, ts, t, x, xdot, a, J,P): #pylint: disable=W0613
         '''
         This is method is used to wrap the callback to the Jacobian in
         a PETSc compatible way
