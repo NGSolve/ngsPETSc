@@ -141,3 +141,24 @@ We now implement the iteration itself: ::
             pc.apply(u,w)
             alpha = stepChoice(A.mat,M.mat,w,u0)
             u0 = alpha[0]*u0+alpha[1]*w
+
+
+.. list-table:: PINVIT Iterations
+   :widths: auto
+   :header-rows: 1
+   
+
+   * - Iteration
+     - 1
+     - 2
+     - 3
+     - 4
+     - 5
+     - 6
+   * - Eigenvalue
+     - 7.187387
+     - 2.172190
+     - 2.133502
+     - 2.131257
+     - 2.130477
+     - 2.130475

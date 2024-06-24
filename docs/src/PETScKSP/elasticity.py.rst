@@ -3,23 +3,20 @@ Solving linear elasticity with a near nullspace
 
 In this tutorial, we explore a linear elasticity discretisation.
 As we did in :doc:`poisson.py`, we will solve the linear system originating from the discretization using a `PETSc KSP`.
-We begin by creating a discretisation for the weak formulation of linear elasticity with Lame coefficients :math:`\mu` and :math:`\lambda`, i.e. 
+We begin by creating a discretisation for the weak formulation of linear elasticity with Lame coefficients :math:`\mu` and :math:`\lambda`, i.e. find :math:`\vec{u}\in [H^1_0(\Omega)]^d` such that
 
 .. math::
 
-   \text{find } \vec{u}\in [H^1_0(\Omega)]^d \text{ s.t. } a(u,v) := 2\mu \int_{\Omega} \epsilon(\vec{u}) : \epsilon(\vec{v}) \; d\vec{x} + \lambda \int_\Omega (\nabla \cdot \vec{u})\; d\vec{x} = L(v) := \int_{\Omega} fv\; d\vec{x}\qquad \vec{v}\in [H^1_0(\Omega)]^d.
+   \vec{u}\in [H^1_0(\Omega)]^d \text{ s.t. } a(u,v) := 2\mu \int_{\Omega} \epsilon(\vec{u}) : \epsilon(\vec{v}) \; d\vec{x} + \lambda \int_\Omega (\nabla \cdot \vec{u})\; d\vec{x} = L(v) := \int_{\Omega} fv\; d\vec{x}\qquad \vec{v}\in [H^1_0(\Omega)]^d.
 
-Such a discretisation can easily be constructed using NGSolve as follows: ::
+We can easily discretise this problem using NGSolve: ::
 
    from ngsolve import *
    import netgen.gui
    import netgen.meshing as ngm
    from mpi4py.MPI import COMM_WORLD
 
-   if COMM_WORLD.rank == 0:
-      mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
-   else:
-      mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
+   mesh = Mesh(unit_square.GenerateMesh(maxh=0.1,comm=COMM_WORLD))
 
    E, nu = 210, 0.2
    mu  = E / 2 / (1+nu)
@@ -37,7 +34,7 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
    force = CF( (0,1) )
    f = LinearForm(force*v*ds("right")).Assemble()
 
-We begin solving the linear system using `PETSc GAMG` as a preconditioner. ::
+We begin solving the linear system using PETSc own implementation of an algebraic multigrid preconditioner. ::
 
    from ngsPETSc import KrylovSolver
    opts = {'ksp_type': 'cg',
@@ -57,7 +54,7 @@ We begin solving the linear system using `PETSc GAMG` as a preconditioner. ::
    * - PETSc GAMG
      - 19 (6.27e-08)
 
-To improve the performance of `HYPRE` can now construct a null space made of the rigid body motions as follows.
+To improve the performance of `PETSc GAMG` we begin constructing a null space composed of the rigid body motions.
 Using the :code:`near` flag we tell `PETSc KSP` to pass the nullspace as a near nullspace to `PETSc GAMG`. ::
 
    from ngsPETSc import NullSpace
