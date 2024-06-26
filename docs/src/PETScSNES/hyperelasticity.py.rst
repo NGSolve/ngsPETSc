@@ -1,7 +1,7 @@
 Non-linear simulation of a Hyperelastic beam
 =============================================
 
-We here consider a simple beam with a hyperelastic material model. In particular, we will assume the beam has energy:
+We consider a simple beam with a hyperelastic material model. In particular, we will assume the beam has energy:
 
 .. math::
 
@@ -24,7 +24,7 @@ A simple discretisation of this energy leads to a non-linear problem that we sol
         mesh = Mesh(OCCGeometry(box).GenerateMesh(maxh=0.05).Distribute(COMM_WORLD))
     else:
         mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
-    
+
     E, nu = 210, 0.2
     mu  = E / 2 / (1+nu)
     lam = E * nu / ((1+nu)*(1-2*nu))
@@ -36,7 +36,7 @@ A simple discretisation of this energy leads to a non-linear problem that we sol
     def NeoHooke (C):
         # return 0.5*mu*InnerProduct(C-Id(3), C-Id(3))
         return 0.5*mu*(Trace(C-Id(3)) + 2*mu/lam*Det(C)**(-lam/2/mu)-1)
-    
+
     loadfactor = Parameter(1)
     force = loadfactor * CF ( (-y, x, 0) )
 
@@ -48,7 +48,7 @@ A simple discretisation of this energy leads to a non-linear problem that we sol
     a += ((Id(3)+Grad(u.Trace()))*force)*v*ds("top")
 
 Once we have defined the energy and the weak form, we can solve the non-linear problem using `PETSc SNES`.
-In particular, we will use a Newton method with line search, and precondition the linear solves with a direct solver. ::
+In particular, we will use a Newton method with line search, solving the arising linear systems with a direct solver. ::
 
     from ngsPETSc import NonLinearSolver
     gfu_petsc = GridFunction(fes)
@@ -74,7 +74,7 @@ In particular, we will use a Newton method with line search, and precondition th
         gfu_history_ngs.AddMultiDimComponent(gfu_ngs.vec)
         gfu_history_petsc.AddMultiDimComponent(gfu_petsc.vec)
 
-We compare the performance of the `PETSc SNES` solvers and of `NGSolve` own implementation of Newton's method:
+We compare the performance of the `PETSc SNES` solvers and of `NGSolve`'s own implementation of Newton's method:
 
 .. list-table:: Performance of different non-linear solvers
    :widths: auto
