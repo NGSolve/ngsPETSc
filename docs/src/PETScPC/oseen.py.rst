@@ -121,7 +121,7 @@ Notice that while the smoother is very similar to the one used in :doc:`poisson.
    vtk.Do()
 
 
-.. list-table:: Preconditioners performance for different values of the Reynolds number, for a fixed penalty parameter :math:`\gamma=10^8`
+.. list-table:: Preconditioner performance for different values of the Reynolds number, for a fixed penalty parameter :math:`\gamma=10^8`
    :widths: auto
    :header-rows: 1
 
@@ -134,4 +134,3 @@ Notice that while the smoother is very similar to the one used in :doc:`poisson.
      - 3 (7.44e-6)
      - 5 (6.59e-6)
 
-       
