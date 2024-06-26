@@ -1,6 +1,6 @@
 Preconditioned Inverse Iteration for Laplace Eigenvalue Problems
 =================================================================
-We will use the Preconditioned INVerse ITeration (PINVIT) scheme, 
+We will use the Preconditioned INVerse ITeration (PINVIT) scheme,
 developed by `Knyazef and Neymeyr <https://doi.org/10.1016/S0024-3795(00)00239-1>`__,
 to compute the lowest eigenvalues of the Dirichlet Laplacian. We seek
 :math:`(u,\lambda) \in H^1_0(\Omega)\times \mathbb{R}` such that for any
@@ -9,7 +9,7 @@ to compute the lowest eigenvalues of the Dirichlet Laplacian. We seek
    .. math:: \int_\Omega \nabla u \cdot \nabla v \; d\vec{x} = \lambda \int_\Omega uv\;d\vec{x}.
 
 In the process of coding the PINVIT scheme, we will show how to use the :code:`VectorMapping` class to
-map PETSc vectors to NGSolve vectors and vice versa. We will also show how to use the :code:`Matrix` class 
+map PETSc vectors to NGSolve vectors and vice versa. We will also show how to use the :code:`Matrix` class
 to create a PETSc matrix from an NGSolve :code:`BilinearForm`.
 First, we need to construct the distributed mesh for the finite element space discretising the PDE. ::
 
@@ -21,8 +21,8 @@ First, we need to construct the distributed mesh for the finite element space di
 
    mesh = Mesh(unit_square.GenerateMesh(maxh=0.2, comm=COMM_WORLD))
 
-We now proceed to construct a linear polynomial finite element space, with :math:`H^1` conformity, 
-and discretise the mass matrix that represents the :math:`L^2` inner product. We also fetch a 
+We now proceed to construct a linear polynomial finite element space, with :math:`H^1` conformity,
+and discretise the mass matrix that represents the :math:`L^2` inner product. We also fetch a
 compatible vector from the mass matrix. ::
 
    from ngsolve import H1, BilinearForm, dx
@@ -32,10 +32,10 @@ compatible vector from the mass matrix. ::
    M = m.mat
    ngsVec = M.CreateColVector()
 
-We are now ready to create a :code:`VectorMapping`, which will first be used to construct 
+We are now ready to create a :code:`VectorMapping`, which will first be used to construct
 a PETSc vector from the :code:`ngsVec` just initialized.
 The only information that the :code:`VectorMapping` class needs is the finite element space
-associated to the vector :code:`GridFunction`, this because the NGSolve :code:`FESpace` class 
+associated to the vector :code:`GridFunction`. This is because the NGSolve :code:`FESpace` class
 contains information about the way the degrees of freedom are distributed and which degrees of
 freedom are not constrained by the boundary conditions. ::
 
@@ -49,17 +49,17 @@ Once the :code:`Matrix` class has been set up, it is possible to access the corr
 object as :code:`Matrix().mat`. By default, if :code:`COMM_WORLD.GetSize()` is larger than one, 
 :code:`mat` is initialized as a PETSc ``mpiaij`` which is the default sparse parallel matrix in PETSc, 
 otherwise :code:`mat` is initialized as a PETSc ``seqaij`` which is the default serial matrix in PETSc.
-We can also spy inside the matrix using the :code:`Matrix().view()` method. ::
+We can also view the matrix using the :code:`Matrix().view()` method. ::
 
    from ngsPETSc import Matrix
    M = Matrix(m.mat, fes)
    print("Matrix type is {} and it has size {}.".format(M.mat.type,M.mat.size))
    M.view()
 
-There are other matrix formats aveilable. To mention a few:
+There are other matrix formats available. To mention a few:
 
 -  ``dense``, a dense format,
--  ``cusparse``, CUDA sparse format, for NVIDIA GPU.
+-  ``cusparse``, CUDA sparse format, for NVIDIA GPUs.
 -  ``aijmkl``, Intel MKL format.
 
 
