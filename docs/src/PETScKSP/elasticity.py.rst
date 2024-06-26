@@ -2,8 +2,8 @@ Solving linear elasticity with a near nullspace
 ==============================================
 
 In this tutorial, we explore a linear elasticity discretisation.
-As we did in :doc:`poisson.py`, we will solve the linear system originating from the discretization using a `PETSc KSP`.
-We begin by creating a discretisation for the weak formulation of linear elasticity with Lame coefficients :math:`\mu` and :math:`\lambda`, i.e. find :math:`\vec{u}\in [H^1_0(\Omega)]^d` such that
+As we did in :doc:`poisson.py`, we will solve the linear system arising from the discretisation using a `PETSc KSP`.
+We begin by creating a discretisation for the weak formulation of linear elasticity with Lamé coefficients :math:`\mu` and :math:`\lambda`, i.e. find :math:`\vec{u}\in [H^1_0(\Omega)]^d` such that
 
 .. math::
 
@@ -34,7 +34,7 @@ We can easily discretise this problem using NGSolve: ::
    force = CF( (0,1) )
    f = LinearForm(force*v*ds("right")).Assemble()
 
-We begin solving the linear system using PETSc own implementation of an algebraic multigrid preconditioner. ::
+We begin solving the linear system using PETSc's own implementation of an algebraic multigrid preconditioner. ::
 
    from ngsPETSc import KrylovSolver
    opts = {'ksp_type': 'cg',
@@ -54,7 +54,7 @@ We begin solving the linear system using PETSc own implementation of an algebrai
    * - PETSc GAMG
      - 19 (6.27e-08)
 
-To improve the performance of `PETSc GAMG` we begin constructing a null space composed of the rigid body motions.
+To improve the performance of `PETSc GAMG` we pass it the near-null space composed of the rigid body motions.
 Using the :code:`near` flag we tell `PETSc KSP` to pass the nullspace as a near nullspace to `PETSc GAMG`. ::
 
    from ngsPETSc import NullSpace
