@@ -1,9 +1,9 @@
 Vertex Patch smoothing for p-Multigrid preconditioners for the Poisson problem
 ===============================================================================
 
-In this tutorial, we explore using `PETSc PC` as a building block inside NGSolve preconditioning infrastructure.
-Not all the preconditioning strategies are equally effective for the discretizations of the Poisson problem here considered.
-This demo is intended to provide a starting point for the exploration of the preconditioning strategies rather than providing a definitive answer.
+In this tutorial, we explore using `PETSc PC` as a building block inside the NGSolve preconditioning infrastructure.
+Not all the preconditioning strategies are equally effective for the discretisations of the Poisson problem here considered.
+This demo is intended to provide a starting point for the exploration of preconditioning strategies rather than providing a definitive answer.
 We begin by creating a discretisation of the Poisson problem using H1 elements, in particular, we consider the usual variational formulation
 
 .. math::
@@ -34,9 +34,9 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
    a.Assemble()
    f.Assemble()
 
-We now construct an NGSolve preconditioner wrapping a `PETSc PC` obejct.
+We now construct an NGSolve preconditioner wrapping a `PETSc PC` object.
 In particular, we begin considering an algebraic multigrid preconditioner constructed using `HYPRE`.
-We will use the preconditioner just discussed inside NGSolve own linear algebra solvers. ::
+We will use the preconditioner just discussed inside NGSolve's own linear algebra solvers. ::
 
    from ngsPETSc.pc import *
    from ngsolve.krylovspace import CG
@@ -64,7 +64,7 @@ We see that the HYPRE preconditioner is quite effective for the Poisson problem 
      - 70 (1.96e-13)
 
 To overcome this issue we will use a two-level additive Schwarz preconditioner.
-In this case, we will use as fine space correction, the inverse of the stiffness matrices associated with the patch of a vertex. ::
+In this case, we will use as fine space correction the inverse of the stiffness matrices associated with the patch of a vertex. ::
 
    def VertexPatchBlocks(mesh, fes):
     blocks = []
@@ -101,7 +101,7 @@ We now isolate the degrees of freedom associated with the vertices and construct
    print("-------------------|Additive Schwarz p={}|-------------------".format(order))
    gfu.vec.data = CG(a.mat, rhs=f.vec, pre=pretwo, printrates=True)
 
-We can see that the two-level additive Schwarz preconditioner where the coarse space correction is performed using HYPRE is more effective than using just HYPRE preconditioner for higher-order elements.
+We can see that the two-level additive Schwarz preconditioner where the coarse space correction is performed using HYPRE is more effective than using just HYPRE for higher-order elements.
 
 .. list-table:: Preconditioners performance HYPRE and Two Level Additive Schwarz
    :widths: auto
