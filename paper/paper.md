@@ -35,20 +35,19 @@ bibliography: paper.bib
 
 # Summary
 
-In the realm of computational science and engineering, combining advanced meshing techniques with robust solver capabilities is essential for improving simulation accuracy and efficiency. This paper introduces ngsPETSc, an interface built on top of petsc4py [@petsc4py] that seamlessly integrates the NETGEN mesher [@Netgen], NGSolve finite element library,[@NGSolve] and PETSc toolkit[@PETSc]. ngsPETSc enables the use of NETGEN meshes and geometries in software based on PETSc DMPlex. Additionally, ngsPETSc provides NGSolve users access to the wide array of linear, non-linear solvers and time-steppers available in PETSc.
+Combining advanced meshing techniques with robust solver capabilities is essential for solving difficult problems in computational science and engineering. This paper introduces ngsPETSc, software built with petsc4py [@petsc4py] that seamlessly integrates the NETGEN mesher [@Netgen], NGSolve finite element library [@NGSolve], and PETSc toolkit [@PETSc]. ngsPETSc enables the use of NETGEN meshes and geometries in PETSc-based solvers, and provides NGSolve users access to the wide array of linear, non-linear solvers and time-steppers available in PETSc.
 
-# Steatment of Need
+# Statement of Need
 
-Efficiently solving large-scale Partial Differential Equations (PDEs) on complex geometries is vital in scientific computing. PETSc, NETGEN, and NGSolve offer distinct functionalities: PETSc handles linear and nonlinear problems in a discretisation agnostic manner, NETGEN constructs meshes from constructive solid geometry (CSG) described with OpenCASCADE, and NGSolve offers a wide range of finite element discretizations to the user. Integrating these tools into ngsPETSc promises to streamline workflows and enhance capabilities in scientific computing. This integration also facilitates seamless mesh exports from NETGEN to PETSc DMPlex, enabling simulations of intricate geometries and supporting advanced meshing techniques. Moreover, ngsPETSc equips NGSolve with PETSc's extensive suite of solvers via interfaces to PETSc PC, KSP, and SNES. This broadens the range of solvers for tackling diverse computational challenges.
+Efficiently solving large-scale partial differential equations (PDEs) on complex geometries is vital in scientific computing. PETSc, NETGEN, and NGSolve offer distinct functionalities: PETSc handles linear and nonlinear problems in a discretisation agnostic manner, NETGEN constructs meshes from constructive solid geometry (CSG) described with OpenCASCADE, and NGSolve offers a wide range of finite element discretisations to the user. Integrating these tools with ngsPETSc promises to streamline simulation workflows and enhance capabilities in scientific computing. This integration also facilitates seamless mesh exports from NETGEN to PETSc DMPlex, enabling simulations of intricate geometries and supporting advanced meshing techniques in other PETSc-based solvers, like Firedrake [@Firedrake]. Moreover, ngsPETSc equips NGSolve with PETSc's extensive suite of solvers via interfaces to the PETSc PC, KSP, and SNES objects. This broadens the range of solvers for tackling diverse computational challenges.
 
-In particular, by combining PETSc, NETGEN, and NGSolve within ngsPETSc the following features are available:
+In particular, by combining PETSc, NETGEN, and NGSolve within ngsPETSc the following new features are available:
 
-- high order meshes constructed in NETGEN together with adaptive mesh refinement are now available in Firedrake [@Firedrake];
-- mesh hierarchies generated from OpenCASCADE geometries can be used in Firedrake;
-- PETSc preconditioners, such as PETSc GAMG and PETSc ASM, can be used as building blocks inside NGSolve preconditioning infrastructure;
-- PETSc nonlinear solvers are available in NGSolve, in particular second-order methods are available thanks to NGSolve's ability to compute the Jacobian for any discretisation;
-- NGSolve can now use PETSc linear solvers, such as PETSc CG, PETSc GMRES, PETSc BiCGStab, etc. In particular, Krylov solvers can also be used with NGSolve matrices stored in a matrix-free fashion as well as with NGSolve block matrices.
-- NGSolve can now use PETSc time integrators, such as PETSc TS, to solve time-dependent problems.
+- PETSc preconditioners, such as PETSc GAMG and PETSc ASM, can be used as building blocks inside the NGSolve preconditioning infrastructure;
+- PETSc nonlinear solvers are available in NGSolve, in particular advanced line search and trust region Newton-based methods are available thanks to NGSolve's ability to compute the Jacobian for any discretisation;
+- NGSolve can now use PETSc linear solvers, including flexible and pipelined variants. In particular, Krylov solvers can also be used with NGSolve matrices stored in a matrix-free fashion as well as with NGSolve block matrices.
+- NGSolve can now use PETSc time integrators, such as PETSc TS, to flexibly switch between algorithms for solving time-dependent problems;
+- high order meshes constructed in NETGEN together with adaptive mesh refinement and mesh hierarchies for geometric multigrid are now available in Firedrake [@Firedrake].
 
 In conclusion, ngsPETSc is a lightweight, user-friendly interface that bridges the gap between NETGEN, NGSolve, and PETSc, building on top of petsc4py.
 ngsPETsc aims to provide a comprehensive set of tools for solving complex PDEs on intricate geometries, enriching the already powerful capabilities of NETGEN, NGSolve, and Firedrake.
