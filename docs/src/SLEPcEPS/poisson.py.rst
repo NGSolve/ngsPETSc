@@ -71,7 +71,7 @@ We can discretise this problem using NGSolve as follows: ::
    m.Assemble()
 
 We can again solve the eigenvalue problem using ngsPETSc's `EigenSolver` class.
-The mass matrix now has a large kernel, hence is no longer symmetric positive definite, therefore we can not use LOBPCG as a solver.
+The matrix on the right-hand side of the generalised eigenvalue problem now has a large kernel, hence is no longer symmetric positive definite, therefore we can not use LOBPCG as a solver.
 Instead, we will use a Krylov-Schur solver with a shift-and-invert spectral transformation to target the smallest eigenvalues.
 Notice that because we are using a shift-and-invert spectral transformation we only need to invert the stiffness matrix which has a trivial kernel since we are using an inf-sup stable discretisation.
 If we tried to use a simple shift transformation to target the largest eigenvalues we would have run into the error of trying to invert a singular matrix.::

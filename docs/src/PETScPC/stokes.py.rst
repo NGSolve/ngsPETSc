@@ -1,8 +1,8 @@
-Boffi-Lovadina Augmentation for Bernardi-Raugel discretisation of the Stokes problem
+Augmented Lagrangian preconditioning for P2-P0 discretisation of the Stokes problem
 ======================================================================================
 
-In this tutorial, we explore constructing preconditioners for Bernardi-Raugel discretisations of the Stokes problem with Boffi-Lovadina augmentation.
-In particular, we will consider a Bernardi-Raugel inf-sup stable discretisation of the Stokes problem, i.e.
+In this tutorial, we explore constructing preconditioners for discretisations of the Stokes problem with Boffi-Lovadina augmentation.
+In particular, we will consider a P2-P0 inf-sup stable discretisation of the Stokes problem, i.e.
 
 .. math::       
    

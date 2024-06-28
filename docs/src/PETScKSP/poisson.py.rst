@@ -101,15 +101,13 @@ We do this changing the flag :code:`"pc_type"` to :code:`"gamg"` ::
      - 35
 
 We can also use the PETSc `BDDC` preconditioner.
-Once again we will select this option via the flag :code:`"pc_type"` flag.
-We will also use the flag :code:`"ksp_rtol"` to obtain a more accurate solution of the linear system. ::
+Once again we will select this option via the flag :code:`"pc_type"` flag. ::
 
     solver = KrylovSolver(a, fes.FreeDofs(), 
                           solverParameters={"ksp_type": "cg", 
                                             "ksp_monitor": "",
                                             "pc_type": "bddc",
-                                            "ngs_mat_type": "is",
-                                            "ksp_rtol": 1e-10})
+                                            "ngs_mat_type": "is"})
     gfu = GridFunction(fes)
     solver.solve(f.vec, gfu.vec)
     print ("BDDC L2-error:", sqrt (Integrate ( (gfu-exact)*(gfu-exact), mesh)))
@@ -126,11 +124,11 @@ We will also use the flag :code:`"ksp_rtol"` to obtain a more accurate solution 
    * - PETSc GAMG
      - 35
    * - PETSc BDDC (N=2)
-     - 10
+     - 5
    * - PETSc BDDC (N=4)
-     - 12
+     - 7
    * - PETSc BDDC (N=6)
-     - 14
+     - 9
 
 We can see that for an increasing number of subdomains :math:`N` the number of iterations also increases.
 Notice that in all the cases we have considered, the :code:`KrylovSolver` class creates a PETSc matrix from the NGSolve matrix in order to assemble the required preconditioners.
@@ -163,11 +161,11 @@ We will now use the :code:`KrylovSolver` class in a matrix-free fashion with the
    * - PETSc GAMG
      - 35
    * - PETSc BDDC (N=2)
-     - 10
+     - 5
    * - PETSc BDDC (N=4)
-     - 12
+     - 7
    * - PETSc BDDC (N=6)
-     - 14
+     - 9
    * - Element-wise BDDC
      - 14
   
