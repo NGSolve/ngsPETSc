@@ -9,7 +9,7 @@ authors:
     orcid: 0000-0002-1241-7060
     equal-contrib: true
     affiliation: 1
-  - name: Joachim Schoberl
+  - name: Joachim Schöberl
     affiliation: 2
     equal-contrib: true 
     orcid: 0000-0002-1250-5087
