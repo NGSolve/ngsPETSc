@@ -13,13 +13,27 @@ class TimeStepper:
           mass matrix for explicit time-stepping schemes and compute the
           Jacobian using the variational form F.
     """
-    def __init__(self, fes, info, G=None, F=None, residual=None,
-                 jacobian=None, solverParameters=None, optionsPrefix=None):
+    def __init__(self, fes, variationalInfo, timeInfo, G=None, F=None, residual=None,
+                 jacobian=None, solverParameters={}, optionsPrefix=""):
         self.fes = fes
         dofs = fes.ParallelDofs()
         self.second_order = False
-        self.trial = info[0]
-        self.t = info[1]
+        self.set = 0
+        if isinstance(timeInfo, (list,tuple)) and len(timeInfo) == 3:
+            self.trial, self.t = variationalInfo
+        elif isinstance(timeInfo, dict):
+            self.trial = timeInfo["trial"]
+            self.t = timeInfo["t"]
+        else:
+            raise ValueError("variationalInfo must be a list/tuple or a dict")
+        if isinstance(timeInfo, (list,tuple)) and len(timeInfo) == 3:
+            self.t0, self.tf, self.dt = timeInfo
+        elif isinstance(timeInfo, dict):
+            self.t0 = timeInfo["t0"]
+            self.tf = timeInfo["tf"]
+            self.dt = timeInfo["dt"]
+        else:
+            raise ValueError("timeInfo must be a list/tuple or a dict")
         self.F = F
         self.G = G
         if "ngs_jacobian_mat_type" not in solverParameters:
@@ -27,13 +41,12 @@ class TimeStepper:
         jacobianMatType = solverParameters["ngs_jacobian_mat_type"]
         self.ts = PETSc.TS().create(comm=dofs.comm.mpi4py)
         #Deafult TS setup
-        self.ts.setExactFinalTime(3)
+        self.ts.setExactFinalTime(PETSc.TS.ExactFinalTime.MATCHSTEP)
         self.ts.setMaxSNESFailures(-1)
         #Setting up the options
         options_object = PETSc.Options()
-        if solverParameters is not None:
-            for optName, optValue in solverParameters.items():
-                options_object[optName] = optValue
+        for optName, optValue in solverParameters.items():
+            options_object[optName] = optValue
         self.ts.setOptionsPrefix(optionsPrefix)
         self.ts.setFromOptions()
         #Setting up utility for mappings
@@ -76,18 +89,11 @@ class TimeStepper:
             self.jacobianMatType = jacobianMatType
         else:
             raise ValueError("You need to provide a jacobian function or a variational form F.")
-    def setup(self, timeInfo):
+        self.set = 1
+    def setup(self):
         '''
         This is method is used to setup the PETSc TS object
         '''
-        if isinstance(timeInfo, (list,tuple)) and len(timeInfo) == 3:
-            self.t0, self.tf, self.dt = timeInfo
-        elif isinstance(timeInfo, dict):
-            self.t0 = timeInfo["t0"]
-            self.tf = timeInfo["tf"]
-            self.dt = timeInfo["dt"]
-        else:
-            raise ValueError("timeInfo must be a list/tuple or a dict")
         ngsGridFucntion = GridFunction(self.fes)
         pIVec = self.vectorMapping.petscVec(ngsGridFucntion.vec)
         pEVec = self.vectorMapping.petscVec(ngsGridFucntion.vec)
@@ -102,12 +108,15 @@ class TimeStepper:
         self.ts.setTimeStep(self.dt)
         self.ts.setMaxTime(self.tf)
         self.ts.setMaxSteps(int((self.tf-self.t0)/self.dt))
+        self.set = 2
 
     def solve(self, x0):
         """
         This method is used to solve the time-stepping problem
         :arg x0: initial data as an NGSolve grid function
         """
+        if self.set == 1:
+            self.setup()
         pscx0 = self.vectorMapping.petscVec(x0.vec)
         self.ts.solve(pscx0)
         self.vectorMapping.ngsVec(pscx0, ngsVec=x0.vec)

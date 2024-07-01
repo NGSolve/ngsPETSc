@@ -29,7 +29,7 @@ class NonLinearSolver:
                    this fuction is used only if the argument a is None.
     '''
     def __init__(self, fes, a=None, residual=None, objective=None, jacobian=None,
-                 solverParameters=None, optionsPrefix=None):
+                 solverParameters={}, optionsPrefix=""):
         self.fes = fes
         dofs = fes.ParallelDofs()
         self.second_order = False
@@ -39,9 +39,8 @@ class NonLinearSolver:
         self.snes = PETSc.SNES().create(comm=dofs.comm.mpi4py)
         #Setting up the options
         options_object = PETSc.Options()
-        if solverParameters is not None:
-            for optName, optValue in solverParameters.items():
-                options_object[optName] = optValue
+        for optName, optValue in solverParameters.items():
+            options_object[optName] = optValue
         self.snes.setOptionsPrefix(optionsPrefix)
         self.snes.setFromOptions()
         #Setting up utility for mappings

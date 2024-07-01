@@ -162,7 +162,7 @@ class KrylovSolver():
 
     """
     def __init__(self, a, dofsDescr, p=None, nullspace=None, optionsPrefix="",
-                 solverParameters=None):
+                 solverParameters={}):
         # Grabbing dofs information
         if isinstance(dofsDescr, FESpace):
             freeDofs = dofsDescr.FreeDofs()
@@ -198,9 +198,8 @@ class KrylovSolver():
         self.mapping = VectorMapping((dofs,freeDofs,{"bsize":entrysize}))
         #Fixing PETSc options
         options_object = PETSc.Options()
-        if solverParameters is not None:
-            for optName, optValue in solverParameters.items():
-                options_object[optName] = optValue
+        for optName, optValue in solverParameters.items():
+            options_object[optName] = optValue
 
         #Setting PETSc Options
         pscA.setOptionsPrefix(optionsPrefix)
