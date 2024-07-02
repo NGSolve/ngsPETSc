@@ -162,7 +162,7 @@ class KrylovSolver():
 
     """
     def __init__(self, a, dofsDescr, p=None, nullspace=None, optionsPrefix="",
-                 solverParameters={}):
+                 solverParameters={}): #pylint: disable=W0102
         # Grabbing dofs information
         if isinstance(dofsDescr, FESpace):
             freeDofs = dofsDescr.FreeDofs()
