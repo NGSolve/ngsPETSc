@@ -29,7 +29,7 @@ class NonLinearSolver:
                    this fuction is used only if the argument a is None.
     '''
     def __init__(self, fes, a=None, residual=None, objective=None, jacobian=None,
-                 solverParameters={}, optionsPrefix=""): #pylint: disable=W0102
+                 solverParameters={}, optionsPrefix=""):
         self.fes = fes
         dofs = fes.ParallelDofs()
         self.second_order = False
