@@ -73,5 +73,6 @@ Ref. Levels (N. DoFs) | Re=1e2       | Re=1e3      | Re=1e4      |
 3 (1333762)           |3  (8.21e-07) |4 (3.84e-06) |6 (7.05e-06) |
 
 Table 2: In this table we report the number of iterations required to solve the Oseen problem with different Reynolds numbers and different number of refinement levels, in parentheses we report the number of degrees of freedom (DoFs) on the finest level and the relative residuals.
+More example can be found in the documentation of ngsPETSc manual [@manual].
 
 
