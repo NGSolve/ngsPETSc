@@ -52,7 +52,8 @@ Welcome to ngsPETSc's documentation!
 
    utils/firedrake/lomesh.py
    utils/firedrake/homesh.py
-
+   utils/firedrake/surfaces.py
+   
 Indices and tables
 ==================
 
