@@ -24,7 +24,7 @@ Once we have generated a surface mesh using Netgen, we can simply pass it to Fir
     from firedrake import *
     mesh = Mesh(Mesh(ngmesh).curve_field(3))
 
-We begin defining the initial condition for the problem, in particular, we will consider a Gaussian function centered at a point on the torus. ::
+We begin defining the initial condition for the problem, in particular, we will consider a Gaussian bump centered at a point on the torus. ::
 
     x, y, z = SpatialCoordinate(mesh)
     V = FunctionSpace(mesh, "CG", 3)
@@ -34,13 +34,12 @@ We begin defining the initial condition for the problem, in particular, we will 
     out = VTKFile("output/heat.pvd")
     out.write(u, time=0.0)
 
-We now use [Irksome](https://www.firedrakeproject.org/Irksome), to describe the time-dependent problem we aim to solve, i.e. 
+We now use `Irksome<https://www.firedrakeproject.org/Irksome>_`, to describe the time-dependent problem we aim to solve, i.e. 
 
 .. math::
 
     \begin{align*}
     \frac{\partial u}{\partial t} - \nabla \cdot \nabla u &= 0 \quad \text{in} \quad \Omega \times (0, T], \\
-    u &= 0 \quad \text{on} \quad \partial \Omega \times (0, T], \\
     u &= u_0 \quad \text{at} \quad t = 0.
     \end{align*}
 
