@@ -34,7 +34,7 @@ We begin defining the initial condition for the problem, in particular, we will 
     out = VTKFile("output/heat.pvd")
     out.write(u, time=0.0)
 
-We now use `Irksome<https://www.firedrakeproject.org/Irksome>_`, to describe the time-dependent problem we aim to solve, i.e. 
+We now use Irksome, to describe the time-dependent problem we aim to solve, i.e. 
 
 .. math::
 
@@ -73,4 +73,11 @@ We will then construct a :code:`TimeStepper` that will take care of time-steppin
         t.assign(float(t) + float(dt))
 
         out.write(u, time=float(t))
+
+
+.. video:: ./heat.mp4
+    :width: 600
+    :height: 400
+    :loop:
+
     
