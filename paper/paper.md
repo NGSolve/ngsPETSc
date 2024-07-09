@@ -45,8 +45,8 @@ In particular, by combining PETSc, NETGEN, and NGSolve within ngsPETSc the follo
 
 - PETSc Krylov solvers, including flexible and pipelined variants, are aveilable in NGSolve. In particular, they can also be used with NGSolve matrices stored in a matrix-free fashion as well as with NGSolve block matrices.
 - PETSc preconditioners, can be used as building blocks inside the NGSolve preconditioning infrastructure;
-- PETSc nonlinear solvers are available in NGSolve, in particular advanced line search and trust region Newton-based methods are available;
-- high order meshes constructed in NETGEN together with adaptive mesh refinement and mesh hierarchies for geometric multigrid are now available in Firedrake [@Firedrake].
+- PETSc nonlinear solvers are available in NGSolve, in particular advanced line search and trust region Newton-based methods are available. A use case of PETSc nonlinear solvers for the simulation of a hypetelastic beam is shown in Figure 1.
+- high order meshes constructed in NETGEN together with adaptive mesh refinement and mesh hierarchies for geometric multigrid are now available in Firedrake [@Firedrake]. A use case of high-order mesh in Firedrake for the simulation of a flow past a cylinder is shown in Figure 2. While a use case of adaptive mesh refinement for the simulation of a Poisson problem on a Pacman domain is shown in Figure 3.
 
 In conclusion, ngsPETSc is a lightweight, user-friendly interface that bridges the gap between NETGEN, NGSolve, and PETSc, building on top of petsc4py.
 ngsPETsc aims to provide a comprehensive set of tools for solving complex PDEs on intricate geometries, enriching the already powerful capabilities of NETGEN, NGSolve, and Firedrake.
