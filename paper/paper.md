@@ -45,8 +45,8 @@ In particular, by combining PETSc, NETGEN, and NGSolve within ngsPETSc the follo
 
 - PETSc Krylov solvers, including flexible and pipelined variants, are aveilable in NGSolve. In particular, they can also be used with NGSolve matrices stored in a matrix-free fashion as well as with NGSolve block matrices.
 - PETSc preconditioners, can be used as building blocks inside the NGSolve preconditioning infrastructure;
-- PETSc nonlinear solvers are available in NGSolve, in particular advanced line search and trust region Newton-based methods are available. A use case of PETSc nonlinear solvers for the simulation of a hypetelastic beam is shown in Figure 1.
-- high order meshes constructed in NETGEN together with adaptive mesh refinement and mesh hierarchies for geometric multigrid are now available in Firedrake [@Firedrake]. A use case of high-order mesh in Firedrake for the simulation of a flow past a cylinder is shown in Figure 2. While a use case of adaptive mesh refinement for the simulation of a Poisson problem on a Pacman domain is shown in Figure 3.
+- PETSc nonlinear solvers are available in NGSolve, in particular advanced line search and trust region Newton-based methods are available;
+- high order meshes constructed in NETGEN together with adaptive mesh refinement and mesh hierarchies for geometric multigrid are now available in Firedrake [@Firedrake]; 
 
 In conclusion, ngsPETSc is a lightweight, user-friendly interface that bridges the gap between NETGEN, NGSolve, and PETSc, building on top of petsc4py.
 ngsPETsc aims to provide a comprehensive set of tools for solving complex PDEs on intricate geometries, enriching the already powerful capabilities of NETGEN, NGSolve, and Firedrake.
@@ -78,6 +78,8 @@ Ref. Levels (N. DoFs) | $\nu=10^{-2}$|$\nu=10^{-3}$|$\nu=10^{-4}$|
 3 (1333762)           |3  (8.21e-07) |4 (3.84e-06) |6 (7.05e-06) |
 
 Table 2: In this table we report the number of iterations required to solve the Oseen problem with different Reynolds numbers and different number of refinement levels, in parentheses we report the number of degrees of freedom (DoFs) on the finest level and the relative residuals.
+A use case of PETSc nonlinear solvers for the simulation of a hypetelastic beam is shown in Figure 1.
+A use case of high-order mesh in Firedrake for the simulation of a flow past a cylinder is shown in Figure 2. While a use case of adaptive mesh refinement for the simulation of a Poisson problem on a Pacman domain is shown in Figure 3.
 
 
 ![An hyperelastic beam deformed by keeping one end fixed and applying a twist at the other end. The coloring corresponds to the deviatoric von Mises stress experienced by the beam. The beam is discretised with P3 finite elements and the non-linear problem is solved using SNES. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScSNES/hyperelasticity.py.html).](figures/hyperelastic.png)
