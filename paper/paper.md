@@ -78,8 +78,15 @@ Ref. Levels (N. DoFs) | $\nu=10^{-2}$|$\nu=10^{-3}$|$\nu=10^{-4}$|
 3 (1333762)           |3  (8.21e-07) |4 (3.84e-06) |6 (7.05e-06) |
 
 Table 2: In this table we report the number of iterations required to solve the Oseen problem with different Reynolds numbers and different number of refinement levels, in parentheses we report the number of degrees of freedom (DoFs) on the finest level and the relative residuals.
+
+
 ![An hyperelastic beam deformed by keeping one end fixed and applying a twist at the other end. The coloring corresponds to the deviatoric von Mises stress experienced by the beam. The beam is discretised with P3 finite elements and the non-linear problem is solved using SNES. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScSNES/hyperelasticity.py.html).](figures/hyperelastic.png)
+
+
 ![On the right a flow past a cylinder simulation, discretised using a Netgen high-order mesh and Firedrake. In particular we use high-order Taylor-Hood elements (P4-P3) and a vertex-patch smoother as fine level correction in a two-level additive Schwarz preconditioner, [@BenziOlshanskii]. The full example, with more details, can be found in [ngsPETSc repo](https://github.com/NGSolve/ngsPETSc). On the left a zoom near the cylinder to show that the mesh is high-order.](figures/flow_past_a_cylinder.png)
-![An adaptive scheme applied to the Poisson problem on a Pacman domain. The domain is discretised using P1 finite elements and the adaptive mesh refinement is driven by a Babuška-Rheinboldt error estimator [@BabuskaRheinboldt]. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/utils/firedrake/lomesh.py.html).
- ](figures/adaptive.png)
+
+
+![An adaptive scheme applied to the Poisson problem on a Pacman domain. The domain is discretised using P1 finite elements and the adaptive mesh refinement is driven by a Babuška-Rheinboldt error estimator [@BabuskaRheinboldt]. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/utils/firedrake/lomesh.py.html).](figures/adaptive.png)
+
+
 More example can be found in the documentation of ngsPETSc manual [@manual].
