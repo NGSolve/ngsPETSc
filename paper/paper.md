@@ -80,7 +80,7 @@ Ref. Levels (N. DoFs) | $\nu=10^{-2}$|$\nu=10^{-3}$|$\nu=10^{-4}$|
 Table 2: The number of iterations required to solve the Oseen problem with different viscosities and different refinement levels. In parentheses we report the number of degrees of freedom (DoFs) on the finest level and the relative residuals.
 
 Figure 1 shows a simulation of a hyperelastic beam, solved with PETSc nonlinear solvers.
-Figure 2 shows a high-order NETGEN mesh employed in Firedrake for the simulation of a Navier-Stokes flow past a cylinder. Figure 3 shows the adaptive mesh refinement for a Poisson problem on a Pacman domain.
+Figure 2 shows a high-order NETGEN mesh employed in Firedrake for the simulation of a Navier-Stokes flow past a cylinder. Figure 3 shows the adaptive mesh refinement for a Poisson problem on an L-shaped domain.
 
 
 ![A hyperelastic beam deformed by fixing one end and applying a twist at the other end. The coloruing corresponds to the deviatoric von Mises stress experienced by the beam. The beam is discretised with $P_3$ finite elements and the nonlinear problem is solved using PETSc SNES. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScSNES/hyperelasticity.py.html).](figures/hyperelastic.png)
@@ -89,7 +89,7 @@ Figure 2 shows a high-order NETGEN mesh employed in Firedrake for the simulation
 ![Flow past a cylinder. The Navier-Stokes equations are discretised on a NETGEN high-order mesh and Firedrake. We use high-order Taylor-Hood elements ($P_4$-$P_3$) and a vertex-patch smoother as fine level correction in a two-level additive Schwarz preconditioner, [@BenziOlshanskii]. The full example, with more details, can be found in [ngsPETSc documentation](https://github.com/NGSolve/ngsPETSc). On the right a zoom near the cylinder shows the curvature of the mesh.](figures/flow_past_a_cylinder.png)
 
 
-![An adaptive scheme applied to the Poisson problem on a Pacman domain. The domain is discretised using $P_1$ finite elements and the adaptive mesh refinement is driven by a Babuška-Rheinboldt error estimator [@BabuskaRheinboldt]. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/utils/firedrake/lomesh.py.html).](figures/adaptivity.png)
+![An adaptive scheme applied to the Poisson problem on an L-shaped domain. The domain is discretised using $P_1$ finite elements and the adaptive mesh refinement is driven by a Babuška-Rheinboldt error estimator [@BabuskaRheinboldt]. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/utils/firedrake/lomesh.py.html).](figures/adaptivity.png)
 
 
 More example can be found in the documentation of ngsPETSc manual [@manual].
