@@ -54,9 +54,9 @@ ngsPETsc aims to assist with the solution of challenging PDEs on complex geometr
 # Examples
 
 In this section we provide a few examples of results that can be obtained using ngsPETSc.
-We begin considering a simple Poisson problem on a unit square domain discretised with $P_2$ finite elements and compare the performance of different solvers available in NGSolve via ngsPETSc. The result is shown in Table 1 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScKSP/poisson.py.html).
+We begin considering a simple Poisson problem on a unit square domain discretised with $P_2$ finite elements and compare the performance of different solvers available in NGSolve via ngsPETSc. In particular we compared PETSc GAMG [@PETScGAMG], PETSc BDDC [@PETScBDDC] and NGSolve own implementation of element-wise BDDC. The result is shown in Table 1 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScKSP/poisson.py.html).
 
-N. DoFs  | [@PETScGAMG]  | [@PETScBDDC] (N=2) | [@PETScBDDC] (N=4) | [@PETScBDDC] (N=6) | Element-wise BDDC* |
+N. DoFs  | PETSc GAMG   | PETSc BDDC (N=2) | PETSc BDDC (N=4) | PETSc BDDC (N=6) | Element-wise BDDC* |
 ---------|--------------|------------------|------------------|------------------|--------------------|
 116716   |35  (1.01e-05)|5 (9.46e-06)      |7 (1.27e-05)      |9 (5.75e-06)      |10 (2.40e-06)       |
 464858   |69  (7.09e-06)|5 (8.39e-06)      |7 (1.27e-05)      |8 (8.19e-06)      |9 (6.78e-06)        |
@@ -86,10 +86,10 @@ Figure 2 shows a high-order NETGEN mesh employed in Firedrake for the simulation
 ![A hyperelastic beam deformed by fixing one end and applying a twist at the other end. The coloruing corresponds to the deviatoric von Mises stress experienced by the beam. The beam is discretised with $P_3$ finite elements and the nonlinear problem is solved using PETSc SNES. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScSNES/hyperelasticity.py.html).](figures/hyperelastic.png)
 
 
-![Flow past a cylinder. The Navier-Stokes equations are discretised on a NETGEN high-order mesh and Firedrake. We use high-order Taylor-Hood elements (P4-P3) and a vertex-patch smoother as fine level correction in a two-level additive Schwarz preconditioner, [@BenziOlshanskii]. The full example, with more details, can be found in [ngsPETSc documentation](https://github.com/NGSolve/ngsPETSc). On the right a zoom near the cylinder shows the curvature of the mesh.](figures/flow_past_a_cylinder.png)
+![Flow past a cylinder. The Navier-Stokes equations are discretised on a NETGEN high-order mesh and Firedrake. We use high-order Taylor-Hood elements ($P_4$-$P_3$) and a vertex-patch smoother as fine level correction in a two-level additive Schwarz preconditioner, [@BenziOlshanskii]. The full example, with more details, can be found in [ngsPETSc documentation](https://github.com/NGSolve/ngsPETSc). On the right a zoom near the cylinder shows the curvature of the mesh.](figures/flow_past_a_cylinder.png)
 
 
-![An adaptive scheme applied to the Poisson problem on a Pacman domain. The domain is discretised using $P_1$ finite elements and the adaptive mesh refinement is driven by a Babuška-Rheinboldt error estimator [@BabuskaRheinboldt]. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/utils/firedrake/lomesh.py.html).](figures/adaptive.png)
+![An adaptive scheme applied to the Poisson problem on a Pacman domain. The domain is discretised using $P_1$ finite elements and the adaptive mesh refinement is driven by a Babuška-Rheinboldt error estimator [@BabuskaRheinboldt]. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/utils/firedrake/lomesh.py.html).](figures/adaptivity.png)
 
 
 More example can be found in the documentation of ngsPETSc manual [@manual].
