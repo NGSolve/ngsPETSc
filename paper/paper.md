@@ -35,7 +35,7 @@ bibliography: paper.bib
 
 # Summary
 
-Combining advanced meshing techniques with robust solver capabilities is essential for solving difficult problems in computational science and engineering. This paper introduces ngsPETSc, a software built with petsc4py [@petsc4py] that seamlessly integrates the NETGEN mesher [@Netgen],the NGSolve finite element library [@NGSolve], and the PETSc toolkit [@PETSc]. ngsPETSc enables the use of NETGEN meshes and geometries in PETSc-based solvers, and provides NGSolve users access to the wide array of linear, nonlinear solvers and time-steppers available in PETSc.
+Combining advanced meshing techniques with robust solver capabilities is essential for solving difficult problems in computational science and engineering. This paper introduces ngsPETSc, software built with petsc4py [@petsc4py] that seamlessly integrates the NETGEN mesher [@Netgen], the NGSolve finite element library [@NGSolve], and the PETSc toolkit [@PETSc]. ngsPETSc enables the use of NETGEN meshes and geometries in PETSc-based solvers, and provides NGSolve users access to the wide array of linear, nonlinear solvers, and time-steppers available in PETSc.
 
 # Statement of Need
 
@@ -43,18 +43,18 @@ Efficiently solving large-scale partial differential equations (PDEs) on complex
 
 In particular, by combining PETSc, NETGEN, and NGSolve within ngsPETSc the following new features are available:
 
-- PETSc Krylov solvers, including flexible and pipelined variants, are available in NGSolve. They can be used both with NGSolve matrix-free operators and NGSolve block matrices.
-- PETSc preconditioners can be used as building blocks inside the NGSolve preconditioning infrastructure;
+- PETSc Krylov solvers, including flexible and pipelined variants, are available in NGSolve. They can be used both with NGSolve matrix-free operators and NGSolve block matrices;
+- PETSc preconditioners can be used as building blocks within the NGSolve preconditioning infrastructure;
 - PETSc nonlinear solvers are available in NGSolve, including advanced line search and trust region Newton-based methods;
-- high order meshes constructed in NETGEN together with adaptive mesh refinement and mesh hierarchies for geometric multigrid are now available in Firedrake [@Firedrake]; 
+- high order meshes constructed in NETGEN are now available in Firedrake [@Firedrake], enabling adaptive mesh refinement and curved mesh hierarchies for geometric multigrid.
 
 In conclusion, ngsPETSc is a lightweight, user-friendly interface that bridges the gap between NETGEN, NGSolve, and PETSc, building on top of petsc4py.
-ngsPETsc aims to assist with the solution of challenging PDEs on complex geometries, enriching the already powerful capabilities of NETGEN, NGSolve, and Firedrake.
+ngsPETsc aims to assist with the solution of challenging PDEs on complex geometries, enriching the already powerful capabilities of NETGEN, NGSolve, PETSc, and Firedrake.
 
 # Examples
 
 In this section we provide a few examples of results that can be obtained using ngsPETSc.
-We begin considering a simple Poisson problem on a unit square domain discretised with $P_2$ finite elements and compare the performance of different solvers available in NGSolve via ngsPETSc. In particular we compared PETSc GAMG [@PETScGAMG], PETSc BDDC [@PETScBDDC] and NGSolve own implementation of element-wise BDDC. The result is shown in Table 1 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScKSP/poisson.py.html).
+We begin by considering a simple Poisson problem on a unit square domain discretised with $P_2$ finite elements and compare the performance of different solvers available in NGSolve via ngsPETSc. In particular we compared PETSc's algebraic multigrid algorithm GAMG [@PETScGAMG], PETSc's domain decomposition BDDC algorithm [@PETScBDDC] and NGSolve's own implementation of element-wise BDDC. The result is shown in Table 1 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScKSP/poisson.py.html).
 
 N. DoFs  | PETSc GAMG   | HYPRE            |  | PETSc BDDC (N=6) | Element-wise BDDC* |
 ---------|--------------|------------------|------------------|------------------|--------------------|
@@ -64,12 +64,16 @@ N. DoFs  | PETSc GAMG   | HYPRE            |  | PETSc BDDC (N=6) | Element-wise 
 
 Table 1: The number of degrees of freedom (DoFs) and the number of iterations required to solve the Poisson problem with different solvers. The numbers in parentheses are the relative residuals. *Element-wise BDDC is a custom implementation of BDDC preconditioner in NGSolve.
 
-We then consider the Oseen problem, i.e.
+We next consider the Oseen problem, i.e.
 $$
 \nu\Delta \vec{u} +\vec{b}\cdot \nabla\vec{u} - \nabla p = \vec{f},
 \\ \quad \nabla \cdot \vec{u} = 0,
 $$
+<<<<<<< HEAD
 We discretise this problem using high-order Hood-Taylor elements ($P_4$-$P_3$) on a unit square domain. We employ an augmented Lagrangian formulation to better enforce the incompressibility constraint. We present the performance of a two level additive Schwarz preconditioner with vertex-patch smoothing as fine level correction [@BenziOlshanskii; @FarrellEtAll]. This preconditioner was built using ngsPETSc. The result for different viscosities $\nu$ are shown in Table 2 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/oseen.py.html).
+=======
+We discretise this problem using high-order Hood-Taylor elements ($P_4$-$P_3$) on a unit square domain. We employ an augmented Lagrangian formulation to better enforce the incompressibility constraint. We present the performance of a two level additive Schwarz preconditioner with vertex-patch smoothing as fine level correction [@BenziOlshanskii]. This preconditioner was built using ngsPETSc. The result for different viscosities $\nu$ are shown in Table 2, exhibiting reasonable robustness as the viscosity (and hence Reynolds number) changes. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/oseen.py.html).
+>>>>>>> d78eb24182d5d2bcb21c203fbe8b22368fab429c
 
 Ref. Levels (N. DoFs) | $\nu=10^{-2}$|$\nu=10^{-3}$|$\nu=10^{-4}$|
 ----------------------|--------------|-------------|-------------|
@@ -85,13 +89,13 @@ Figure 1 shows a simulation of a hyperelastic beam, solved with PETSc nonlinear 
 Figure 2 shows a high-order NETGEN mesh employed in Firedrake for the simulation of a Navier-Stokes flow past a cylinder. Figure 3 shows the adaptive mesh refinement for a Poisson problem on an L-shaped domain.
 
 
-![A hyperelastic beam deformed by fixing one end and applying a twist at the other end. The coloruing corresponds to the deviatoric von Mises stress experienced by the beam. The beam is discretised with $P_3$ finite elements and the nonlinear problem is solved using PETSc SNES. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScSNES/hyperelasticity.py.html).](figures/hyperelastic.png)
+![A hyperelastic beam deformed by fixing one end and applying a twist at the other end. The colouring corresponds to the deviatoric von Mises stress experienced by the beam. The beam is discretised with $P_3$ finite elements and the nonlinear problem is solved using PETSc SNES. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScSNES/hyperelasticity.py.html).](figures/hyperelastic.png)
 
 
-![Flow past a cylinder. The Navier-Stokes equations are discretised on a NETGEN high-order mesh and Firedrake. We use high-order Taylor-Hood elements ($P_4$-$P_3$) and a vertex-patch smoother as fine level correction in a two-level additive Schwarz preconditioner, [@BenziOlshanskii]. The full example, with more details, can be found in [ngsPETSc documentation](https://github.com/NGSolve/ngsPETSc). On the right a zoom near the cylinder shows the curvature of the mesh.](figures/flow_past_a_cylinder.png)
+![Flow past a cylinder. The Navier-Stokes equations are discretised on a NETGEN high-order mesh with Firedrake. We use high-order Taylor-Hood elements ($P_4$-$P_3$) and a vertex-patch smoother as fine level correction in a two-level additive Schwarz preconditioner, [@BenziOlshanskii]. The full example, with more details, can be found in [ngsPETSc documentation](https://github.com/NGSolve/ngsPETSc). On the right a zoom near the cylinder shows the curvature of the mesh.](figures/flow_past_a_cylinder.png)
 
 
-![An adaptive scheme applied to the Poisson problem on an L-shaped domain. The domain is discretised using $P_1$ finite elements and the adaptive mesh refinement is driven by a Babuška-Rheinboldt error estimator [@BabuskaRheinboldt]. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/utils/firedrake/lomesh.py.html).](figures/adaptivity.png)
+![An adaptive scheme applied to the Poisson problem on an L-shaped domain. The domain is discretised using $P_1$ finite elements and the adaptive mesh refinement is driven by a Babuška-Rheinboldt error estimator [@BabuskaRheinboldt]. The adaptive procedure delivers optimal scaling of the energy norm of the error in terms of the number of degrees of freedom. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/utils/firedrake/lomesh.py.html).](figures/adaptivity.png)
 
 
-More example can be found in the documentation of ngsPETSc manual [@manual].
+More examples can be found in the documentation of ngsPETSc manual [@manual].

@@ -1,4 +1,4 @@
-Vertex Patch smoothing for Augmented Lagrangian formulations of the Oseen problem
+Vertex patch smoothing for augmented Lagrangian formulations of the Oseen problem
 ===================================================================================
 
 In this tutorial, we will see how to use an augmented Lagrangian formulation to precondition the Oseen problem, i.e.
