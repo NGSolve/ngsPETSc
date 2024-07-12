@@ -56,7 +56,7 @@ ngsPETsc aims to assist with the solution of challenging PDEs on complex geometr
 In this section we provide a few examples of results that can be obtained using ngsPETSc.
 We begin by considering a simple Poisson problem on a unit square domain discretised with $P_2$ finite elements and compare the performance of different solvers available in NGSolve via ngsPETSc. In particular, we showcase PETSc's algebraic multigrid algorithm GAMG [@PETScGAMG], PETSc's domain decomposition BDDC algorithm [@PETScBDDC], NGSolve's own implementation of element-wise BDDC, Hypre [@hypre] and Trillinos ML [@ml]. 
 In particular, we would like to pointout that there is no non-element wise BDDC preconditioner aveilable in NGSolve. The result is shown in Table 1 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScKSP/poisson.py.html).
-All the preconditioners here considered are robust as we refine the mesh for a $P_1$ discretisation, but out-of-the-box only BDDC type preconditioners are robust as we refine the mesh for a $P_2$ discretisation. A possible cure to this issue is discussed in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/poisson.py.html).
+All the preconditioners here considered are robust as we refine the mesh for a $P_1$ discretisation, but out-of-the-box only BDDC type preconditioners are robust as we refine the mesh for a $P_2$ discretisation. A possible cure for this issue is discussed in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/poisson.py.html).
 
 N. DoFs  | PETSc GAMG   | HYPRE | ML  | PETSc BDDC* | Element-wise BDDC** |
 ---------|--------------|-------|-----|------------|--------------------|
