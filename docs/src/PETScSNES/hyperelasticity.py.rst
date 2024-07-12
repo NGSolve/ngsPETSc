@@ -1,4 +1,4 @@
-Non-linear simulation of a Hyperelastic beam
+Non-linear simulation of a hyperelastic beam
 =============================================
 
 We consider a simple beam with a hyperelastic material model. In particular, we will assume the beam has energy:
