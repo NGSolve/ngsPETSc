@@ -56,11 +56,11 @@ ngsPETsc aims to assist with the solution of challenging PDEs on complex geometr
 In this section we provide a few examples of results that can be obtained using ngsPETSc.
 We begin considering a simple Poisson problem on a unit square domain discretised with $P_2$ finite elements and compare the performance of different solvers available in NGSolve via ngsPETSc. In particular we compared PETSc GAMG [@PETScGAMG], PETSc BDDC [@PETScBDDC] and NGSolve own implementation of element-wise BDDC. The result is shown in Table 1 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScKSP/poisson.py.html).
 
-N. DoFs  | PETSc GAMG   | PETSc BDDC (N=2) | PETSc BDDC (N=4) | PETSc BDDC (N=6) | Element-wise BDDC* |
+N. DoFs  | PETSc GAMG   | HYPRE            |  | PETSc BDDC (N=6) | Element-wise BDDC* |
 ---------|--------------|------------------|------------------|------------------|--------------------|
-116716   |35  (1.01e-05)|5 (9.46e-06)      |7 (1.27e-05)      |9 (5.75e-06)      |10 (2.40e-06)       |
-464858   |69  (7.09e-06)|5 (8.39e-06)      |7 (1.27e-05)      |8 (8.19e-06)      |9 (6.78e-06)        |
-1855428  |142 (3.70e-06)|        -         |8 (7.12e-06)      |9 (5.39e-06)      |10 (8.79e-06)       |
+116716   |35            |                  |                 |9                 |10                  |
+464858   |69            |                  |                 |8                 |9                   |
+1855428  |142           |                  |                 |9                 |10                  |
 
 Table 1: The number of degrees of freedom (DoFs) and the number of iterations required to solve the Poisson problem with different solvers. The numbers in parentheses are the relative residuals. *Element-wise BDDC is a custom implementation of BDDC preconditioner in NGSolve.
 
@@ -69,15 +69,17 @@ $$
 \nu\Delta \vec{u} +\vec{b}\cdot \nabla\vec{u} - \nabla p = \vec{f},
 \\ \quad \nabla \cdot \vec{u} = 0,
 $$
-We discretise this problem using high-order Hood-Taylor elements ($P_4$-$P_3$) on a unit square domain. We employ an augmented Lagrangian formulation to better enforce the incompressibility constraint. We present the performance of a two level additive Schwarz preconditioner with vertex-patch smoothing as fine level correction [@BenziOlshanskii]. This preconditioner was built using ngsPETSc. The result for different viscosities $\nu$ are shown in Table 2 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/oseen.py.html).
+We discretise this problem using high-order Hood-Taylor elements ($P_4$-$P_3$) on a unit square domain. We employ an augmented Lagrangian formulation to better enforce the incompressibility constraint. We present the performance of a two level additive Schwarz preconditioner with vertex-patch smoothing as fine level correction [@BenziOlshanskii; @FarrellEtAll]. This preconditioner was built using ngsPETSc. The result for different viscosities $\nu$ are shown in Table 2 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/oseen.py.html).
 
 Ref. Levels (N. DoFs) | $\nu=10^{-2}$|$\nu=10^{-3}$|$\nu=10^{-4}$|
 ----------------------|--------------|-------------|-------------|
-1 (83842)             |3  (9.52e-07) |4 (3.05e-06) |6 (2.56e-05) |
-2 (334082)            |3  (6.09e-07) |4 (1.53e-06) |6 (8.85e-06) |
-3 (1333762)           |3  (8.21e-07) |4 (3.84e-06) |6 (7.05e-06) |
+1 (83842)             |3             |4            |6            |
+2 (334082)            |3             |4            |6            |
+3 (1333762)           |3             |4            |6            |
 
-Table 2: The number of iterations required to solve the Oseen problem with different viscosities and different refinement levels. In parentheses we report the number of degrees of freedom (DoFs) on the finest level and the relative residuals.
+Table 2: The number of iterations required to solve the Oseen problem with different viscosities and different refinement levels. In parentheses we report the number of degrees of freedom (DoFs) on the finest level and the relative residuals. The choosen stopping criterion is the relative residual equal to $10^{-8}$.
+
+Finally, we consider a Navier-Stokes problem, i.e.
 
 Figure 1 shows a simulation of a hyperelastic beam, solved with PETSc nonlinear solvers.
 Figure 2 shows a high-order NETGEN mesh employed in Firedrake for the simulation of a Navier-Stokes flow past a cylinder. Figure 3 shows the adaptive mesh refinement for a Poisson problem on an L-shaped domain.
