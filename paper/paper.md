@@ -35,7 +35,7 @@ bibliography: paper.bib
 
 # Summary
 
-Combining advanced meshing techniques with robust solver capabilities is essential for solving difficult problems in computational science and engineering. This paper introduces ngsPETSc, a software built with petsc4py [@petsc4py] that seamlessly integrates the NETGEN mesher [@Netgen],the NGSolve finite element library [@NGSolve], and the PETSc toolkit [@PETSc]. ngsPETSc enables the use of NETGEN meshes and geometries in PETSc-based solvers, and provides NGSolve users access to the wide array of linear, nonlinear solvers and time-steppers available in PETSc.
+Combining advanced meshing techniques with robust solver capabilities is essential for solving difficult problems in computational science and engineering. This paper introduces ngsPETSc, software built with petsc4py [@petsc4py] that seamlessly integrates the NETGEN mesher [@Netgen], the NGSolve finite element library [@NGSolve], and the PETSc toolkit [@PETSc]. ngsPETSc enables the use of NETGEN meshes and geometries in PETSc-based solvers, and provides NGSolve users access to the wide array of linear, nonlinear solvers, and time-steppers available in PETSc.
 
 # Statement of Need
 
@@ -43,13 +43,13 @@ Efficiently solving large-scale partial differential equations (PDEs) on complex
 
 In particular, by combining PETSc, NETGEN, and NGSolve within ngsPETSc the following new features are available:
 
-- PETSc Krylov solvers, including flexible and pipelined variants, are available in NGSolve. They can be used both with NGSolve matrix-free operators and NGSolve block matrices.
-- PETSc preconditioners can be used as building blocks inside the NGSolve preconditioning infrastructure;
+- PETSc Krylov solvers, including flexible and pipelined variants, are available in NGSolve. They can be used both with NGSolve matrix-free operators and NGSolve block matrices;
+- PETSc preconditioners can be used as building blocks within the NGSolve preconditioning infrastructure;
 - PETSc nonlinear solvers are available in NGSolve, including advanced line search and trust region Newton-based methods;
-- high order meshes constructed in NETGEN together with adaptive mesh refinement and mesh hierarchies for geometric multigrid are now available in Firedrake [@Firedrake]; 
+- high order meshes constructed in NETGEN are now available in Firedrake [@Firedrake], enabling adaptive mesh refinement and curved mesh hierarchies for geometric multigrid.
 
 In conclusion, ngsPETSc is a lightweight, user-friendly interface that bridges the gap between NETGEN, NGSolve, and PETSc, building on top of petsc4py.
-ngsPETsc aims to assist with the solution of challenging PDEs on complex geometries, enriching the already powerful capabilities of NETGEN, NGSolve, and Firedrake.
+ngsPETsc aims to assist with the solution of challenging PDEs on complex geometries, enriching the already powerful capabilities of NETGEN, NGSolve, PETSc, and Firedrake.
 
 # Examples
 
