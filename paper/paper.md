@@ -54,26 +54,24 @@ ngsPETsc aims to assist with the solution of challenging PDEs on complex geometr
 # Examples
 
 In this section we provide a few examples of results that can be obtained using ngsPETSc.
-We begin by considering a simple Poisson problem on a unit square domain discretised with $P_2$ finite elements and compare the performance of different solvers available in NGSolve via ngsPETSc. In particular we compared PETSc's algebraic multigrid algorithm GAMG [@PETScGAMG], PETSc's domain decomposition BDDC algorithm [@PETScBDDC] and NGSolve's own implementation of element-wise BDDC. The result is shown in Table 1 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScKSP/poisson.py.html).
+We begin by considering a simple Poisson problem on a unit square domain discretised with $P_2$ finite elements and compare the performance of different solvers available in NGSolve via ngsPETSc. In particular, we showcase PETSc's algebraic multigrid algorithm GAMG [@PETScGAMG], PETSc's domain decomposition BDDC algorithm [@PETScBDDC], NGSolve's own implementation of element-wise BDDC, Hypre [@hypre] and Trillinos ML [@ml]. 
+In particular, we would like to pointout that there is no non-element wise BDDC preconditioner aveilable in NGSolve. The result is shown in Table 1 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScKSP/poisson.py.html).
+All the preconditioners here considered are robust as we refine the mesh for a $P_1$ discretisation, but out-of-the-box only BDDC type preconditioners are robust as we refine the mesh for a $P_2$ discretisation. A possible cure to this issue is discussed in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/poisson.py.html).
 
-N. DoFs  | PETSc GAMG   | HYPRE            |  | PETSc BDDC (N=6) | Element-wise BDDC* |
----------|--------------|------------------|------------------|------------------|--------------------|
-116716   |35            |                  |                 |9                 |10                  |
-464858   |69            |                  |                 |8                 |9                   |
-1855428  |142           |                  |                 |9                 |10                  |
+N. DoFs  | PETSc GAMG   | HYPRE | ML  | PETSc BDDC* | Element-wise BDDC** |
+---------|--------------|-------|-----|------------|--------------------|
+116716   |35            | 36    | 31  |9           |10                  |
+464858   |69            | 74    | 63  |8           |9                   |
+1855428  |142           | 148   | 127 |9           |10                  |
 
-Table 1: The number of degrees of freedom (DoFs) and the number of iterations required to solve the Poisson problem with different solvers. The numbers in parentheses are the relative residuals. *Element-wise BDDC is a custom implementation of BDDC preconditioner in NGSolve.
+Table 1: The number of degrees of freedom (DoFs) and the number of iterations required to solve the Poisson problem with different solvers. Each row corresponds to a level of unifrom refinement.  As stopping criterion we used the relative residual equal to $10^{-6}$. *We choose to use PETSc BDDC with six subdomains. **Element-wise BDDC is a custom implementation of BDDC preconditioner in NGSolve.
 
 We next consider the Oseen problem, i.e.
 $$
 \nu\Delta \vec{u} +\vec{b}\cdot \nabla\vec{u} - \nabla p = \vec{f},
 \\ \quad \nabla \cdot \vec{u} = 0,
 $$
-<<<<<<< HEAD
-We discretise this problem using high-order Hood-Taylor elements ($P_4$-$P_3$) on a unit square domain. We employ an augmented Lagrangian formulation to better enforce the incompressibility constraint. We present the performance of a two level additive Schwarz preconditioner with vertex-patch smoothing as fine level correction [@BenziOlshanskii; @FarrellEtAll]. This preconditioner was built using ngsPETSc. The result for different viscosities $\nu$ are shown in Table 2 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/oseen.py.html).
-=======
 We discretise this problem using high-order Hood-Taylor elements ($P_4$-$P_3$) on a unit square domain. We employ an augmented Lagrangian formulation to better enforce the incompressibility constraint. We present the performance of a two level additive Schwarz preconditioner with vertex-patch smoothing as fine level correction [@BenziOlshanskii]. This preconditioner was built using ngsPETSc. The result for different viscosities $\nu$ are shown in Table 2, exhibiting reasonable robustness as the viscosity (and hence Reynolds number) changes. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/oseen.py.html).
->>>>>>> d78eb24182d5d2bcb21c203fbe8b22368fab429c
 
 Ref. Levels (N. DoFs) | $\nu=10^{-2}$|$\nu=10^{-3}$|$\nu=10^{-4}$|
 ----------------------|--------------|-------------|-------------|
@@ -81,7 +79,7 @@ Ref. Levels (N. DoFs) | $\nu=10^{-2}$|$\nu=10^{-3}$|$\nu=10^{-4}$|
 2 (334082)            |3             |4            |6            |
 3 (1333762)           |3             |4            |6            |
 
-Table 2: The number of iterations required to solve the Oseen problem with different viscosities and different refinement levels. In parentheses we report the number of degrees of freedom (DoFs) on the finest level and the relative residuals. The choosen stopping criterion is the relative residual equal to $10^{-8}$.
+Table 2: The number of iterations required to solve the Oseen problem with different viscosities and different refinement levels. In parentheses we report the number of degrees of freedom (DoFs) on the finest level. The choosen stopping criterion is the relative residual equal to $10^{-8}$.
 
 Finally, we consider a Navier-Stokes problem, i.e.
 
