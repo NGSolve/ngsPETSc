@@ -71,7 +71,7 @@ $$
 \nu\Delta \vec{u} +\vec{b}\cdot \nabla\vec{u} - \nabla p = \vec{f},
 \\ \quad \nabla \cdot \vec{u} = 0,
 $$
-We discretise this problem using high-order Hood-Taylor elements ($P_4$-$P_3$) on a unit square domain [@HT; @Boffi]. We employ an augmented Lagrangian formulation to better enforce the incompressibility constraint. We present the performance of GMRES preconditioned with a two level additive Schwarz preconditioner with vertex-patch smoothing as fine level correction [@BenziOlshanskii; @FarrellEtAll]. This preconditioner was built using ngsPETSc. The result for different viscosities $\nu$ are shown in Table 2, exhibiting reasonable robustness as the viscosity (and hence Reynolds number) changes. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/oseen.py.html).
+We discretise this problem using high-order Hood-Taylor elements ($P_4$-$P_3$) on a unit square domain [@HT; @Boffi]. We employ an augmented Lagrangian formulation to better enforce the incompressibility constraint. We present the performance of GMRES [@GMRES] preconditioned with a two level additive Schwarz preconditioner with vertex-patch smoothing as fine level correction [@BenziOlshanskii; @FarrellEtAll]. This preconditioner was built using ngsPETSc. The result for different viscosities $\nu$ are shown in Table 2, exhibiting reasonable robustness as the viscosity (and hence Reynolds number) changes. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/oseen.py.html).
 
 Ref. Levels (N. DoFs) | $\nu=10^{-2}$|$\nu=10^{-3}$|$\nu=10^{-4}$|
 ----------------------|--------------|-------------|-------------|
