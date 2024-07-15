@@ -81,8 +81,8 @@ We discretise this problem using high-order Hood-Taylor elements ($P_4$-$P_3$) o
 
 Table 2: The number of iterations required to solve the Oseen problem with different viscosities and different refinement levels. In parentheses we report the number of degrees of freedom (DoFs) on the finest level. The GMRES iteration was terminated when the residual norm decreased by eight orders of magnitude. 
 
-Figure 1 shows a simulation of a hyperelastic beam, solved with PETSc nonlinear solvers.
-Figure 2 shows a high-order NETGEN mesh employed in Firedrake for the simulation of a Navier-Stokes flow past a cylinder. Figure 3 shows the adaptive mesh refinement for a Poisson problem on an L-shaped domain.
+Figure 1 shows a simulation of a hyperelastic beam, solved with PETSc nonlinear solvers; the line search algorithms in PETSc solve this straightforwardly, but an undamped Newton iteration does not converge.
+Figures 2 and 3 show simulations in Firedrake that were not previously possible. Figure 2 shows a high-order NETGEN mesh employed for the simulation of a Navier-Stokes flow past a cylinder, while Figure 3 shows adaptive mesh refinement for a Poisson problem on an L-shaped domain. The adaptive procedure achieves the optimal complexity of error with degree of freedom count, as expected.
 
 
 ![A hyperelastic beam deformed by fixing one end and applying a twist at the other end. The colouring corresponds to the deviatoric von Mises stress experienced by the beam. The beam is discretised with $P_3$ finite elements and the nonlinear problem is solved using PETSc SNES. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScSNES/hyperelasticity.py.html).](figures/hyperelastic.png)
