@@ -46,7 +46,7 @@ In particular, by combining PETSc, NETGEN, and NGSolve within ngsPETSc the follo
 - PETSc Krylov solvers, including flexible and pipelined variants, are available in NGSolve. They can be used both with NGSolve matrix-free operators and NGSolve block matrices;
 - PETSc preconditioners can be used as building blocks within the NGSolve preconditioning infrastructure;
 - PETSc nonlinear solvers are available in NGSolve, including advanced line search and trust region Newton-based methods;
-- high order meshes constructed in NETGEN are now available in Firedrake [@Firedrake], enabling adaptive mesh refinement and curved mesh hierarchies for geometric multigrid.
+- high order meshes constructed in NETGEN are now available in Firedrake [@Firedrake], enabling adaptive mesh refinement and hierarchies of curved meshes for geometric multigrid.
 
 In conclusion, ngsPETSc is a lightweight, user-friendly interface that bridges the gap between NETGEN, NGSolve, and PETSc, building on top of petsc4py.
 ngsPETsc aims to assist with the solution of challenging PDEs on complex geometries, enriching the already powerful capabilities of NETGEN, NGSolve, PETSc, and Firedrake.
@@ -54,17 +54,17 @@ ngsPETsc aims to assist with the solution of challenging PDEs on complex geometr
 # Examples
 
 In this section we provide a few examples of results that can be obtained using ngsPETSc.
-We begin by considering a simple primal Poisson problem on a unit square domain discretised with conforming $P_2$ finite elements and compare the performance of different solvers newly available in NGSolve via ngsPETSc. In particular, we showcase PETSc's algebraic multigrid algorithm GAMG [@PETScGAMG], PETSc's domain decomposition BDDC algorithm [@PETScBDDC], NGSolve's own implementation of element-wise BDDC, Hypre [@hypre] and Trillinos ML [@ml], each combined with the conjugate gradient method. 
+We begin by considering a simple primal Poisson problem on a unit square domain discretised with conforming $P_2$ finite elements and compare the performance of different solvers newly available in NGSolve via ngsPETSc. In particular, we consider PETSc's algebraic multigrid algorithm GAMG [@PETScGAMG], PETSc's domain decomposition BDDC algorithm [@PETScBDDC], NGSolve's own implementation of element-wise BDDC, Hypre [@hypre] and Trilinos ML [@ml], each combined with the conjugate gradient method. 
 Other than the elementwise BDDC preconditioner, these preconditioners were not previously available in NGSolve. The results are shown in Table 1 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScKSP/poisson.py.html).
 All the preconditioners here considered exhibit robust conjugate gradient iteration counts as we refine the mesh for a $P_1$ discretisation, but out-of-the-box only BDDC type preconditioners are robust as we refine the mesh for a $P_2$ discretisation. A possible remedy for this issue is discussed in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/poisson.py.html).
 
-N. DoFs  | PETSc GAMG   | HYPRE | ML  | PETSc BDDC* | Element-wise BDDC** |
+\# DoFs  | PETSc GAMG   | HYPRE | ML  | PETSc BDDC* | Element-wise BDDC** |
 ---------|--------------|-------|-----|------------|--------------------|
 116716   |35            | 36    | 31  |9           |10                  |
 464858   |69            | 74    | 63  |8           |9                   |
 1855428  |142           | 148   | 127 |9           |10                  |
 
-Table 1: The number of degrees of freedom (DoFs) and the number of iterations required to solve the Poisson problem with different solvers. Each row corresponds to a level of uniform refinement.  The conjugate gradient solve was terminated when the residual norm decreased by six orders of magnitude. *We choose to use PETSc BDDC with six subdomains. **Element-wise BDDC is a custom implementation of BDDC preconditioner in NGSolve.
+Table 1: The number of degrees of freedom (DoFs) and the number of iterations required to solve the Poisson problem with different solvers. Each row corresponds to a level of uniform refinement.  The conjugate gradient solve was terminated when the residual norm decreased by six orders of magnitude. *We choose to use PETSc BDDC with six subdomains. **Element-wise BDDC is a custom implementation of BDDC in NGSolve.
 
 We next consider the Oseen problem, i.e.
 $$
@@ -73,7 +73,7 @@ $$
 $$
 We discretise this problem using high-order Hood-Taylor elements ($P_4$-$P_3$) on a unit square domain [@HT; @Boffi]. We employ an augmented Lagrangian formulation to better enforce the incompressibility constraint. We present the performance of GMRES [@GMRES] preconditioned with a two level additive Schwarz preconditioner with vertex-patch smoothing as fine level correction [@BenziOlshanskii; @FarrellEtAll]. This preconditioner was built using ngsPETSc. The result for different viscosities $\nu$ are shown in Table 2, exhibiting reasonable robustness as the viscosity (and hence Reynolds number) changes. The full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/oseen.py.html).
 
-Ref. Levels (N. DoFs) | $\nu=10^{-2}$|$\nu=10^{-3}$|$\nu=10^{-4}$|
+\# refinements (\# DoFs) | $\nu=10^{-2}$|$\nu=10^{-3}$|$\nu=10^{-4}$|
 ----------------------|--------------|-------------|-------------|
 1 (83842)             |3             |4            |6            |
 2 (334082)            |3             |4            |6            |
