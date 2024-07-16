@@ -44,9 +44,9 @@ Efficiently solving large-scale partial differential equations (PDEs) on complex
 In particular, by combining PETSc, NETGEN, and NGSolve within ngsPETSc the following new features are available:
 
 - PETSc Krylov solvers, including flexible and pipelined variants, are available in NGSolve. They can be used both with NGSolve matrix-free operators and NGSolve block matrices;
-- PETSc preconditioners can be used as building blocks within the NGSolve preconditioning infrastructure;
+- PETSc preconditioners can be used as components within the NGSolve preconditioning infrastructure;
 - PETSc nonlinear solvers are available in NGSolve, including advanced line search and trust region Newton-based methods;
-- high order meshes constructed in NETGEN are now available in Firedrake [@Firedrake], enabling adaptive mesh refinement and hierarchies of curved meshes for geometric multigrid.
+- high order meshes constructed in NETGEN are now available in Firedrake [@Firedrake], enabling adaptive mesh refinement and geometric multigrid on hierarchies of curved meshes.
 
 In conclusion, ngsPETSc is a lightweight, user-friendly interface that bridges the gap between NETGEN, NGSolve, and PETSc, building on top of petsc4py.
 ngsPETsc aims to assist with the solution of challenging PDEs on complex geometries, enriching the already powerful capabilities of NETGEN, NGSolve, PETSc, and Firedrake.
@@ -54,9 +54,9 @@ ngsPETsc aims to assist with the solution of challenging PDEs on complex geometr
 # Examples
 
 In this section we provide a few examples of results that can be obtained using ngsPETSc.
-We begin by considering a simple primal Poisson problem on a unit square domain discretised with conforming $P_2$ finite elements and compare the performance of different solvers newly available in NGSolve via ngsPETSc. In particular, we consider PETSc's algebraic multigrid algorithm GAMG [@PETScGAMG], PETSc's domain decomposition BDDC algorithm [@PETScBDDC], NGSolve's own implementation of element-wise BDDC, Hypre [@hypre] and Trilinos ML [@ml], each combined with the conjugate gradient method. 
+We begin by considering a simple primal Poisson problem on a unit square domain discretised with conforming $P_2$ finite elements and compare the performance of different solvers newly available in NGSolve via ngsPETSc. In particular, we consider PETSc's algebraic multigrid algorithm GAMG [@PETScGAMG], PETSc's domain decomposition BDDC algorithm [@PETScBDDC], NGSolve's own implementation of element-wise BDDC, the Hypre algebraic multigrid algorithm [@hypre] and the ML algebraic multigrid algorithm [@ml], each combined with the conjugate gradient method. 
 Other than the elementwise BDDC preconditioner, these preconditioners were not previously available in NGSolve. The results are shown in Table 1 and the full example, with more details, can be found in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScKSP/poisson.py.html).
-All the preconditioners here considered exhibit robust conjugate gradient iteration counts as we refine the mesh for a $P_1$ discretisation, but out-of-the-box only BDDC type preconditioners are robust as we refine the mesh for a $P_2$ discretisation. A possible remedy for this issue is discussed in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/poisson.py.html).
+All the preconditioners considered exhibit robust conjugate gradient iteration counts as we refine the mesh for a $P_1$ discretisation, but out-of-the-box only BDDC type preconditioners are robust as we refine the mesh for a $P_2$ discretisation. A possible remedy for this issue is discussed in the [ngsPETSc documentation](https://ngspetsc.readthedocs.io/en/latest/PETScPC/poisson.py.html).
 
 \# DoFs  | PETSc GAMG   | HYPRE | ML  | PETSc BDDC* | Element-wise BDDC** |
 ---------|--------------|-------|-----|------------|--------------------|
