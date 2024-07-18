@@ -57,7 +57,10 @@ def createFromPC(a, freeDofs, solverParameters):
             self.mapping = VectorMapping((dofs,freeDofs,{"bsize": [1]}))
             self.ngX = a.CreateColVector()
             self.ngY = a.CreateColVector()
-            self.prj = Projector(mask=a.actingDofs, range=True)
+            if hasattr(a, "actingDofs"):
+                self.prj = Projector(mask=a.actingDofs, range=True)
+            else:
+                self.prj = Projector(mask=freeDofs, range=True)
 
         def mult(self, mat, X, Y): #pylint: disable=W0613
             """
@@ -159,7 +162,7 @@ class KrylovSolver():
 
     """
     def __init__(self, a, dofsDescr, p=None, nullspace=None, optionsPrefix="",
-                 solverParameters=None):
+                 solverParameters={}):
         # Grabbing dofs information
         if isinstance(dofsDescr, FESpace):
             freeDofs = dofsDescr.FreeDofs()
@@ -195,9 +198,8 @@ class KrylovSolver():
         self.mapping = VectorMapping((dofs,freeDofs,{"bsize":entrysize}))
         #Fixing PETSc options
         options_object = PETSc.Options()
-        if solverParameters is not None:
-            for optName, optValue in solverParameters.items():
-                options_object[optName] = optValue
+        for optName, optValue in solverParameters.items():
+            options_object[optName] = optValue
 
         #Setting PETSc Options
         pscA.setOptionsPrefix(optionsPrefix)
@@ -235,6 +237,9 @@ class KrylovSolver():
         self.ksp.setFromOptions()
         self.pscX, self.pscB = pscA.createVecs()
 
+        #Attaching operator
+        self.ngsA = ngsA
+
     def solve(self, b, x, mapping=None):
         """
         This function solves the linear system
@@ -248,3 +253,39 @@ class KrylovSolver():
         mapping.petscVec(b, self.pscB)
         self.ksp.solve(self.pscB, self.pscX)
         mapping.ngsVec(self.pscX, x)
+
+    def operator(self):
+        """
+        This function returns the operator of the KSP solver
+        """
+        return KSPOpeator(self)
+
+class KSPOpeator(la.BaseMatrix):
+    """
+    This class wraps a PETSc KSP solver as an NGSolve matrix
+    """
+    def __init__(self, ksp):
+        la.BaseMatrix.__init__(self)
+        self.ksp = ksp
+
+    def Shape(self):
+        '''
+        Shape of the BaseMatrix
+
+        '''
+        return self.ksp.ngsA.shape
+
+    def CreateVector(self,col):
+        '''
+        Create vector corresponding to the matrix
+
+        :arg col: True if one want a column vector
+
+        '''
+        return self.ksp.ngsA.CreateVector(not col)
+
+    def Mult(self, x, y):
+        """
+        Matrix-vector product
+        """
+        self.ksp.solve(x, y)

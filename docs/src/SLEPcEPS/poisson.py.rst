@@ -1,8 +1,8 @@
 Solving the Laplace eigenvalue problem using SLEPc EPS
 =======================================================
 
-In this tutorial, we explore using `SLEPc EPS` to solve the Laplace eigenvalue problem in different formulations.
-We begin considering the Poisson eigenvalue problem in primal form, i.e.
+In this tutorial, we explore using `SLEPc EPS` to solve the Laplace eigenvalue problem in primal and mixed formulations.
+We begin by considering the Poisson eigenvalue problem in primal form, i.e.
 
 .. math::
 
@@ -16,10 +16,7 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
    import numpy as np
    from mpi4py.MPI import COMM_WORLD
 
-   if COMM_WORLD.rank == 0:
-      mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
-   else:
-      mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
+   mesh = Mesh(unit_square.GenerateMesh(maxh=0.1, comm=COMM_WORLD))
 
    order = 3
    fes = H1(mesh, order=order, dirichlet="left|right|top|bottom")
@@ -30,9 +27,9 @@ Such a discretisation can easily be constructed using NGSolve as follows: ::
    m = BilinearForm(-1*u*v*dx, symmetric=True)
    m.Assemble()
 
-We then proceed to solve the eigenvalue problem using `SLEPc EPS` which is wrapped by ngsPETSc's :code:`EigenSolver` class. 
-In particular, we will use SLEPc implementation of a locally optimal block preconditioned conjugate gradient.
-Notice that we have assembled the mass matrix so that it is symmetric negative definite, this is because ngsPETSc :code:`Eigensolver` requires  all eigenvalue problems to be written as a polynomial eigenvalue problem, i.e.
+We then proceed to solve the eigenvalue problem using `SLEPc EPS` which is wrapped by ngsPETSc's :code:`EigenSolver` class.
+In particular, we will use the SLEPc implementation of locally optimal block preconditioned conjugate gradient.
+Notice that we have assembled the mass matrix so that it is symmetric negative definite; this is because ngsPETSc :code:`Eigensolver` requires all eigenvalue problems to be written as a polynomial eigenvalue problem, i.e.
 
 .. math::
    A\vec{U} - \lambda M\vec{U} = 0
@@ -73,10 +70,10 @@ We can discretise this problem using NGSolve as follows: ::
    m = BilinearForm(1*u*v*dx)
    m.Assemble()
 
-We can then solve the eigenvalue problem using `SLEPc EPS` using ngsPETSc's `EigenSolver` class.
-The mass matrix now has a large kernel, hence is no longer symmetric positive definite, therefore we can not use LOBPCG as a solver.
+We can again solve the eigenvalue problem using ngsPETSc's `EigenSolver` class.
+The matrix on the right-hand side of the generalised eigenvalue problem now has a large kernel, hence is no longer symmetric positive definite, therefore we can not use LOBPCG as a solver.
 Instead, we will use a Krylov-Schur solver with a shift-and-invert spectral transformation to target the smallest eigenvalues.
-Notice that because we are using a shift-and-invert spectral transformation we only need to invert the stiffness matrix which has a trivial kernel since we are using an inf-sup discretisation.
+Notice that because we are using a shift-and-invert spectral transformation we only need to invert the stiffness matrix which has a trivial kernel since we are using an inf-sup stable discretisation.
 If we tried to use a simple shift transformation to target the largest eigenvalues we would have run into the error of trying to invert a singular matrix.::
    
    solver = EigenSolver((m, a), W, 10,

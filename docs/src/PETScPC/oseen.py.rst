@@ -1,4 +1,4 @@
-Vertex Patch smoothing for Augmented Lagrangian formulations of the Oseen problem
+Vertex patch smoothing for augmented Lagrangian formulations of the Oseen problem
 ===================================================================================
 
 In this tutorial, we will see how to use an augmented Lagrangian formulation to precondition the Oseen problem, i.e.
@@ -22,7 +22,7 @@ Let us begin defining the parameters of the problem. ::
    b = CoefficientFunction((4*(2*y-1)*(1-x)*x, -4*(2*x-1)*(1-y)*y)) 
    uin = CoefficientFunction((1,0))
 
-In particular, we will consider a high-order Hood-Taylor discretization of the problem. Such a discretization can easily be constructed using NGSolve as follows: ::
+In particular, we will consider a high-order Hood-Taylor discretisation of the problem. Such a discretisation can easily be constructed using NGSolve as follows: ::
 
    from netgen.occ import *
    import netgen.gui
@@ -47,8 +47,7 @@ In particular, we will consider a high-order Hood-Taylor discretization of the p
    f = LinearForm(V)
    g = LinearForm(Q)
 
-In :doc:`stokes.py` we have seen that augmenting the Stokes linear system with a :math:`\gamma(div(\vec{u}),div(\vec{v}))_{L^2(\Omega)}` we can obtain better converge result for a filed split preconditioner where we use the pressure mass matrix instead of the Schur complement.
-Let us then construct the augmentation block of the matrix and the pressure mass matrix to use in the (2,2) block of our preconditioner. ::
+In :doc:`stokes.py` we have seen that augmenting the Stokes linear system with a :math:`\gamma(div(\vec{u}),div(\vec{v}))_{L^2(\Omega)}` we can obtain better converge result for a field-split preconditioner where we use the pressure mass matrix instead of the Schur complement. ::
 
    mG = BilinearForm((1/nu+gamma)*p*q*dx)
 
@@ -69,9 +68,9 @@ We can now assemble the matrices and the right-hand side of the problem. ::
                                        solverParameters={"pc_type":"lu"})
    K = BlockMatrix( [ [a.mat, b.mat.T], [b.mat, c.mat] ] )
 
-As discussed in :doc:`stokes.py`, the hard part remains the construction of the :math:`(A+\gamma B^TM^{-1}B)^{-1}` to precondition the (1,1) block.
-We will use a two-level additive Schwarz preconditioner made of an exact coarse correction and a vertex patch smoother, similar to what we have done in :doc:`stokes.py`.
-Notice that while the smoother is very similar to the one used in :doc:`stokes.py`, for the coarse correction we are here using h-multigrid and not p-multigrid. ::
+As discussed in :doc:`stokes.py`, the hard part remains the construction of :math:`(A+\gamma B^TM^{-1}B)^{-1}` to precondition the (1,1) block.
+We will use a two-level additive Schwarz preconditioner made of an exact coarse correction and a vertex patch smoother, similar to what we presented in :doc:`poisson.py`.
+Notice that while the smoother is very similar to the one used in :doc:`poisson.py`, for the coarse correction we are here using h-multigrid and not p-multigrid. ::
 
    def VertexStarPatchBlocks(mesh, fes):
       blocks = []
@@ -122,11 +121,11 @@ Notice that while the smoother is very similar to the one used in :doc:`stokes.p
    vtk.Do()
 
 
-.. list-table:: Preconditioners performance for different values of the Reynolds number, for a fixed penalty parameter :math:`\gamma=10^8`
+.. list-table:: Preconditioner performance for different values of the Reynolds number, for a fixed penalty parameter :math:`\gamma=10^8`
    :widths: auto
    :header-rows: 1
 
-   * - Rayleigh number
+   * - Raynolds number
      - 1e-2
      - 1e-3
      - 1e-4
@@ -135,4 +134,3 @@ Notice that while the smoother is very similar to the one used in :doc:`stokes.p
      - 3 (7.44e-6)
      - 5 (6.59e-6)
 
-       

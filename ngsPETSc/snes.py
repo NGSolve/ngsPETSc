@@ -29,16 +29,18 @@ class NonLinearSolver:
                    this fuction is used only if the argument a is None.
     '''
     def __init__(self, fes, a=None, residual=None, objective=None, jacobian=None,
-                 jacobianMatType="aij", solverParameters=None, optionsPrefix=None):
+                 solverParameters={}, optionsPrefix=""):
         self.fes = fes
         dofs = fes.ParallelDofs()
         self.second_order = False
+        if "ngs_jacobian_mat_type" not in solverParameters:
+            solverParameters["ngs_jacobian_mat_type"] = "aij"
+        jacobianMatType = solverParameters["ngs_jacobian_mat_type"]
         self.snes = PETSc.SNES().create(comm=dofs.comm.mpi4py)
         #Setting up the options
         options_object = PETSc.Options()
-        if solverParameters is not None:
-            for optName, optValue in solverParameters.items():
-                options_object[optName] = optValue
+        for optName, optValue in solverParameters.items():
+            options_object[optName] = optValue
         self.snes.setOptionsPrefix(optionsPrefix)
         self.snes.setFromOptions()
         #Setting up utility for mappings
@@ -50,6 +52,8 @@ class NonLinearSolver:
                 a.Apply(x.vec, res.vec)
                 return res
             self.residual = residual
+        else:
+            raise ValueError("Either evalFunction or a must be provided")
         if objective is not None: self.objective = objective
         elif a is not None:
             def objective(x):  #pylint: disable=E0102, E0213
