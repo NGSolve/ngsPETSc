@@ -39,6 +39,7 @@ def createFromMatrix(a, freeDofs, solverParameters):
             dofs = None
         mat = Matrix(a, (dofs, freeDofs, None), solverParameters["ngs_mat_type"])
         pscMat = mat.mat
+        return (a, pscMat)
     elif solverParameters["ngs_mat_type"] == "python":
         _, pscMat = createFromAction(a, freeDofs, solverParameters)
         return (a, pscMat)
