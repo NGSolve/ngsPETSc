@@ -65,5 +65,10 @@ class TrefftzEmbedding(object):
             self.QT.multTranspose(X, Z)
             self.A.mult(Z, W)
             self.QT.mult(W, Y)
-            
+
+class AggregationEmbedding(TrefftzEmbedding):
+    
+    def __init__(self, V, aggregation, dim=None, tol=1e-12):
+        
+        super().__init__(V, b, dim, tol)
          
