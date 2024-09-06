@@ -4,7 +4,7 @@ try:
     from firedrake.__future__ import interpolate
 except ImportError:
     fd = None
-
+from ngsPETSc.plex import CELL_SETS_LABEL, FACE_SETS_LABEL
 class TrefftzEmbedding(object):
 
     def __init__(self, V, b, dim=None, tol=1e-12):
@@ -67,26 +67,34 @@ class TrefftzEmbedding(object):
             self.QT.mult(W, Y)
 
 class AggregationEmbedding(TrefftzEmbedding):
-    
     def __init__(self, V, mesh, dim=None, tol=1e-12):
         # Relabel facets that are inside an aggregated region
         plex = mesh.topology_dm
         pStart,pEnd = plex.getDepthStratum(2)
+        numberBnd = len(mesh.netgen_mesh.GetRegionNames(dim=1))
         numberMat = len(mesh.netgen_mesh.GetRegionNames(dim=2))
         for mat in range(numberMat):
             facets = []
             for i in range(pStart,pEnd):
-                if plex.getLabelValue("Cell Sets",i) == mat+1:
+                if plex.getLabelValue(CELL_SETS_LABEL,i) == mat+1:
                     for f in plex.getCone(i):
                         if f in facets:
-                            print(numberMat+mat+1)
-                            plex.setLabelValue("Facet Sets",f,numberMat+mat+1)
+                            plex.setLabelValue(FACE_SETS_LABEL,f,numberBnd+numberMat+mat+1)
                     facets = facets + list(plex.getCone(i))
-        u = fd.TrialFunction(V)
-        v = fd.TestFunction(V)
+        self.mesh = fd.Mesh(plex)
+        h = fd.CellDiameter(self.mesh)
+        n = fd.FacetNormal(self.mesh)
+        W = fd.FunctionSpace(self.mesh, V.ufl_element())
+        u = fd.TrialFunction(W)
+        v = fd.TestFunction(W)
         b = fd.Constant(0)*fd.inner(u,v)*fd.dx
-        for i in range(numberMat+1, 2*numberMat+1):
-            print(i)
+        for i in range(numberBnd+numberMat+1, numberBnd+2*numberMat+1):
             b += fd.inner(fd.jump(u),fd.jump(v))*fd.dS(i)
-        super().__init__(V, b, dim, tol)
-         
+        for k in range(V.ufl_element().degree()):
+            for i in range(numberBnd+numberMat+1, numberBnd+2*numberMat+1):
+                b += ((0.5*h("+")+0.5*h("-"))**(2*i+2))*fd.inner(jumpNormal(u,n("+")),jumpNormal(v, n("+")))*fd.dS(i)
+
+        super().__init__(W, b, dim, tol)
+
+def jumpNormal(u,n):
+    return 0.5*fd.dot(n, (fd.grad(u)("+")-fd.grad(u)("-")))
