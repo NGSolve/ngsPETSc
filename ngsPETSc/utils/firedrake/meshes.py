@@ -255,3 +255,17 @@ class FiredrakeMesh:
         #Adding refine_marked_elements and curve_field methods
         setattr(fd.MeshGeometry, "refine_marked_elements", refineMarkedElements)
         setattr(fd.MeshGeometry, "curve_field", curveField)
+        #Adding mesh labels
+        Regions = self.meshMap.ngMesh.GetRegionNames(dim=geometric_dim)
+        bndRegions = self.meshMap.ngMesh.GetRegionNames(dim=geometric_dim-1)
+        numberRegions = len(Regions)
+        numberBndRegions = len(bndRegions)
+        self.firedrakeMesh.labels = {}
+        for i in range(numberBndRegions):
+            if bndRegions[i] not in self.firedrakeMesh.labels:
+                self.firedrakeMesh.labels[bndRegions[i]] = []
+            self.firedrakeMesh.labels[bndRegions[i]].append(i+1)
+        for i in range(numberRegions):
+            if Regions[i] not in self.firedrakeMesh.labels:
+                self.firedrakeMesh.labels[Regions[i]] = []
+            self.firedrakeMesh.labels[Regions[i]].append(i+1+numberBndRegions)
