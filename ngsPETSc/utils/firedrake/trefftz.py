@@ -10,7 +10,7 @@ class TrefftzEmbedding(object):
     def __init__(self, V, b, dim=None, tol=1e-12):
         self.V = V
         self.b = b
-        self.dim = V.dim() if not dim else dim
+        self.dim = V.dim() if not dim else dim + 1
         self.tol = tol
     
     def assemble(self, backend="PETSc"):
@@ -23,11 +23,11 @@ class TrefftzEmbedding(object):
             QT = sp.csr_matrix(VT[0:sum(sig<self.tol), :])
             QTpsc = PETSc.Mat().createAIJ(size=QT.shape, csr=(QT.indptr, QT.indices, QT.data))
             self.dimT = QT.shape[0]
-            return QTpsc
+            return QTpsc, sig
         
     def assembledEmbeddedMatrix(self, a, backend="PETSc"):
         self.A = fd.assemble(a).M.handle
-        self.QT = self.assemble(backend)
+        self.QT, _ = self.assemble(backend)
         pythonQTAQ = self.embeddedMatrixWrap(self.QT, self.A)
         pscQTAQ = PETSc.Mat().create(comm=PETSc.COMM_WORLD)
         pscQTAQ.setSizes(self.dimT, self.dimT)
@@ -68,7 +68,25 @@ class TrefftzEmbedding(object):
 
 class AggregationEmbedding(TrefftzEmbedding):
     
-    def __init__(self, V, aggregation, dim=None, tol=1e-12):
-        
+    def __init__(self, V, mesh, dim=None, tol=1e-12):
+        # Relabel facets that are inside an aggregated region
+        plex = mesh.topology_dm
+        pStart,pEnd = plex.getDepthStratum(2)
+        numberMat = len(mesh.netgen_mesh.GetRegionNames(dim=2))
+        for mat in range(numberMat):
+            facets = []
+            for i in range(pStart,pEnd):
+                if plex.getLabelValue("Cell Sets",i) == mat+1:
+                    for f in plex.getCone(i):
+                        if f in facets:
+                            print(numberMat+mat+1)
+                            plex.setLabelValue("Facet Sets",f,numberMat+mat+1)
+                    facets = facets + list(plex.getCone(i))
+        u = fd.TrialFunction(V)
+        v = fd.TestFunction(V)
+        b = fd.Constant(0)*fd.inner(u,v)*fd.dx
+        for i in range(numberMat+1, 2*numberMat+1):
+            print(i)
+            b += fd.inner(fd.jump(u),fd.jump(v))*fd.dS(i)
         super().__init__(V, b, dim, tol)
          
