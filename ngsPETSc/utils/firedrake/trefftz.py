@@ -114,7 +114,7 @@ class TrefftzEmbedding(object):
             self.E.embedVec(eY).copy(Y)
 
 class AggregationEmbedding(TrefftzEmbedding):
-    def __init__(self, V, mesh, dim=None, tol=1e-12):
+    def __init__(self, V, mesh,b = None, dim=None, tol=1e-12):
         # Relabel facets that are inside an aggregated region
         plex = mesh.topology_dm
         pStart,pEnd = plex.getDepthStratum(2)
@@ -134,12 +134,12 @@ class AggregationEmbedding(TrefftzEmbedding):
         W = fd.FunctionSpace(self.mesh, V.ufl_element())
         u = fd.TrialFunction(W)
         v = fd.TestFunction(W)
-        b = fd.Constant(0)*fd.inner(u,v)*fd.dx
+        self.b = fd.Constant(0)*fd.inner(u,v)*fd.dx if not b else b
         for i in range(numberBnd+numberMat+1, numberBnd+2*numberMat+1):
-            b += fd.inner(fd.jump(u),fd.jump(v))*fd.dS(i)
+            self.b += fd.inner(fd.jump(u),fd.jump(v))*fd.dS(i)
         for k in range(V.ufl_element().degree()):
             for i in range(numberBnd+numberMat+1, numberBnd+2*numberMat+1):
-                b += ((0.5*h("+")+0.5*h("-"))**(2*i+2))*fd.inner(jumpNormal(u,n("+")),jumpNormal(v, n("+")))*fd.dS(i)
+                self.b += ((0.5*h("+")+0.5*h("-"))**(2*i+2))*fd.inner(jumpNormal(u,n("+")),jumpNormal(v, n("+")))*fd.dS(i)
 
         super().__init__(W, b, dim, tol)
 
