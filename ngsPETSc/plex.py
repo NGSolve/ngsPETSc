@@ -33,9 +33,10 @@ class MeshMapping:
 
     '''
 
-    def __init__(self, mesh=None, comm=MPI.COMM_WORLD, name="Default"):
+    def __init__(self, mesh=None, comm=MPI.COMM_WORLD, geo=None, name="Default"):
         self.name = name
         self.comm = comm
+        self.geo = geo
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             self.createPETScDMPlex(mesh)
         elif isinstance(mesh,PETSc.DMPlex):
@@ -53,6 +54,8 @@ class MeshMapping:
         self.petscPlex = plex
         ngMesh = ngm.Mesh(dim=plex.getCoordinateDim())
         self.ngMesh = ngMesh
+        if self.geo:
+            self.ngMesh.SetGeometry(self.geo)
 
         if plex.getDimension() == 2:
             coordinates = plex.getCoordinates().getArray().reshape([-1,2])
@@ -94,8 +97,12 @@ class MeshMapping:
                 for j in bcIndices:
                     bcIndex = plex.getCone(j)-vStart
                     if len(bcIndex) == 2:
-                        edge = ngm.Element1D([v+1 for v in bcIndex],index=bcLabel)
-                        self.ngMesh.Add(edge)
+                        edge = ngm.Element1D([v+1 for v in bcIndex],
+                                             index=bcLabel,edgenr=bcLabel-1)
+                        if self.geo:
+                            self.ngMesh.Add(edge, project_geominfo=True)
+                        else:
+                            self.ngMesh.Add(edge)
         elif plex.getDimension() == 3:
             coordinates = plex.getCoordinates().getArray().reshape([-1,3])
             self.ngMesh.AddPoints(coordinates)
@@ -139,9 +146,12 @@ class MeshMapping:
                             faces = faces + [face]
                         else:
                             faces = faces + [[face[0],face[2],face[1]]]
-                #fd = self.ngmesh.Add(ngm.FaceDescriptor(bc=bcLabel))
-                self.ngMesh.Add(ngm.FaceDescriptor(bc=bcLabel))
-                self.ngMesh.AddElements(dim=2, index=bcLabel,
+                self.ngMesh.Add(ngm.FaceDescriptor(bc=bcLabel, surfnr=bcLabel))
+                if self.geo:
+                    self.ngMesh.AddElements(dim=2, index=bcLabel, 
+                        data=np.asarray(faces,dtype=np.int32), base=0, project_geometry=True)
+                else:
+                    self.ngMesh.AddElements(dim=2, index=bcLabel, edgenr=bcLabel-1,
                                         data=np.asarray(faces,dtype=np.int32), base=0)
         else:
             raise NotImplementedError("No implementation for dimension greater than 3.")
@@ -159,6 +169,7 @@ class MeshMapping:
         else:
             self.ngMesh = mesh
         comm = self.comm
+        self.geo = self.ngMesh.GetGeometry()
         if self.ngMesh.dim == 3:
             if comm.rank == 0:
                 V = self.ngMesh.Coordinates()
