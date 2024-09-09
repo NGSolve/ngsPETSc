@@ -148,7 +148,7 @@ class MeshMapping:
                             faces = faces + [[face[0],face[2],face[1]]]
                 self.ngMesh.Add(ngm.FaceDescriptor(bc=bcLabel, surfnr=bcLabel))
                 if self.geo:
-                    self.ngMesh.AddElements(dim=2, index=bcLabel, 
+                    self.ngMesh.AddElements(dim=2, index=bcLabel,
                         data=np.asarray(faces,dtype=np.int32), base=0, project_geometry=True)
                 else:
                     self.ngMesh.AddElements(dim=2, index=bcLabel, edgenr=bcLabel-1,

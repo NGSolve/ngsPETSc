@@ -109,7 +109,8 @@ def NetgenHierarchy(mesh, levs, flags):
         -refinement_type, the refinment type to be used: uniform (default), Alfeld
     '''
     if mesh.geometric_dimension() > 3:
-        raise NotImplementedError("Netgen hierachies are only implemented for meshes with dimension greater than 3.")
+        raise NotImplementedError("Netgen hierachies are only implemented \
+                                  for meshes with dimension greater than 3.")
     ngmesh = mesh.netgen_mesh
     comm = mesh.comm
     #Parsing netgen flags
