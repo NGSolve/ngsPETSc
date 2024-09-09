@@ -110,7 +110,7 @@ def NetgenHierarchy(mesh, levs, flags):
     '''
     if mesh.geometric_dimension() > 3:
         raise NotImplementedError("Netgen hierachies are only implemented \
-                                  for meshes with dimension greater than 3.")
+                                  for meshes with dimension greater than 4.")
     ngmesh = mesh.netgen_mesh
     comm = mesh.comm
     #Parsing netgen flags
