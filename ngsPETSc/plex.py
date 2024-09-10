@@ -183,11 +183,21 @@ class MeshMapping:
                 plex = PETSc.DMPlex().createFromCellList(dim, T, V, comm=comm)
                 plex.setName(self.name)
                 vStart, _ = plex.getDepthStratum(0)
+                nMat = len(self.ngMesh.GetRegionNames(dim=3))
+                nBnd = len(self.ngMesh.GetRegionNames(dim=2))
+                nBBnd = len(self.ngMesh.GetRegionNames(dim=1))
                 if surfMesh:
                     for e in self.ngMesh.Elements1D():
                         join = plex.getJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.surfaces[1]))
                 else:
+                    if nMat > 1:
+                        for e in self.ngMesh.Elements3D():
+                            join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
+                            plex.setLabelValue(CELL_SETS_LABEL, join[0], int(e.index))
+                            cone  = plex.getCone(join[0])
+                            for i in range(len(cone)):
+                                plex.setLabelValue(FACE_SETS_LABEL, cone[i], nBBnd+nBnd+int(e.index))
                     for e in self.ngMesh.Elements2D():
                         join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.index))
@@ -209,14 +219,18 @@ class MeshMapping:
                 plex = PETSc.DMPlex().createFromCellList(2, T, V, comm=comm)
                 plex.setName(self.name)
                 vStart, _ = plex.getDepthStratum(0)   # vertices
-                for e in self.ngMesh.Elements1D():
-                    join = plex.getJoin([vStart+v.nr-1 for v in e.vertices])
-                    plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.index))
-                if not (1 == self.ngMesh.Elements2D().NumPy()["index"]).all():
+                nMat = len(self.ngMesh.GetRegionNames(dim=2))
+                nBnd = len(self.ngMesh.GetRegionNames(dim=1))
+                if nMat > 1:
                     for e in self.ngMesh.Elements2D():
                         join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(CELL_SETS_LABEL, join[0], int(e.index))
-
+                        cone  = plex.getCone(join[0])
+                        for i in range(len(cone)):
+                            plex.setLabelValue(FACE_SETS_LABEL, cone[i], nBnd+int(e.index))
+                for e in self.ngMesh.Elements1D():
+                    join = plex.getJoin([vStart+v.nr-1 for v in e.vertices])
+                    plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.index))
                 self.petscPlex = plex
             else:
                 plex = PETSc.DMPlex().createFromCellList(2,
