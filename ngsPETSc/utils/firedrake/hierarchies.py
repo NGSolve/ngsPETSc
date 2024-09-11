@@ -105,8 +105,6 @@ def NetgenHierarchy(mesh, levs, flags):
     tol = flagsUtils(flags, "tol", 1e-8)
     refType = flagsUtils(flags, "refinement_type", "uniform")
     optMoves = flagsUtils(flags, "optimisation_moves", False)
-    post_curve_degree = flagsUtils(flags, "post_processing_curve", 0)
-    post_curve_tol = flagsUtils(flags, "post_processing_curve_tol", 1e-8)
     nested = flagsUtils(flags, "post_processing_nested", False)
     #Firedrake quoantities
     meshes = []
@@ -149,9 +147,5 @@ def NetgenHierarchy(mesh, levs, flags):
     #We populate the coarse to fine map
     coarse_to_fine_cells, fine_to_coarse_cells = refinementTypes[refType][1](meshes)
     #Various post processing options
-    if post_curve_degree:
-        for i, mesh in enumerate(meshes):
-            meshes[i] = fd.Mesh(mesh.curve_field(order=post_curve_degree,\
-                                tol=post_curve_tol))
     return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
                             1, nested=nested)
