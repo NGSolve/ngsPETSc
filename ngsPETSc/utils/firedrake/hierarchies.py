@@ -40,7 +40,8 @@ def uniformRefinementRoutine(ngmesh, cdm):
     rdm.removeLabel("pyop2_owned")
     rdm.removeLabel("pyop2_ghost")
     if ngmesh.dim > 2:
-        mapping = MeshMapping(rdm, geo=ngmesh.GetGeometry())
+        sdm = rdm.getRedundant()
+        mapping = MeshMapping(sdm, geo=ngmesh.GetGeometry())
         return (rdm, mapping.ngMesh)
     else:
         #Faster but only works for 2D meshes
