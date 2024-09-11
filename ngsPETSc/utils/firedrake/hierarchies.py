@@ -69,29 +69,7 @@ def uniformMapRoutine(meshes):
                                 for i, f2c in enumerate(fine_to_coarse_cells))
     return (coarse_to_fine_cells, fine_to_coarse_cells)
 
-def alfeldRefinementRoutine(ngmesh, cdm):
-    '''
-    Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
-    '''
-    #We refine the netgen mesh alfeld
-    ngmesh.SplitAlfeld()
-    #We refine the DMPlex mesh alfeld
-    tr = PETSc.DMPlexTransform().create(comm=PETSc.COMM_WORLD)
-    tr.setType(PETSc.DMPlexTransformType.REFINEREGULAR)
-    tr.setDM(cdm)
-    tr.setUp()
-    rdm = tr.apply(cdm)
-    return (rdm, ngmesh)
-
-def alfeldMapRoutine(meshes):
-    '''
-    This function computes the coarse to fine and fine to coarse maps
-    for a alfeld mesh hierarchy.
-    '''
-    raise NotImplementedError("Alfeld refinement is not implemented yet.")
-
-refinementTypes = {"uniform": (uniformRefinementRoutine, uniformMapRoutine),
-                   "Alfeld": (alfeldRefinementRoutine, alfeldMapRoutine)}
+refinementTypes = {"uniform": (uniformRefinementRoutine, uniformMapRoutine)}
 
 def NetgenHierarchy(mesh, levs, flags):
     '''
