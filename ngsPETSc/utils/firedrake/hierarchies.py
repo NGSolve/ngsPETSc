@@ -39,8 +39,13 @@ def uniformRefinementRoutine(ngmesh, cdm):
     rdm.removeLabel("pyop2_core")
     rdm.removeLabel("pyop2_owned")
     rdm.removeLabel("pyop2_ghost")
-    mapping = MeshMapping(rdm, geo=ngmesh.GetGeometry())
-    return (rdm, mapping.ngMesh)
+    if ngmesh.dim > 2:
+        mapping = MeshMapping(rdm, geo=ngmesh.GetGeometry())
+        return (rdm, mapping.ngMesh)
+    else:
+        #Faster but only works for 2D meshes
+        ngmesh.Refine(adaptive=False)
+        return (rdm, ngmesh)
 
 def uniformMapRoutine(meshes):
     '''
@@ -100,6 +105,8 @@ def NetgenHierarchy(mesh, levs, flags):
     tol = flagsUtils(flags, "tol", 1e-8)
     refType = flagsUtils(flags, "refinement_type", "uniform")
     optMoves = flagsUtils(flags, "optimisation_moves", False)
+    post_curve_degree = flagsUtils(flags, "post_processing_curve", 0)
+    nested = flagsUtils(flags, "post_processing_nested", False)
     #Firedrake quoantities
     meshes = []
     coarse_to_fine_cells = []
@@ -140,5 +147,9 @@ def NetgenHierarchy(mesh, levs, flags):
         meshes += [mesh]
     #We populate the coarse to fine map
     coarse_to_fine_cells, fine_to_coarse_cells = refinementTypes[refType][1](meshes)
+    #Various post processing options
+    if post_curve_degree:
+        for i, mesh in enumerate(meshes):
+            meshes[i] = mesh.curve_field(order=post_curve_degree, tol=1e-8)
     return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
-                            1, nested=False)
+                            1, nested=nested)
