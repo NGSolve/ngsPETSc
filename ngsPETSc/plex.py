@@ -150,7 +150,7 @@ class MeshMapping:
                     self.ngMesh.AddElements(dim=2, index=bcLabel,
                         data=np.asarray(faces,dtype=np.int32), base=0, project_geometry=True)
                 else:
-                    self.ngMesh.AddElements(dim=2, index=bcLabel, edgenr=bcLabel-1,
+                    self.ngMesh.AddElements(dim=2, index=bcLabel,
                                         data=np.asarray(faces,dtype=np.int32), base=0)
         else:
             raise NotImplementedError("No implementation for dimension greater than 3.")
