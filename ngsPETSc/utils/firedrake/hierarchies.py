@@ -11,6 +11,7 @@ from fractions import Fraction
 import numpy as np
 from petsc4py import PETSc
 
+import netgen.meshing as ngm
 from netgen.meshing import MeshingParameters
 
 from ngsPETSc.plex import MeshMapping
@@ -29,7 +30,7 @@ def snapToNetgenDMPlex(ngmesh, petscPlex):
     petscPlexCoordinates.setArray(petscPlexCoordinates)
     petscPlex.setCoordinatesLocal(petscPlexCoordinates)
 
-def uniformRefinementRoutine(ngmesh, cdm):
+def uniformRefinementRoutine(ngmesh, cdm, comm, safe_bcast):
     '''
     Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
     '''
@@ -39,14 +40,26 @@ def uniformRefinementRoutine(ngmesh, cdm):
     rdm.removeLabel("pyop2_core")
     rdm.removeLabel("pyop2_owned")
     rdm.removeLabel("pyop2_ghost")
+    sdm = rdm.getRedundantDM()
+    sdm.getCoordinates().getArray().reshape(-1, ngmesh.dim).shape
     if ngmesh.dim > 2:
-        sdm = rdm.getRedundant()
-        mapping = MeshMapping(sdm, geo=ngmesh.GetGeometry())
-        return (rdm, mapping.ngMesh)
+        if comm.rank == 0:
+            mapping = MeshMapping(sdm, geo=ngmesh.GetGeometry())
+            ngmesh = mapping.ngMesh
+        print("Safe", safe_bcast)
+        if not safe_bcast:
+            ngmesh = comm.bcast(ngmesh, root=0)
+        else:
+            if comm.rank == 0:
+                ngmesh.Save(".ngsPETSc_tmp.vol")
+            comm.barrier()
+            if comm.rank > 0:
+                ngmesh = ngm.Mesh()
+                ngmesh.Load(".ngsPETSc_tmp.vol")
     else:
         #Faster but only works for 2D meshes
         ngmesh.Refine(adaptive=False)
-        return (rdm, ngmesh)
+    return (rdm, ngmesh)
 
 def uniformMapRoutine(meshes):
     '''
@@ -106,7 +119,8 @@ def NetgenHierarchy(mesh, levs, flags):
     tol = flagsUtils(flags, "tol", 1e-8)
     refType = flagsUtils(flags, "refinement_type", "uniform")
     optMoves = flagsUtils(flags, "optimisation_moves", False)
-    nested = flagsUtils(flags, "post_processing_nested", False)
+    nested = flagsUtils(flags, "nested", False)
+    safe_bcast = flagsUtils(flags, "safe_broadcast", False)
     #Firedrake quoantities
     meshes = []
     coarse_to_fine_cells = []
@@ -124,7 +138,7 @@ def NetgenHierarchy(mesh, levs, flags):
     for l in range(levs):
         #Streightening the mesh
         ngmesh.Curve(1)
-        rdm, ngmesh = refinementTypes[refType][0](ngmesh, cdm)
+        rdm, ngmesh = refinementTypes[refType][0](ngmesh, cdm, comm, safe_bcast)
         cdm = rdm
         #We snap the mesh to the Netgen mesh
         snapToNetgenDMPlex(ngmesh, rdm)

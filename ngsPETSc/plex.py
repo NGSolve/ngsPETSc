@@ -56,7 +56,6 @@ class MeshMapping:
         self.ngMesh = ngMesh
         if self.geo:
             self.ngMesh.SetGeometry(self.geo)
-
         if plex.getDimension() == 2:
             coordinates = plex.getCoordinates().getArray().reshape([-1,2])
             self.ngMesh.AddPoints(coordinates)
