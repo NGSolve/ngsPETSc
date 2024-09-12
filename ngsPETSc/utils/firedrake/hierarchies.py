@@ -40,22 +40,25 @@ def uniformRefinementRoutine(ngmesh, cdm, comm, safe_bcast):
     rdm.removeLabel("pyop2_core")
     rdm.removeLabel("pyop2_owned")
     rdm.removeLabel("pyop2_ghost")
-    sdm = rdm.getRedundantDM()
-    sdm.getCoordinates().getArray().reshape(-1, ngmesh.dim).shape
     if ngmesh.dim > 2:
-        if comm.rank == 0:
-            mapping = MeshMapping(sdm, geo=ngmesh.GetGeometry())
-            ngmesh = mapping.ngMesh
-        print("Safe", safe_bcast)
-        if not safe_bcast:
-            ngmesh = comm.bcast(ngmesh, root=0)
-        else:
+        if comm.size > 1:
+            sdm = rdm.getRedundantDM()
+            sdm.getCoordinates().getArray().reshape(-1, ngmesh.dim).shape
             if comm.rank == 0:
-                ngmesh.Save(".ngsPETSc_tmp.vol")
-            comm.barrier()
-            if comm.rank > 0:
-                ngmesh = ngm.Mesh()
-                ngmesh.Load(".ngsPETSc_tmp.vol")
+                mapping = MeshMapping(sdm, geo=ngmesh.GetGeometry())
+                ngmesh = mapping.ngMesh
+            if not safe_bcast:
+                ngmesh = comm.bcast(ngmesh, root=0)
+            else:
+                if comm.rank == 0:
+                    ngmesh.Save(".ngsPETSc_tmp.vol")
+                comm.barrier()
+                if comm.rank > 0:
+                    ngmesh = ngm.Mesh()
+                    ngmesh.Load(".ngsPETSc_tmp.vol")
+        else:
+            mapping = MeshMapping(rdm, geo=ngmesh.GetGeometry())
+            ngmesh = mapping.ngMesh
     else:
         #Faster but only works for 2D meshes
         ngmesh.Refine(adaptive=False)
