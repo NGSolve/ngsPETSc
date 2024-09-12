@@ -9,7 +9,6 @@ except ImportError:
 
 from fractions import Fraction
 import numpy as np
-from petsc4py import PETSc
 
 import netgen.meshing as ngm
 from netgen.meshing import MeshingParameters
@@ -40,10 +39,11 @@ def uniformRefinementRoutine(ngmesh, cdm, comm, safe_bcast):
     rdm.removeLabel("pyop2_core")
     rdm.removeLabel("pyop2_owned")
     rdm.removeLabel("pyop2_ghost")
-    if ngmesh.dim > 2:
+    dim = ngmesh.dim
+    if dim > 2:
         if comm.size > 1:
             sdm = rdm.getRedundantDM()
-            sdm.getCoordinates().getArray().reshape(-1, ngmesh.dim).shape
+            sdm.getCoordinates().getArray().reshape(-1, dim).shape #pylint: disable=W0106
             if comm.rank == 0:
                 mapping = MeshMapping(sdm, geo=ngmesh.GetGeometry())
                 ngmesh = mapping.ngMesh

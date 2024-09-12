@@ -195,8 +195,9 @@ class MeshMapping:
                             join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
                             plex.setLabelValue(CELL_SETS_LABEL, join[0], int(e.index))
                             cone  = plex.getCone(join[0])
-                            for i in range(len(cone)):
-                                plex.setLabelValue(FACE_SETS_LABEL, cone[i], nBBnd+nBnd+int(e.index))
+                            for i, _ in enumerate(cone):
+                                plex.setLabelValue(FACE_SETS_LABEL, cone[i], \
+                                                   nBBnd+nBnd+int(e.index))
                     for e in self.ngMesh.Elements2D():
                         join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.index))
@@ -225,7 +226,7 @@ class MeshMapping:
                         join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(CELL_SETS_LABEL, join[0], int(e.index))
                         cone  = plex.getCone(join[0])
-                        for i in range(len(cone)):
+                        for i, _ in enumerate(cone):
                             plex.setLabelValue(FACE_SETS_LABEL, cone[i], nBnd+int(e.index))
                 for e in self.ngMesh.Elements1D():
                     join = plex.getJoin([vStart+v.nr-1 for v in e.vertices])
