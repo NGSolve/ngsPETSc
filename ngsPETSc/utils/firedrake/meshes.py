@@ -256,25 +256,10 @@ class FiredrakeMesh:
         setattr(fd.MeshGeometry, "refine_marked_elements", refineMarkedElements)
         setattr(fd.MeshGeometry, "curve_field", curveField)
         #Adding labels for boundary regions and regions
-        Regions = self.meshMap.ngMesh.GetRegionNames(dim=geometric_dim)
-        bndRegions = self.meshMap.ngMesh.GetRegionNames(dim=geometric_dim-1)
-        numberRegions = len(Regions)
-        numberBndRegions = len(bndRegions)
         self.firedrakeMesh.labels = {}
-        if geometric_dim - 2 > 0:
-            bbndRegions = self.meshMap.ngMesh.GetRegionNames(dim=geometric_dim-1)
-            numberBBndRegions = len(bbndRegions)
-        else:
-            numberBBndRegions = 0
-        for i in range(numberBBndRegions):
-            if bbndRegions[i] not in self.firedrakeMesh.labels:
-                self.firedrakeMesh.labels[bbndRegions[i]] = []
-            self.firedrakeMesh.labels[bbndRegions[i]].append(i+1)
-        for i in range(numberBndRegions):
-            if bndRegions[i] not in self.firedrakeMesh.labels:
-                self.firedrakeMesh.labels[bndRegions[i]] = []
-            self.firedrakeMesh.labels[bndRegions[i]].append(i+1+numberBBndRegions)
-        for i in range(numberRegions):
-            if Regions[i] not in self.firedrakeMesh.labels:
-                self.firedrakeMesh.labels[Regions[i]] = []
-            self.firedrakeMesh.labels[Regions[i]].append(i+1+numberBndRegions+numberBBndRegions)
+        for dim in range(1, geometric_dim+1):
+            for i, label in enumerate(self.firedrakeMesh.netgen_mesh.GetRegionNames(dim=dim)):
+                if (dim, label) not in self.firedrakeMesh.labels:
+                    self.firedrakeMesh.labels[(dim, label)] = ()
+                self.firedrakeMesh.labels[(dim, label)] \
+                    = (*self.firedrakeMesh.labels[(dim, label)],i+1)               
