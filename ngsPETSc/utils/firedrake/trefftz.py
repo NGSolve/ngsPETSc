@@ -1,21 +1,34 @@
+"""
+This module provides a class to compute the Trefftz embedding of a given function space.
+It is also used to compute aggregation embedding of a given function space.
+"""
 try:
     import firedrake as fd
     from petsc4py import PETSc
-    from firedrake.__future__ import interpolate
 except ImportError:
     fd = None
-from ngsPETSc.plex import CELL_SETS_LABEL, FACE_SETS_LABEL
+from ngsPETSc.plex import FACE_SETS_LABEL
 
 class TrefftzEmbedding(object):
-
+    """
+    This class computes the Trefftz embedding of a given function space
+    :arg V: the function space
+    :arg b: the bilinear form defining the embedding
+    :arg dim: the dimension of the embedding
+    :arg tol: the tolerance for the singular values
+    :arg backend: the backend to use for the computation of the SVD
+    """
     def __init__(self, V, b, dim=None, tol=1e-12, backend="scipy"):
         self.V = V
         self.b = b
         self.dim = V.dim() if not dim else dim + 1
         self.tol = tol
         self.backend = backend
-    
+
     def assemble(self):
+        """
+        Assemble the embedding, compute the SVD and return the embedding matrix
+        """
         self.B = fd.assemble(self.b).M.handle
         if self.backend == "scipy":
             import scipy.sparse as sp
@@ -26,16 +39,27 @@ class TrefftzEmbedding(object):
             QTpsc = PETSc.Mat().createAIJ(size=QT.shape, csr=(QT.indptr, QT.indices, QT.data))
             self.dimT = QT.shape[0]
             self.sig = sig
-            return QTpsc, sig
+        else:
+            raise NotImplementedError("Only scipy backend is supported")
+        return QTpsc, sig
 
     def embeddedMatrix(self, a):
+        """
+        Compute the Trefftz embedding of the bilinear form a
+        :arg a: the bilinear form
+        """
         self.A = fd.assemble(a).M.handle
         self.QT, _ = self.assemble()
         self.Q = PETSc.Mat().createTranspose(self.QT)
         pscQTAQ = self.QT @ self.A @ self.Q
         return pscQTAQ
-    
+
     def embeddedMatrixAction(self, a):
+        """
+        Compute the Trefftz embedding of the bilinear form a,
+        and wrap it as a PETSc Python matrix.
+        :arg a: the bilinear form
+        """
         self.A = fd.assemble(a).M.handle
         self.QT, _ = self.assemble()
         pythonQTAQ = self.embeddedMatrixWrap(self.QT, self.A)
@@ -46,33 +70,34 @@ class TrefftzEmbedding(object):
         pscQTAQ.setUp()
         return pscQTAQ
 
-    def embeddedPreconditioner(self, a):
-        self.A = fd.assemble(a).M.handle
-        self.QT, _ = self.assemble()
-        pythonQTAQ = self.embeddedPreconditioner(self, a)
-        pscQTAQ = PETSc.Mat().create(comm=PETSc.COMM_WORLD)
-        pscQTAQ.setSizes(self.dim, self.dim)
-        pscQTAQ.setType("python")
-        pscQTAQ.setPythonContext(pythonQTAQ)
-        pscQTAQ.setUp()
-        return pscQTAQ
-
     def embeddedLoad(self, L):
+        """
+        Compute the Trefftz embedding of the load vector L
+        :arg L: the load vector
+        """
         self.L = fd.assemble(L)
         with self.L.dat.vec as w:
             y =  self.QT.createVecLeft()
             self.QT.mult(w, y)
         return y
     def embed(self, y):
+        """
+        Compute the Trefftz embedding of the firedrake function y
+        :arg y: the firedrake function
+        """
         u = fd.Function(self.V)
         with u.dat.vec as w:
             self.QT.multTranspose(y, w)
         return u
     def embedVec(self, y):
+        """
+        Compute the Trefftz embedding of the PETSc vector y
+        :arg y: the PETSc vector
+        """
         w = self.QT.createVecRight()
         self.QT.multTranspose(y, w)
         return w
-        
+
     class embeddedMatrixWrap(object):
         """
         This class wraps a PETSc Preconditioner as PETSc Python matrix
@@ -115,19 +140,32 @@ class TrefftzEmbedding(object):
 
 trefftz_ksp = "ngsPETSc.utils.firedrake.trefftz.TrefftzKSP"
 class TrefftzKSP(object):
+    """
+    This class wraps a PETSc KSP object to solve the reduced
+    system obtained by the Trefftz embedding.
+    """
     def __init__(self):
         pass
 
     @staticmethod
     def get_appctx(ksp):
+        """
+        Get the application context from the KSP
+        """
         from firedrake.dmhooks import get_appctx
         return get_appctx(ksp.getDM()).appctx
-        
+
     def setUp(self, ksp):
+        """
+        Set up the Trefftz KSP
+        """
         appctx = self.get_appctx(ksp)
         self.QT, _ = appctx["trefftz_embedding"].assemble()
-        
+
     def solve(self, ksp, b, x):
+        """
+        Solve the Trefftz KSP
+        """
         A, P = ksp.getOperators()
         self.Q = PETSc.Mat().createTranspose(self.QT)
         ATF = self.QT @ A @ self.Q
@@ -146,6 +184,14 @@ class TrefftzKSP(object):
 
 
 class AggregationEmbedding(TrefftzEmbedding):
+    """
+    This class computes the aggregation embedding of a given function space.
+    :arg V: the function space
+    :arg mesh: the mesh
+    :arg polyMesh: the aggregation mesh
+    :arg dim: the dimension of the embedding
+    :arg tol: the tolerance for the singular values
+    """
     def __init__(self, V, mesh, polyMesh, dim=None, tol=1e-12):
         # Relabel facets that are inside an aggregated region
         offset = len(mesh.netgen_mesh.GetRegionNames(dim=1))\
@@ -176,22 +222,32 @@ class AggregationEmbedding(TrefftzEmbedding):
             self.b += fd.inner(fd.jump(u),fd.jump(v))*fd.dS(i)
         for k in range(1,V.ufl_element().degree()+1):
             for i in self.facet_index:
-                self.b += ((0.5*h("+")+0.5*h("-"))**(2*k))*fd.inner(jumpNormal(u,n("+"),k),jumpNormal(v, n("+"),k))*fd.dS(i)
+                self.b += ((0.5*h("+")+0.5*h("-"))**(2*k))*\
+                fd.inner(jumpNormal(u,n("+"),k),jumpNormal(v, n("+"),k))*fd.dS(i)
         super().__init__(W, self.b, dim, tol)
-        
 
 def jumpNormal(u,n,k):
+    """
+    Compute the jump of the normal derivative of a function u
+    :arg u: the function
+    :arg n: the normal vector
+    :arg k: the degree of the normal derivative
+    """
     j = 0.5*fd.dot(n, (fd.grad(u)("+")-fd.grad(u)("-")))
-    for i in range(1,k):
+    for _ in range(1,k):
         j = 0.5*fd.dot(n, (fd.grad(j)-fd.grad(j)))
     return j
 
 def dumbAggregation(mesh):
+    """
+    Compute a dumb aggregation of the mesh
+    :arg mesh: the mesh
+    """
     if mesh.comm.size > 1:
         raise NotImplementedError("Parallel mesh aggregation not supported")
     plex = mesh.topology_dm
     pStart,pEnd = plex.getDepthStratum(2)
-    eStart,eEnd = plex.getDepthStratum(1)
+    _,eEnd = plex.getDepthStratum(1)
     adjacency = []
     for i in range(pStart,pEnd):
         ad = plex.getAdjacency(i)
@@ -201,7 +257,7 @@ def dumbAggregation(mesh):
             supp = supp[supp<eEnd]
             for s in supp:
                 if s < pEnd and s != ad[0]:
-                    local = local + [s] 
+                    local = local + [s]
         adjacency = adjacency + [(i, local)]
     adjacency = sorted(adjacency, key=lambda x: len(x[1]))[::-1]
     u = fd.Function(fd.FunctionSpace(mesh,"DG",0))
