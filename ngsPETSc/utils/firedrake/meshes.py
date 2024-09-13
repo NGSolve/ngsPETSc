@@ -263,7 +263,8 @@ class FiredrakeMesh:
                     self.firedrakeMesh.labels[(dim, label)] = ()
                 self.firedrakeMesh.labels[(dim, label)] \
                     = (*self.firedrakeMesh.labels[(dim, label)],i+1)
-                if  dim == geometric_dim:
+                if  dim == geometric_dim \
+                    and len(self.firedrakeMesh.netgen_mesh.GetRegionNames(dim=dim)) > 1:
                     offset = len(self.firedrakeMesh.netgen_mesh.GetRegionNames(dim=dim-1))
                     if (dim-1, label) not in self.firedrakeMesh.labels:
                         self.firedrakeMesh.labels[(dim-1, label)] = ()
