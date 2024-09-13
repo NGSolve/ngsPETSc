@@ -142,11 +142,17 @@ class AggregationEmbedding(TrefftzEmbedding):
         self.b = fd.Constant(0)*fd.inner(u,v)*fd.dx
         for i in self.facet_index:
             self.b += fd.inner(fd.jump(u),fd.jump(v))*fd.dS(i)
+        for k in range(1,V.ufl_element().degree()+1):
+            for i in self.facet_index:
+                self.b += ((0.5*h("+")+0.5*h("-"))**(2*k))*fd.inner(jumpNormal(u,n("+"),k),jumpNormal(v, n("+"),k))*fd.dS(i)
         super().__init__(W, self.b, dim, tol)
         
 
-def jumpNormal(u,n):
-    return 0.5*fd.dot(n, (fd.grad(u)("+")-fd.grad(u)("-")))
+def jumpNormal(u,n,k):
+    j = 0.5*fd.dot(n, (fd.grad(u)("+")-fd.grad(u)("-")))
+    for i in range(1,k):
+        j = 0.5*fd.dot(n, (fd.grad(j)-fd.grad(j)))
+    return j
 
 def dumpAggregation(mesh):
     if mesh.comm.size > 1:
