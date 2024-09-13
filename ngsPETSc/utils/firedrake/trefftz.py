@@ -5,6 +5,7 @@ try:
 except ImportError:
     fd = None
 from ngsPETSc.plex import CELL_SETS_LABEL, FACE_SETS_LABEL
+
 class TrefftzEmbedding(object):
 
     def __init__(self, V, b, dim=None, tol=1e-12, backend="scipy"):
@@ -26,7 +27,7 @@ class TrefftzEmbedding(object):
             self.dimT = QT.shape[0]
             self.sig = sig
             return QTpsc, sig
-        
+
     def embeddedMatrix(self, a):
         self.A = fd.assemble(a).M.handle
         self.QT, _ = self.assemble()
@@ -71,7 +72,6 @@ class TrefftzEmbedding(object):
         w = self.QT.createVecRight()
         self.QT.multTranspose(y, w)
         return w
-
         
     class embeddedMatrixWrap(object):
         """
@@ -112,6 +112,38 @@ class TrefftzEmbedding(object):
             self.E.QT.mult(X,eX)
             self.ksp.solve(eX, eY)
             self.E.embedVec(eY).copy(Y)
+
+trefftz_ksp = "ngsPETSc.utils.firedrake.trefftz.TrefftzKSP"
+class TrefftzKSP(object):
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def get_appctx(ksp):
+        from firedrake.dmhooks import get_appctx
+        return get_appctx(ksp.getDM()).appctx
+        
+    def setUp(self, ksp):
+        appctx = self.get_appctx(ksp)
+        self.QT, _ = appctx["trefftz_embedding"].assemble()
+        
+    def solve(self, ksp, b, x):
+        A, P = ksp.getOperators()
+        self.Q = PETSc.Mat().createTranspose(self.QT)
+        ATF = self.QT @ A @ self.Q
+        PTF = self.QT @ P @ self.Q
+        bTF =  self.QT.createVecLeft()
+        self.QT.mult(b, bTF)
+
+        tiny_ksp = PETSc.KSP().create()
+        tiny_ksp.setOperators(ATF, PTF)
+        tiny_ksp.setOptionsPrefix("trefftz_")
+        tiny_ksp.setFromOptions()
+        xTF = ATF.createVecRight()
+        tiny_ksp.solve(bTF, xTF)
+        self.QT.multTranspose(xTF, x)
+        ksp.setConvergedReason(tiny_ksp.getConvergedReason())
+
 
 class AggregationEmbedding(TrefftzEmbedding):
     def __init__(self, V, mesh, polyMesh, dim=None, tol=1e-12):
@@ -161,14 +193,10 @@ def dumpAggregation(mesh):
     pStart,pEnd = plex.getDepthStratum(2)
     eStart,eEnd = plex.getDepthStratum(1)
     adjacency = []
-    print(pStart,pEnd)
-    print(eStart,eEnd)
     for i in range(pStart,pEnd):
         ad = plex.getAdjacency(i)
-        print(ad)
         local = []
         for a in ad:
-            print("\t{}".format(plex.getSupport(a)))
             supp = plex.getSupport(a)
             supp = supp[supp<eEnd]
             for s in supp:
@@ -190,6 +218,4 @@ def dumpAggregation(mesh):
             av.remove(a[0])
             u.dat.data[getIdx(a[0])] = col
             col = col + 1
-    print(adjacency)
-    print(av)
     return u
