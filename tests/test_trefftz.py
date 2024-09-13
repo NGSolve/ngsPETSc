@@ -3,6 +3,7 @@ from firedrake import *
 from petsc4py import PETSc
 import numpy as np
 from ngsPETSc import TrefftzEmbedding, AggregationEmbedding
+from ngsPETSc import trefftz_ksp, dumbAggregation
 from netgen.gui import *
 
 def test_trefftz_laplace():
@@ -30,27 +31,16 @@ def test_trefftz_laplace():
     # Solve the problem
     uDG = Function(V)
     uDG.rename("uDG")
-    solve(aDG == L, uDG)
-
-    E = TrefftzEmbedding(V, a, tol=1e-8)
-    ATF = E.embeddedMatrixAction(aDG)
-    LTF = E.embeddedLoad(L)
-
-    # Solver linear system using ksp
-    ksp = PETSc.KSP().create()
-    ksp.setOperators(ATF)
-    ksp.setFromOptions()
-    x = ATF.createVecRight()
-    ksp.solve(LTF, x)
-    uTF = E.embed(x)
-    uTF.rename("uTF")
+    embd = TrefftzEmbedding(V, a, tol=1e-8)
+    appctx = {"trefftz_embedding": embd}
+    uDG = Function(V)
+    solve(aDG == L, uDG, solver_parameters={"ksp_type":"python","ksp_python_type":trefftz_ksp},appctx=appctx)
     #assmeble the error
-    assert(assemble(inner(uDG-uTF,uDG-uTF)*dx) < 1e-6)
-    assert(E.dimT < V.dim()/2)
+    assert(assemble(inner(uDG-f,uDG-f)*dx) < 1e-6)
+    assert(embd.dimT < V.dim()/2)
 
 def test_trefftz_aggregation():
     from netgen.occ import WorkPlane, OCCGeometry
-    from ngsPETSc import dumbAggregation, AggregationEmbedding, trefftz_ksp
 
     Rectangle = WorkPlane().Rectangle(1,1).Face()
     geo = OCCGeometry(Rectangle, dim=2)
