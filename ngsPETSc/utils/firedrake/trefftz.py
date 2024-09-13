@@ -186,7 +186,7 @@ def jumpNormal(u,n,k):
         j = 0.5*fd.dot(n, (fd.grad(j)-fd.grad(j)))
     return j
 
-def dumpAggregation(mesh):
+def dumbAggregation(mesh):
     if mesh.comm.size > 1:
         raise NotImplementedError("Parallel mesh aggregation not supported")
     plex = mesh.topology_dm
