@@ -7,7 +7,7 @@ try:
     from petsc4py import PETSc
 except ImportError:
     fd = None
-from ngsPETSc.plex import FACE_SETS_LABEL
+from ngsPETSc.plex import FACE_SETS_LABEL, CELL_SETS_LABEL
 
 class TrefftzEmbedding(object):
     """
@@ -194,8 +194,8 @@ class AggregationEmbedding(TrefftzEmbedding):
     """
     def __init__(self, V, mesh, polyMesh, dim=None, tol=1e-12):
         # Relabel facets that are inside an aggregated region
-        offset = len(mesh.netgen_mesh.GetRegionNames(dim=1))\
-               + len(mesh.netgen_mesh.GetRegionNames(dim=2))
+        offset = 1+mesh.topology_dm.getLabelSize(FACE_SETS_LABEL)
+        offset += mesh.topology_dm.getLabelSize(CELL_SETS_LABEL)
         nPoly = int(max(polyMesh.dat.data[:])) # Number of aggregates
         getIdx = mesh._cell_numbering.getOffset
         plex = mesh.topology_dm
