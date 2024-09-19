@@ -70,7 +70,7 @@ def refineMarkedElements(self, mark):
     else:
         raise NotImplementedError("No implementation for dimension other than 2 and 3.")
 
-def curveField(self, order, tol=1e-8):
+def curveField(self, order, tol=1e-8, CG=False):
     '''
     This method returns a curved mesh as a Firedrake function.
 
@@ -80,9 +80,12 @@ def curveField(self, order, tol=1e-8):
     #Checking if the mesh is a surface mesh or two dimensional mesh
     surf = len(self.netgen_mesh.Elements3D()) == 0
     #Constructing mesh as a function
-    low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
-    element = low_order_element.reconstruct(degree=order)
-    space = fd.VectorFunctionSpace(self, fd.BrokenElement(element))
+    if CG:
+        space = fd.VectorFunctionSpace(self, "CG", order)
+    else:
+        low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
+        element = low_order_element.reconstruct(degree=order)
+        space = fd.VectorFunctionSpace(self, fd.BrokenElement(element))
     newFunctionCoordinates = fd.assemble(interpolate(self.coordinates, space))
     #Computing reference points using fiat
     fiat_element = newFunctionCoordinates.function_space().finat_element.fiat_equivalent
