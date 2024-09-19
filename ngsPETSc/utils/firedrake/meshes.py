@@ -109,16 +109,42 @@ def curveField(self, order, tol=1e-8):
                                     refPts.shape[0], self.geometric_dimension()))
         self.netgen_mesh.CalcElementMapping(refPts, curvedPhysPts)
         curved = els[surf]().NumPy()["curved"]
+        print(curved)
     else:
         physPts = np.ndarray((len(els[surf]()),
                                 refPts.shape[0], self.geometric_dimension()))
         curvedPhysPts = np.ndarray((len(els[surf]()),
                                     refPts.shape[0], self.geometric_dimension()))
-        curved = np.array((len(els[surf]()),1))
+        curved = np.array((len(els[surf]()),1), dtype=int)
     physPts = self.comm.bcast(physPts, root=0)
     curvedPhysPts = self.comm.bcast(curvedPhysPts, root=0)
-    curved = self.comm.bcast(curved, root=0)
     cellMap = newFunctionCoordinates.cell_node_map()
+    permutedCurvedPhysPts = np.zeros_like(curvedPhysPts)
+    fd_cell_indices = np.zeros(physPts[curved].shape[0:2], dtype=int)
+    #Looping over the curved elements physical points
+    for ng_cell_index, pts in enumerate(physPts[curved]):
+        #Computing cell baricenter
+        bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
+        cell_index = self.locate_cell(bary) #Grabbing the cell index
+        #Check if element is shared across workes
+        isInMesh = (0<=cell_index<len(cellMap.values)) if cell_index is not None else False
+        shared = self.comm.allgather(isInMesh)
+        # Element is not shared
+        if np.sum(shared) == 1  and isInMesh:
+            permutation = [np.argmin(np.sum((pts - pt)**2, axis=1))
+                    for pt in V[cellMap.values[cell_index]][0:refPts.shape[0]]]
+            permutedCurvedPhysPts[curved][ng_cell_index] = curvedPhysPts[curved][ng_cell_index][permutation]
+            res = np.linalg.norm(pts[permutation]-V[cellMap.values[cell_index]][0:refPts.shape[0]])
+            if res > tol:
+                fd.logging.warning("[{}] Not able to curve Firedrake element {} \
+                    ({}) -- residual: {}".format(self.comm.rank, cell_index,i, res))
+            else:
+                fd_cell_indices[ng_cell_index, :] = cellMap.values[cell_index][0:refPts.shape[0]]
+    for dim in range(self.geometric_dimension()):
+        #breakpoint()
+        newFunctionCoordinates.sub(dim).dat.data[fd_cell_indices.reshape(-1)] = permutedCurvedPhysPts[curved][:, :, dim].reshape(-1)
+
+
     for i in range(physPts.shape[0]):
         #Inefficent code but runs only on curved elements
         if curved[i]:
