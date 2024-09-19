@@ -4,6 +4,7 @@ This module contains all the functions related
 try:
     import firedrake as fd
     from firedrake.cython import mgimpl as impl
+    from firedrake.__future__ import interpolate
 except ImportError:
     fd = None
 
@@ -30,6 +31,35 @@ def snapToNetgenDMPlex(ngmesh, petscPlex):
         petscPlex.setCoordinatesLocal(petscPlexCoordinates)
     else:
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
+
+def snapToCoarse(coarse, linear, degree):
+    '''
+    This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
+    '''
+    print(linear.coordinates.dat.data.shape)
+    if coarse.geometric_dimension() == 2:
+        low_order_element = linear.coordinates.function_space().ufl_element().sub_elements[0]
+        element = low_order_element.reconstruct(degree=degree)
+        space = fd.VectorFunctionSpace(linear, fd.BrokenElement(element))
+        ho = fd.assemble(interpolate(linear.coordinates, space))
+        eStart, eEnd = linear.topology_dm.getDepthStratum(1)
+        pStart, _ = linear.topology_dm.getDepthStratum(0)
+        nodes = linear.topology_dm.getCoordinatesLocal().getArray().reshape(-1, 2)
+        for i, pt in enumerate(ho.dat.data):
+            d = np.sum((coarse.coordinates.dat.data - pt)**2, axis=1)
+            j = np.argmin(d)
+            #check if points are on the boudnary
+            for k in range(eStart, eEnd):
+                cone = linear.topology_dm.getCone(k)
+                A = np.array([[1, nodes[cone[0]-pStart][0], nodes[cone[0]-pStart][1]],
+                              [1, nodes[cone[1]-pStart][0], nodes[cone[1]-pStart][1]],
+                              [1, pt[0], pt[1]]])
+                lb = linear.topology_dm.getLabelValue("Face Sets", k)
+                if np.abs(np.linalg.det(A)) <1e-12 and lb != -1:
+                    ho.dat.data[i] = coarse.coordinates.dat.data[j]
+    else:
+        raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
+    return fd.Mesh(ho, comm=linear.comm, distribution_parameters=linear._distribution_parameters)
 
 def uniformRefinementRoutine(ngmesh, cdm):
     '''
@@ -124,6 +154,7 @@ def NetgenHierarchy(mesh, levs, flags):
     tol = flagsUtils(flags, "tol", 1e-8)
     refType = flagsUtils(flags, "refinement_type", "uniform")
     optMoves = flagsUtils(flags, "optimisation_moves", False)
+    snap = flagsUtils(flags, "snap_to", "geometry")
     #Firedrake quoantities
     meshes = []
     coarse_to_fine_cells = []
@@ -144,7 +175,8 @@ def NetgenHierarchy(mesh, levs, flags):
         rdm, ngmesh = refinementTypes[refType][0](ngmesh, cdm)
         cdm = rdm
         #We snap the mesh to the Netgen mesh
-        snapToNetgenDMPlex(ngmesh, rdm)
+        if snap == "geometry":
+            snapToNetgenDMPlex(ngmesh, rdm)
         #We construct a Firedrake mesh from the DMPlex mesh
         mesh = fd.Mesh(rdm, dim=meshes[-1].ufl_cell().geometric_dimension(), reorder=False,
                                     distribution_parameters=params, comm=comm)
@@ -159,8 +191,11 @@ def NetgenHierarchy(mesh, levs, flags):
         mesh.netgen_mesh = ngmesh
         #We curve the mesh
         if order[l+1] > 1:
-            mesh = fd.Mesh(mesh.curve_field(order=order[l+1], tol=1e-8),
-                           distribution_parameters=params, comm=comm)
+            if snap == "geometry":
+                mesh = fd.Mesh(mesh.curve_field(order=order[l+1], tol=tol),
+                               distribution_parameters=params, comm=comm)
+            elif snap == "coarse":
+                mesh = snapToCoarse(meshes[0], mesh, order[l+1])
         meshes += [mesh]
     #We populate the coarse to fine map
     coarse_to_fine_cells, fine_to_coarse_cells = refinementTypes[refType][1](meshes)
