@@ -42,21 +42,10 @@ def snapToCoarse(coarse, linear, degree):
         element = low_order_element.reconstruct(degree=degree)
         space = fd.VectorFunctionSpace(linear, fd.BrokenElement(element))
         ho = fd.assemble(interpolate(linear.coordinates, space))
-        eStart, eEnd = linear.topology_dm.getDepthStratum(1)
-        pStart, _ = linear.topology_dm.getDepthStratum(0)
-        nodes = linear.topology_dm.getCoordinatesLocal().getArray().reshape(-1, 2)
+        bnd = coarse.coordinates.function_space().boundary_nodes("on_boundary")
+        print(bnd)
         for i, pt in enumerate(ho.dat.data):
-            d = np.sum((coarse.coordinates.dat.data - pt)**2, axis=1)
-            j = np.argmin(d)
-            #check if points are on the boudnary
-            for k in range(eStart, eEnd):
-                cone = linear.topology_dm.getCone(k)
-                A = np.array([[1, nodes[cone[0]-pStart][0], nodes[cone[0]-pStart][1]],
-                              [1, nodes[cone[1]-pStart][0], nodes[cone[1]-pStart][1]],
-                              [1, pt[0], pt[1]]])
-                lb = linear.topology_dm.getLabelValue("Face Sets", k)
-                if np.abs(np.linalg.det(A)) <1e-12 and lb != -1:
-                    ho.dat.data[i] = coarse.coordinates.dat.data[j]
+            pass
     else:
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
     return fd.Mesh(ho, comm=linear.comm, distribution_parameters=linear._distribution_parameters)
