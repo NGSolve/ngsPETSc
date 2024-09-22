@@ -35,96 +35,76 @@ def snapToNetgenDMPlex(ngmesh, petscPlex):
     else:
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
 
-def snapToCoarse(coarse, linear, degree):
+def snapToCoarse(coarse, linear, degree, snap_smoothing):
     '''
     This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
     '''
-    dim = coarse.geometric_dimension()
+    dim = linear.geometric_dimension()
     if dim == 2:
-        coarseSpace = coarse.coordinates.function_space()
         space = fd.VectorFunctionSpace(linear, "CG", degree)
-        ho = fd.assemble(interpolate(coarse.coordinates, space))
-        bnd =space.boundary_nodes("on_boundary")
-        coarseBnd = coarseSpace.boundary_nodes("on_boundary")
-        cellMap = coarse.coordinates.cell_node_map()
-        for i in bnd:
-            pt = ho.dat.data[i]
-            j = np.argmin(np.sum((coarse.coordinates.dat.data[coarseBnd]- pt)**2, axis=1))
-            print(np.linalg.norm(pt-coarse.coordinates.dat.data[coarseBnd[j]]))
-            if np.linalg.norm(pt-coarse.coordinates.dat.data[coarseBnd[j]]) > 1e-16:
-                cell_idx = coarse.locate_cell(pt)
-                dim = linear.cell_sizes.at(pt)
-                edge_nodes = [node for node in cellMap.values[cell_idx] if node in coarseBnd]
-                #Compute polynomial reppresentation of the cell edge
-                edge_coo = coarse.coordinates.dat.data[edge_nodes]
-                coeffs = np.polyfit(edge_coo[:, 0], edge_coo[:, 1], degree)
-                dalet = lambda x: np.sqrt((x-pt[0])**2 + (np.polyval(coeffs, x)-pt[1])**2)
-                newpt = optimize.minimize_scalar(dalet)
-                ho.dat.data[i] = (newpt.x, np.polyval(coeffs, newpt.x))
-        """
-        #Hyperelastic Smoothing
-        bcs = [fd.DirichletBC(space, ho, "on_boundary")]
-        quad_degree = 2*(degree+1)-1
-        dx = fd.dx(degree=quad_degree, domain=linear)
-        d = linear.topological_dimension()
-
-        Q = fd.TensorFunctionSpace(linear, "DG", degree=0)
-        Jinv = ufl.JacobianInverse(linear)
-        hinv = fd.Function(Q)
-        hinv.interpolate(Jinv)
-        G = ufl.Jacobian(linear) * hinv
-        ijac = 1/abs(ufl.det(G))
-        ref_grad = lambda u: ufl.dot(ufl.grad(u), G)
-        params = {
-            "snes_type": "newtonls",
-            "snes_linesearch_type": "l2",
-            "snes_max_it": 50,
-            "snes_rtol": 1E-8,
-            "snes_atol": 1E-8,
-            "snes_ksp_ew": True,
-            "snes_ksp_ew_rtol0": 1E-2,
-            "snes_ksp_ew_rtol_max": 1E-2,
-        }
-        params["mat_type"] = "aij"
-        coarse = {
-            "ksp_type": "preonly",
-            "pc_type": "lu",
-            "pc_mat_factor_type": "mumps",
-        }
-        gmg = {
-            "pc_type": "mg",
-            "mg_coarse": coarse,
-            "mg_levels": {
-                "ksp_max_it": 2,
-                "ksp_type": "chebyshev",
-                "pc_type": "jacobi",
-            },
-        }
-        l = fd.mg.utils.get_level(linear)[1]
-        pc = gmg if l else coarse
-        params.update(pc)
-        ksp = {
-            "ksp_rtol": 1E-8,
-            "ksp_atol": 0,
-            "ksp_type": "minres",
-            "ksp_norm_type": "preconditioned",
-        }
-        params.update(ksp)
-        u = ho
-        F = ref_grad(u)
-        J = ufl.det(F)
-        psi = (1/2) * (ufl.inner(F, F)-d - ufl.ln(J**2))
-        U = (psi * ijac)*fd.dx(degree=quad_degree)
-        dU = ufl.derivative(U, u, fd.TestFunction(space))
-        problem = fd.NonlinearVariationalProblem(dU, u, bcs)
-        solver = fd.NonlinearVariationalSolver(problem, solver_parameters=params)
-        solver.set_transfer_manager(None)
-        ctx = solver._ctx
-        for c in problem.F.coefficients():
-            dm = c.function_space().dm
-            dmhooks.push_appctx(dm, ctx)
-        solver.solve()
-        """
+        ho = fd.assemble(interpolate(coarse, space))
+        if snap_smoothing == "hyperelastic":
+            #Hyperelastic Smoothing
+            bcs = [fd.DirichletBC(space, ho, "on_boundary")]
+            quad_degree = 2*(degree+1)-1
+            dx = fd.dx(degree=quad_degree, domain=linear)
+            d = linear.topological_dimension()
+            Q = fd.TensorFunctionSpace(linear, "DG", degree=0)
+            Jinv = ufl.JacobianInverse(linear)
+            hinv = fd.Function(Q)
+            hinv.interpolate(Jinv)
+            G = ufl.Jacobian(linear) * hinv
+            ijac = 1/abs(ufl.det(G))
+            ref_grad = lambda u: ufl.dot(ufl.grad(u), G)
+            params = {
+                "snes_type": "newtonls",
+                "snes_linesearch_type": "l2",
+                "snes_max_it": 50,
+                "snes_rtol": 1E-8,
+                "snes_atol": 1E-8,
+                "snes_ksp_ew": True,
+                "snes_ksp_ew_rtol0": 1E-2,
+                "snes_ksp_ew_rtol_max": 1E-2,
+            }
+            params["mat_type"] = "aij"
+            coarse = {
+                "ksp_type": "preonly",
+                "pc_type": "lu",
+                "pc_mat_factor_type": "mumps",
+            }
+            gmg = {
+                "pc_type": "mg",
+                "mg_coarse": coarse,
+                "mg_levels": {
+                    "ksp_max_it": 2,
+                    "ksp_type": "chebyshev",
+                    "pc_type": "jacobi",
+                },
+            }
+            l = fd.mg.utils.get_level(linear)[1]
+            pc = gmg if l else coarse
+            params.update(pc)
+            ksp = {
+                "ksp_rtol": 1E-8,
+                "ksp_atol": 0,
+                "ksp_type": "minres",
+                "ksp_norm_type": "preconditioned",
+            }
+            params.update(ksp)
+            u = ho
+            F = ref_grad(u)
+            J = ufl.det(F)
+            psi = (1/2) * (ufl.inner(F, F)-d - ufl.ln(J**2))
+            U = (psi * ijac)*fd.dx(degree=quad_degree)
+            dU = ufl.derivative(U, u, fd.TestFunction(space))
+            problem = fd.NonlinearVariationalProblem(dU, u, bcs)
+            solver = fd.NonlinearVariationalSolver(problem, solver_parameters=params)
+            solver.set_transfer_manager(None)
+            ctx = solver._ctx
+            for c in problem.F.coefficients():
+                dm = c.function_space().dm
+                dmhooks.push_appctx(dm, ctx)
+            solver.solve()
     else:
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
     return fd.Mesh(ho, comm=linear.comm, distribution_parameters=linear._distribution_parameters)
@@ -223,6 +203,8 @@ def NetgenHierarchy(mesh, levs, flags):
     refType = flagsUtils(flags, "refinement_type", "uniform")
     optMoves = flagsUtils(flags, "optimisation_moves", False)
     snap = flagsUtils(flags, "snap_to", "geometry")
+    snap_smoothing = flagsUtils(flags, "snap_smoothing", "hyperelastic")
+    cg = flagsUtils(flags, "cg", False)
     #Firedrake quoantities
     meshes = []
     coarse_to_fine_cells = []
@@ -233,9 +215,8 @@ def NetgenHierarchy(mesh, levs, flags):
         raise RuntimeError("Cannot refine parallel overlapped meshes ")
     #We curve the mesh
     if order[0]>1:
-        CG = True if snap == "coarse" else False
-        mesh = fd.Mesh(mesh.curve_field(order=order[0], tol=tol, CG=CG),
-                       distribution_parameters=params, comm=comm)
+        ho_field  = mesh.curve_field(order=order[0], tol=tol, CG=cg)
+        mesh = fd.Mesh(ho_field,distribution_parameters=params, comm=comm)
     meshes += [mesh]
     cdm = meshes[-1].topology_dm
     for l in range(levs):
@@ -264,7 +245,7 @@ def NetgenHierarchy(mesh, levs, flags):
                 mesh = fd.Mesh(mesh.curve_field(order=order[l+1], tol=tol),
                                distribution_parameters=params, comm=comm)
             elif snap == "coarse":
-                mesh = snapToCoarse(meshes[0], mesh, order[l+1])
+                mesh = snapToCoarse(ho_field, mesh, order[l+1], snap_smoothing)
         meshes += [mesh]
     #We populate the coarse to fine map
     coarse_to_fine_cells, fine_to_coarse_cells = refinementTypes[refType][1](meshes)
