@@ -1,5 +1,5 @@
 #Setting up basic python and to be root
-FROM python:3.10-slim-buster
+FROM python:3.10-slim
 USER root
 #Setting up system variable
 ENV PETSC_DIR /root/petsc
