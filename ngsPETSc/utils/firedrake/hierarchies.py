@@ -12,6 +12,7 @@ except ImportError:
 
 from fractions import Fraction
 import numpy as np
+from scipy import optimize
 from petsc4py import PETSc
 
 from netgen.meshing import MeshingParameters
@@ -42,13 +43,25 @@ def snapToCoarse(coarse, linear, degree):
     if dim == 2:
         coarseSpace = coarse.coordinates.function_space()
         space = fd.VectorFunctionSpace(linear, "CG", degree)
+        ho = fd.assemble(interpolate(coarse.coordinates, space))
         bnd =space.boundary_nodes("on_boundary")
-        ho = fd.assemble(interpolate(linear.coordinates, space))
         coarseBnd = coarseSpace.boundary_nodes("on_boundary")
+        cellMap = coarse.coordinates.cell_node_map()
         for i in bnd:
             pt = ho.dat.data[i]
-            j = np.argmin(np.sum((coarse.coordinates.dat.data[coarseBnd] - pt)**2, axis=1))
-            ho.dat.data[i] = coarse.coordinates.dat.data[coarseBnd][j]
+            j = np.argmin(np.sum((coarse.coordinates.dat.data[coarseBnd]- pt)**2, axis=1))
+            print(np.linalg.norm(pt-coarse.coordinates.dat.data[coarseBnd[j]]))
+            if np.linalg.norm(pt-coarse.coordinates.dat.data[coarseBnd[j]]) > 1e-16:
+                cell_idx = coarse.locate_cell(pt)
+                dim = linear.cell_sizes.at(pt)
+                edge_nodes = [node for node in cellMap.values[cell_idx] if node in coarseBnd]
+                #Compute polynomial reppresentation of the cell edge
+                edge_coo = coarse.coordinates.dat.data[edge_nodes]
+                coeffs = np.polyfit(edge_coo[:, 0], edge_coo[:, 1], degree)
+                dalet = lambda x: np.sqrt((x-pt[0])**2 + (np.polyval(coeffs, x)-pt[1])**2)
+                newpt = optimize.minimize_scalar(dalet)
+                ho.dat.data[i] = (newpt.x, np.polyval(coeffs, newpt.x))
+        """
         #Hyperelastic Smoothing
         bcs = [fd.DirichletBC(space, ho, "on_boundary")]
         quad_degree = 2*(degree+1)-1
@@ -111,6 +124,7 @@ def snapToCoarse(coarse, linear, degree):
             dm = c.function_space().dm
             dmhooks.push_appctx(dm, ctx)
         solver.solve()
+        """
     else:
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
     return fd.Mesh(ho, comm=linear.comm, distribution_parameters=linear._distribution_parameters)
