@@ -197,7 +197,7 @@ class MeshMapping:
                             cone  = plex.getCone(join[0])
                             for i, _ in enumerate(cone):
                                 plex.setLabelValue(FACE_SETS_LABEL, cone[i], \
-                                                   nBBnd+nBnd+int(e.index))
+                                                   nBnd+int(e.index))
                     for e in self.ngMesh.Elements2D():
                         join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(FACE_SETS_LABEL, join[0], int(e.index))

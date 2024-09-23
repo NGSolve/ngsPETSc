@@ -257,7 +257,7 @@ class FiredrakeMesh:
         setattr(fd.MeshGeometry, "curve_field", curveField)
         #Adding labels for boundary regions and regions
         self.firedrakeMesh.labels = {}
-        for dim in range(1, geometric_dim+1):
+        for dim in range(geometric_dim-1, geometric_dim+1):
             for i, label in enumerate(self.firedrakeMesh.netgen_mesh.GetRegionNames(dim=dim)):
                 if (dim, label) not in self.firedrakeMesh.labels:
                     self.firedrakeMesh.labels[(dim, label)] = ()
