@@ -255,3 +255,18 @@ class FiredrakeMesh:
         #Adding refine_marked_elements and curve_field methods
         setattr(fd.MeshGeometry, "refine_marked_elements", refineMarkedElements)
         setattr(fd.MeshGeometry, "curve_field", curveField)
+        #Adding labels for boundary regions and regions
+        self.firedrakeMesh.labels = {}
+        for dim in range(geometric_dim-1, geometric_dim+1):
+            for i, label in enumerate(self.firedrakeMesh.netgen_mesh.GetRegionNames(dim=dim)):
+                if (dim, label) not in self.firedrakeMesh.labels:
+                    self.firedrakeMesh.labels[(dim, label)] = ()
+                self.firedrakeMesh.labels[(dim, label)] \
+                    = (*self.firedrakeMesh.labels[(dim, label)],i+1)
+                if  dim == geometric_dim \
+                    and len(self.firedrakeMesh.netgen_mesh.GetRegionNames(dim=dim)) > 1:
+                    offset = len(self.firedrakeMesh.netgen_mesh.GetRegionNames(dim=dim-1))
+                    if (dim-1, label) not in self.firedrakeMesh.labels:
+                        self.firedrakeMesh.labels[(dim-1, label)] = ()
+                    self.firedrakeMesh.labels[(dim-1, label)] \
+                        = (*self.firedrakeMesh.labels[(dim-1, label)],i+1+offset)

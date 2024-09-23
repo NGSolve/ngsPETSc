@@ -9,40 +9,59 @@ except ImportError:
 
 from fractions import Fraction
 import numpy as np
-from petsc4py import PETSc
 
+import netgen.meshing as ngm
 from netgen.meshing import MeshingParameters
 
+from ngsPETSc.plex import MeshMapping
 from ngsPETSc.utils.firedrake.meshes import flagsUtils
 
 def snapToNetgenDMPlex(ngmesh, petscPlex):
     '''
     This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
     '''
-    if petscPlex.getDimension() == 2:
-        ngCoordinates = ngmesh.Coordinates()
-        petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)
-        for i, pt in enumerate(petscCoordinates):
-            j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
-            petscCoordinates[i] = ngCoordinates[j]
-        petscPlexCoordinates = petscPlex.getCoordinatesLocal()
-        petscPlexCoordinates.setArray(petscPlexCoordinates)
-        petscPlex.setCoordinatesLocal(petscPlexCoordinates)
-    else:
-        raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
+    ngCoordinates = ngmesh.Coordinates()
+    petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)
+    for i, pt in enumerate(petscCoordinates):
+        j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
+        petscCoordinates[i] = ngCoordinates[j]
+    petscPlexCoordinates = petscPlex.getCoordinatesLocal()
+    petscPlexCoordinates.setArray(petscPlexCoordinates)
+    petscPlex.setCoordinatesLocal(petscPlexCoordinates)
 
-def uniformRefinementRoutine(ngmesh, cdm):
+def uniformRefinementRoutine(ngmesh, cdm, comm, safe_bcast):
     '''
     Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
     '''
-    #We refine the netgen mesh uniformly
-    ngmesh.Refine(adaptive=False)
     #We refine the DMPlex mesh uniformly
     cdm.setRefinementUniform(True)
     rdm = cdm.refine()
     rdm.removeLabel("pyop2_core")
     rdm.removeLabel("pyop2_owned")
     rdm.removeLabel("pyop2_ghost")
+    dim = ngmesh.dim
+    if dim > 2:
+        if comm.size > 1:
+            sdm = rdm.getRedundantDM()
+            sdm.getCoordinates().getArray().reshape(-1, dim).shape #pylint: disable=W0106
+            if comm.rank == 0:
+                mapping = MeshMapping(sdm, geo=ngmesh.GetGeometry())
+                ngmesh = mapping.ngMesh
+            if not safe_bcast:
+                ngmesh = comm.bcast(ngmesh, root=0)
+            else:
+                if comm.rank == 0:
+                    ngmesh.Save(".ngsPETSc_tmp.vol")
+                comm.barrier()
+                if comm.rank > 0:
+                    ngmesh = ngm.Mesh()
+                    ngmesh.Load(".ngsPETSc_tmp.vol")
+        else:
+            mapping = MeshMapping(rdm, geo=ngmesh.GetGeometry())
+            ngmesh = mapping.ngMesh
+    else:
+        #Faster but only works for 2D meshes
+        ngmesh.Refine(adaptive=False)
     return (rdm, ngmesh)
 
 def uniformMapRoutine(meshes):
@@ -72,29 +91,7 @@ def uniformMapRoutine(meshes):
                                 for i, f2c in enumerate(fine_to_coarse_cells))
     return (coarse_to_fine_cells, fine_to_coarse_cells)
 
-def alfeldRefinementRoutine(ngmesh, cdm):
-    '''
-    Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
-    '''
-    #We refine the netgen mesh alfeld
-    ngmesh.SplitAlfeld()
-    #We refine the DMPlex mesh alfeld
-    tr = PETSc.DMPlexTransform().create(comm=PETSc.COMM_WORLD)
-    tr.setType(PETSc.DMPlexTransformType.REFINEREGULAR)
-    tr.setDM(cdm)
-    tr.setUp()
-    rdm = tr.apply(cdm)
-    return (rdm, ngmesh)
-
-def alfeldMapRoutine(meshes):
-    '''
-    This function computes the coarse to fine and fine to coarse maps
-    for a alfeld mesh hierarchy.
-    '''
-    raise NotImplementedError("Alfeld refinement is not implemented yet.")
-
-refinementTypes = {"uniform": (uniformRefinementRoutine, uniformMapRoutine),
-                   "Alfeld": (alfeldRefinementRoutine, alfeldMapRoutine)}
+refinementTypes = {"uniform": (uniformRefinementRoutine, uniformMapRoutine)}
 
 def NetgenHierarchy(mesh, levs, flags):
     '''
@@ -111,8 +108,9 @@ def NetgenHierarchy(mesh, levs, flags):
         -tol, geometric tollerance adopted in snapToNetgenDMPlex.
         -refinement_type, the refinment type to be used: uniform (default), Alfeld
     '''
-    if mesh.geometric_dimension() == 3:
-        raise NotImplementedError("Netgen hierachies are only implemented for 2D meshes.")
+    if mesh.geometric_dimension() > 3:
+        raise NotImplementedError("Netgen hierachies are only implemented \
+                                  for meshes with dimension greater than 3.")
     ngmesh = mesh.netgen_mesh
     comm = mesh.comm
     #Parsing netgen flags
@@ -124,6 +122,8 @@ def NetgenHierarchy(mesh, levs, flags):
     tol = flagsUtils(flags, "tol", 1e-8)
     refType = flagsUtils(flags, "refinement_type", "uniform")
     optMoves = flagsUtils(flags, "optimisation_moves", False)
+    nested = flagsUtils(flags, "nested", False)
+    safe_bcast = flagsUtils(flags, "safe_broadcast", False)
     #Firedrake quoantities
     meshes = []
     coarse_to_fine_cells = []
@@ -141,7 +141,7 @@ def NetgenHierarchy(mesh, levs, flags):
     for l in range(levs):
         #Streightening the mesh
         ngmesh.Curve(1)
-        rdm, ngmesh = refinementTypes[refType][0](ngmesh, cdm)
+        rdm, ngmesh = refinementTypes[refType][0](ngmesh, cdm, comm, safe_bcast)
         cdm = rdm
         #We snap the mesh to the Netgen mesh
         snapToNetgenDMPlex(ngmesh, rdm)
@@ -164,5 +164,6 @@ def NetgenHierarchy(mesh, levs, flags):
         meshes += [mesh]
     #We populate the coarse to fine map
     coarse_to_fine_cells, fine_to_coarse_cells = refinementTypes[refType][1](meshes)
+    #Various post processing options
     return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
-                            1, nested=False)
+                            1, nested=nested)
