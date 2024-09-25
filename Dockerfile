@@ -24,16 +24,12 @@ RUN pip install numpy scipy cython mpi4py pytest pytest-mpi
 RUN cd ~ && git clone https://gitlab.com/petsc/petsc.git
 RUN cd ~/petsc \
     && python configure --download-chaco \
-    --download-cmake \
-    --download-eigen \
     --with-openmpi=1 \
     --download-hypre \
     --download-metis \
     --download-parmetis \
-    --download-ml \
     --download-mumps \
     --download-scalapack \
-    --download-superlu_dist \
     --with-c2html=0 \
     --with-cxx-dialect=C++11 \
     --with-debugging=0 \
@@ -51,6 +47,7 @@ RUN cd ~/slepc \
     && make 
 #Building ngsolve
 ENV LD_LIBRARY_PATH /root/petsc/linux_debug/lib
+RUN pip install netgen-occt-devel netgen-occt
 RUN mkdir -p ~/ngsuite \
            && cd ~/ngsuite \
            && git clone https://github.com/NGSolve/ngsolve.git ngsolve-src \
@@ -59,7 +56,7 @@ RUN mkdir -p ~/ngsuite \
            && mkdir ~/ngsuite/ngsolve-build \
            && mkdir ~/ngsuite/ngsolve-install \
            && cd ~/ngsuite/ngsolve-build \
-           && cmake -DCMAKE_INSTALL_PREFIX=~/ngsuite/ngsolve-install ~/ngsuite/ngsolve-src -DUSE_MPI=ON -DBUILD_OCC=ON \
+           && cmake -DCMAKE_INSTALL_PREFIX=~/ngsuite/ngsolve-install ~/ngsuite/ngsolve-src -DUSE_MPI=ON -DBUILD_OCC=OFF\
            && make && make install
 #Adding NGS to PYTHONPATH
 ENV PYTHONPATH /root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib:/root/ngsuite/ngsolve-install/lib/python3.10/site-packages
