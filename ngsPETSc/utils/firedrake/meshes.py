@@ -78,51 +78,57 @@ def curveField(self, order, tol=1e-8):
 
     '''
     #Checking if the mesh is a surface mesh or two dimensional mesh
-    surf = len(self.netgen_mesh.Elements3D()) == 0
+    surf = len(self.netgen_mesh.Elements3D()) == 0 # REMOVE
+    if len(self.netgen_mesh.Elements3D()) == 0:
+        ng_element = self.netgen_mesh.Elements2D
+    else:
+        ng_element = self.netgen_mesh.Elements3D
+    ng_dimension = len(ng_element())
+
     #Constructing mesh as a function
     low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
-    element = low_order_element.reconstruct(degree=order)
-    space = fd.VectorFunctionSpace(self, fd.BrokenElement(element))
-    newFunctionCoordinates = fd.assemble(interpolate(self.coordinates, space))
+    ufl_element = low_order_element.reconstruct(degree=order)
+    firedrake_space = fd.VectorFunctionSpace(self, fd.BrokenElement(ufl_element))
+    newFunctionCoordinates = fd.assemble(interpolate(self.coordinates, firedrake_space))
+
     #Computing reference points using fiat
     fiat_element = newFunctionCoordinates.function_space().finat_element.fiat_equivalent
     entity_ids = fiat_element.entity_dofs()
     nodes = fiat_element.dual_basis()
-    refPts = []
+    ref = []
     for dim in entity_ids:
         for entity in entity_ids[dim]:
             for dof in entity_ids[dim][entity]:
                 # Assert singleton point for each node.
                 pt, = nodes[dof].get_point_dict().keys()
-                refPts.append(pt)
-    V = newFunctionCoordinates.dat.data
-    refPts = np.array(refPts)
-    els = {True: self.netgen_mesh.Elements2D, False: self.netgen_mesh.Elements3D}
+                ref.append(pt)
+    reference_space_points = np.array(ref)
+
     #Mapping to the physical domain
+    els = {True: self.netgen_mesh.Elements2D, False: self.netgen_mesh.Elements3D} # REMOVE
+    physical_space_points = np.ndarray((ng_dimension, reference_space_points.shape[0], self.geometric_dimension()))
+    curved_space_points = np.ndarray((ng_dimension, reference_space_points.shape[0], self.geometric_dimension()))
+
     if self.comm.rank == 0:
-        physPts = np.ndarray((len(els[surf]()),
-                                refPts.shape[0], self.geometric_dimension()))
-        self.netgen_mesh.CalcElementMapping(refPts, physPts)
-        #Cruving the mesh
+        #Curving the mesh on rank 0
+        self.netgen_mesh.CalcElementMapping(reference_space_points, physical_space_points)
         self.netgen_mesh.Curve(order)
-        curvedPhysPts = np.ndarray((len(els[surf]()),
-                                    refPts.shape[0], self.geometric_dimension()))
-        self.netgen_mesh.CalcElementMapping(refPts, curvedPhysPts)
-        curved = els[surf]().NumPy()["curved"]
+        self.netgen_mesh.CalcElementMapping(reference_space_points, curved_space_points)
+        curved = ng_element().NumPy()["curved"]
     else:
-        physPts = np.ndarray((len(els[surf]()),
-                                refPts.shape[0], self.geometric_dimension()))
-        curvedPhysPts = np.ndarray((len(els[surf]()),
-                                    refPts.shape[0], self.geometric_dimension()))
-        curved = np.array((len(els[surf]()),1))
-    physPts = self.comm.bcast(physPts, root=0)
-    curvedPhysPts = self.comm.bcast(curvedPhysPts, root=0)
+        curved = np.array((ng_dimension, 1))
+
+    # Broadcast curving
+    physical_space_points = self.comm.bcast(physical_space_points, root=0)
+    curved_space_points = self.comm.bcast(curved_space_points, root=0)
     curved = self.comm.bcast(curved, root=0)
     cellMap = newFunctionCoordinates.cell_node_map()
-    for i in range(physPts.shape[0]):
+
+
+    for i in range(physical_space_points.shape[0]):
         #Inefficent code but runs only on curved elements
         if curved[i]:
-            pts = physPts[i][0:refPts.shape[0]]
+            pts = physical_space_points[i][0:reference_space_points.shape[0]]
             bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
             Idx = self.locate_cell(bary)
             isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
@@ -133,23 +139,22 @@ def curveField(self, order, tol=1e-8):
             if np.sum(shared) == 1:
                 if isInMesh:
                     p = [np.argmin(np.sum((pts - pt)**2, axis=1))
-                            for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
-                    curvedPhysPts[i] = curvedPhysPts[i][p]
-                    res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
+                            for pt in newFunctionCoordinates.dat.data[cellMap.values[Idx]][0:reference_space_points.shape[0]]]
+                    curved_space_points[i] = curved_space_points[i][p]
+                    res = np.linalg.norm(pts[p] - newFunctionCoordinates.dat.data[cellMap.values[Idx]][0:reference_space_points.shape[0]])
                     if res > tol:
-                        fd.logging.warning("[{}] Not able to curve Firedrake element {} \
-                            ({}) -- residual: {}".format(self.comm.rank, Idx,i, res))
+                        fd.logging.warning(f"[{self.comm.rank}] Not able to curve Firedrake element {Idx} ({i}) -- residual: {res}")
                     else:
-                        for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
+                        for j, datIdx in enumerate(cellMap.values[Idx][0:reference_space_points.shape[0]]):
                             for dim in range(self.geometric_dimension()):
-                                coo = curvedPhysPts[i][j][dim]
+                                coo = curved_space_points[i][j][dim]
                                 newFunctionCoordinates.sub(dim).dat.data[datIdx] = coo
             else:
                 if isInMesh:
                     p = [np.argmin(np.sum((pts - pt)**2, axis=1))
-                            for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
-                    curvedPhysPts[i] = curvedPhysPts[i][p]
-                    res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
+                            for pt in newFunctionCoordinates.dat.data[cellMap.values[Idx]][0:reference_space_points.shape[0]]]
+                    curved_space_points[i] = curved_space_points[i][p]
+                    res = np.linalg.norm(pts[p]-newFunctionCoordinates.dat.data[cellMap.values[Idx]][0:reference_space_points.shape[0]])
                 else:
                     res = np.inf
                 res = self.comm.gather(res, root=0)
@@ -160,11 +165,11 @@ def curveField(self, order, tol=1e-8):
                         fd.logging.warning("[{}, {}] Not able to curve Firedrake element {} \
                             ({}) -- residual: {}".format(self.comm.rank, shared, Idx,i, res))
                     else:
-                        for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
+                        for j, datIdx in enumerate(cellMap.values[Idx][0:reference_space_points.shape[0]]):
                             for dim in range(self.geometric_dimension()):
-                                coo = curvedPhysPts[i][j][dim]
+                                coo = curved_space_points[i][j][dim]
                                 newFunctionCoordinates.sub(dim).dat.data[datIdx] = coo
-
+    # ~ breakpoint()
     return newFunctionCoordinates
 
 def splitToQuads(plex, dim, comm):
