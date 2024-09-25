@@ -5,14 +5,13 @@ try:
     import firedrake as fd
     from firedrake.cython import mgimpl as impl
     from firedrake.__future__ import interpolate
-    import firedrake.dmhooks as dmhooks
+    from firedrake import dmhooks
     import ufl
 except ImportError:
     fd = None
 
 from fractions import Fraction
 import numpy as np
-from scipy import optimize
 from petsc4py import PETSc
 
 from netgen.meshing import MeshingParameters
@@ -35,7 +34,7 @@ def snapToNetgenDMPlex(ngmesh, petscPlex):
     else:
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
 
-def snapToCoarse(coarse, linear, degree, snap_smoothing):
+def snapToCoarse(coarse, linear, degree, snap_smoothing, cg):
     '''
     This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
     '''
@@ -47,7 +46,6 @@ def snapToCoarse(coarse, linear, degree, snap_smoothing):
             #Hyperelastic Smoothing
             bcs = [fd.DirichletBC(space, ho, "on_boundary")]
             quad_degree = 2*(degree+1)-1
-            dx = fd.dx(degree=quad_degree, domain=linear)
             d = linear.topological_dimension()
             Q = fd.TensorFunctionSpace(linear, "DG", degree=0)
             Jinv = ufl.JacobianInverse(linear)
@@ -55,7 +53,10 @@ def snapToCoarse(coarse, linear, degree, snap_smoothing):
             hinv.interpolate(Jinv)
             G = ufl.Jacobian(linear) * hinv
             ijac = 1/abs(ufl.det(G))
-            ref_grad = lambda u: ufl.dot(ufl.grad(u), G)
+
+            def ref_grad(u):
+                return ufl.dot(ufl.grad(u),G)
+
             params = {
                 "snes_type": "newtonls",
                 "snes_linesearch_type": "l2",
@@ -105,6 +106,10 @@ def snapToCoarse(coarse, linear, degree, snap_smoothing):
                 dm = c.function_space().dm
                 dmhooks.push_appctx(dm, ctx)
             solver.solve()
+        if not cg:
+            element = ho.function_space().ufl_element().sub_elements[0].reconstruct(degree=degree)
+            space = fd.VectorFunctionSpace(linear, fd.BrokenElement(element))
+            ho = fd.Function(space).interpolate(ho)
     else:
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
     return fd.Mesh(ho, comm=linear.comm, distribution_parameters=linear._distribution_parameters)
@@ -205,6 +210,7 @@ def NetgenHierarchy(mesh, levs, flags):
     snap = flagsUtils(flags, "snap_to", "geometry")
     snap_smoothing = flagsUtils(flags, "snap_smoothing", "hyperelastic")
     cg = flagsUtils(flags, "cg", False)
+    nested = flagsUtils(flags, "nested", snap in ["coarse"])
     #Firedrake quoantities
     meshes = []
     coarse_to_fine_cells = []
@@ -245,9 +251,9 @@ def NetgenHierarchy(mesh, levs, flags):
                 mesh = fd.Mesh(mesh.curve_field(order=order[l+1], tol=tol),
                                distribution_parameters=params, comm=comm)
             elif snap == "coarse":
-                mesh = snapToCoarse(ho_field, mesh, order[l+1], snap_smoothing)
+                mesh = snapToCoarse(ho_field, mesh, order[l+1], snap_smoothing, cg)
         meshes += [mesh]
     #We populate the coarse to fine map
     coarse_to_fine_cells, fine_to_coarse_cells = refinementTypes[refType][1](meshes)
     return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
-                            1, nested=False)
+                            1, nested=nested)
