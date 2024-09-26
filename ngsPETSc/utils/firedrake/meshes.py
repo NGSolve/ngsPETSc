@@ -118,57 +118,85 @@ def curveField(self, order, tol=1e-8):
     else:
         curved = np.array((ng_dimension, 1))
 
-    # Broadcast curving
+    # Broadcast curving data
     physical_space_points = self.comm.bcast(physical_space_points, root=0)
     curved_space_points = self.comm.bcast(curved_space_points, root=0)
     curved = self.comm.bcast(curved, root=0)
-    cellMap = newFunctionCoordinates.cell_node_map()
+    cell_node_map = newFunctionCoordinates.cell_node_map()
 
+    # Select only the points in curved cells
+    physical_space_points = physical_space_points[curved]
+    curved_space_points = curved_space_points[curved]
+    barycentres = np.average(physical_space_points, axis=1)
+    ng_index = [*map(self.locate_cell, barycentres)]
+    owned = [(0 <= ii < len(cell_node_map.values)) if ii is not None else False for ii in ng_index]
 
-    for i in range(physical_space_points.shape[0]):
-        #Inefficent code but runs only on curved elements
-        if curved[i]:
-            pts = physical_space_points[i][0:reference_space_points.shape[0]]
-            bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
-            Idx = self.locate_cell(bary)
-            isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
-            #Check if element is shared across processes
-            shared = self.comm.gather(isInMesh, root=0)
-            shared = self.comm.bcast(shared, root=0)
-            #Bend if not shared
-            if np.sum(shared) == 1:
-                if isInMesh:
-                    p = [np.argmin(np.sum((pts - pt)**2, axis=1))
-                            for pt in newFunctionCoordinates.dat.data[cellMap.values[Idx]][0:reference_space_points.shape[0]]]
-                    curved_space_points[i] = curved_space_points[i][p]
-                    res = np.linalg.norm(pts[p] - newFunctionCoordinates.dat.data[cellMap.values[Idx]][0:reference_space_points.shape[0]])
-                    if res > tol:
-                        fd.logging.warning(f"[{self.comm.rank}] Not able to curve Firedrake element {Idx} ({i}) -- residual: {res}")
-                    else:
-                        for j, datIdx in enumerate(cellMap.values[Idx][0:reference_space_points.shape[0]]):
-                            for dim in range(self.geometric_dimension()):
-                                coo = curved_space_points[i][j][dim]
-                                newFunctionCoordinates.sub(dim).dat.data[datIdx] = coo
-            else:
-                if isInMesh:
-                    p = [np.argmin(np.sum((pts - pt)**2, axis=1))
-                            for pt in newFunctionCoordinates.dat.data[cellMap.values[Idx]][0:reference_space_points.shape[0]]]
-                    curved_space_points[i] = curved_space_points[i][p]
-                    res = np.linalg.norm(pts[p]-newFunctionCoordinates.dat.data[cellMap.values[Idx]][0:reference_space_points.shape[0]])
-                else:
-                    res = np.inf
-                res = self.comm.gather(res, root=0)
-                res = self.comm.bcast(res, root=0)
-                rank = np.argmin(res)
-                if self.comm.rank == rank:
-                    if res[rank] > tol:
-                        fd.logging.warning("[{}, {}] Not able to curve Firedrake element {} \
-                            ({}) -- residual: {}".format(self.comm.rank, shared, Idx,i, res))
-                    else:
-                        for j, datIdx in enumerate(cellMap.values[Idx][0:reference_space_points.shape[0]]):
-                            for dim in range(self.geometric_dimension()):
-                                coo = curved_space_points[i][j][dim]
-                                newFunctionCoordinates.sub(dim).dat.data[datIdx] = coo
+    # Select only the points owned by this rank
+    physical_space_points = physical_space_points[owned]
+    curved_space_points = curved_space_points[owned]
+    barycentres = barycentres[owned]
+    ng_index = [idx for idx, o in zip(ng_index, owned) if o]
+
+    # Do we want the min or max of these???
+    norms = np.linalg.norm(physical_space_points - newFunctionCoordinates.dat.data[cell_node_map.values[ng_index]], axis=2)
+
+    # PyOP2 index
+    pyop2_index = []
+    for ngidx in ng_index:
+        pyop2_index.extend(cell_node_map.values[ngidx])
+    np.array(pyop2_index)
+
+    for dim in range(self.geometric_dimension()):
+        newFunctionCoordinates.sub(dim).dat.data[pyop2_index] = curved_space_points[:,:,dim].flatten()
+
+    # ~ breakpoint()
+
+    # ~ for i in range(physical_space_points.shape[0]):
+        # ~ #Inefficent code but runs only on curved elements
+        # ~ if curved[i]:
+            # ~ pts = physical_space_points[i][0:reference_space_points.shape[0]]
+            # ~ bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
+            # ~ Idx = self.locate_cell(bary)
+            # ~ isInMesh = (0<=Idx<len(cell_node_map.values)) if Idx is not None else False
+            # ~ #Check if element is shared across processes
+            # ~ shared = self.comm.gather(isInMesh, root=0)
+            # ~ shared = self.comm.bcast(shared, root=0) # `shared` isn't used in anything other than warning messages!?
+            # ~ # self.comm.Allgather(isInMesh, shared)
+            # ~ #Bend if not shared
+            # ~ if np.sum(shared) == 1:
+                # ~ if isInMesh:
+                    # ~ # This seems dodgy, I think we're just trying to ensure the points in the netgen cell are close to the coordinates in the dat
+                    # ~ p = [np.argmin(np.sum((pts - pt)**2, axis=1))
+                            # ~ for pt in newFunctionCoordinates.dat.data[cell_node_map.values[Idx]][0:reference_space_points.shape[0]]]
+                    # ~ curved_space_points[i] = curved_space_points[i][p]
+                    # ~ res = np.linalg.norm(pts[p] - newFunctionCoordinates.dat.data[cell_node_map.values[Idx]][0:reference_space_points.shape[0]])
+                    # ~ if res > tol:
+                        # ~ fd.logging.warning(f"[{self.comm.rank}] Not able to curve Firedrake element {Idx} ({i}) -- residual: {res}")
+                    # ~ else:
+                        # ~ for j, datIdx in enumerate(cell_node_map.values[Idx][0:reference_space_points.shape[0]]):
+                            # ~ for dim in range(self.geometric_dimension()):
+                                # ~ coo = curved_space_points[i][j][dim]
+                                # ~ newFunctionCoordinates.sub(dim).dat.data[datIdx] = coo
+            # ~ else:
+                # ~ if isInMesh:
+                    # ~ p = [np.argmin(np.sum((pts - pt)**2, axis=1))
+                            # ~ for pt in newFunctionCoordinates.dat.data[cell_node_map.values[Idx]][0:reference_space_points.shape[0]]]
+                    # ~ curved_space_points[i] = curved_space_points[i][p]
+                    # ~ res = np.linalg.norm(pts[p]-newFunctionCoordinates.dat.data[cell_node_map.values[Idx]][0:reference_space_points.shape[0]])
+                # ~ else:
+                    # ~ res = np.inf
+                # ~ res = self.comm.gather(res, root=0)
+                # ~ res = self.comm.bcast(res, root=0)
+                # ~ rank = np.argmin(res)
+                # ~ if self.comm.rank == rank:
+                    # ~ if res[rank] > tol:
+                        # ~ fd.logging.warning("[{}, {}] Not able to curve Firedrake element {} \
+                            # ~ ({}) -- residual: {}".format(self.comm.rank, shared, Idx,i, res))
+                    # ~ else:
+                        # ~ for j, datIdx in enumerate(cell_node_map.values[Idx][0:reference_space_points.shape[0]]):
+                            # ~ for dim in range(self.geometric_dimension()):
+                                # ~ coo = curved_space_points[i][j][dim]
+                                # ~ newFunctionCoordinates.sub(dim).dat.data[datIdx] = coo
     # ~ breakpoint()
     return newFunctionCoordinates
 
