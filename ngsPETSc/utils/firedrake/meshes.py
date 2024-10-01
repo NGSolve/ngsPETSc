@@ -128,7 +128,7 @@ def curveField(self, order, tol=1e-8):
     :arg order: the order of the curved mesh
 
     '''
-    #Checking if the mesh is a surface mesh or two dimensional mesh
+    # Check if the mesh is a surface mesh or two dimensional mesh
     if len(self.netgen_mesh.Elements3D()) == 0:
         ng_element = self.netgen_mesh.Elements2D
     else:
@@ -136,13 +136,13 @@ def curveField(self, order, tol=1e-8):
     ng_dimension = len(ng_element())
     geom_dim = self.geometric_dimension()
 
-    #Constructing mesh as a function
+    # Construct the mesh as a Firedrake function
     low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
     ufl_element = low_order_element.reconstruct(degree=order)
     firedrake_space = fd.VectorFunctionSpace(self, fd.BrokenElement(ufl_element))
     new_coordinates = fd.assemble(interpolate(self.coordinates, firedrake_space))
 
-    #Computing reference points using fiat
+    # Compute reference points using fiat
     fiat_element = new_coordinates.function_space().finat_element.fiat_equivalent
     entity_ids = fiat_element.entity_dofs()
     nodes = fiat_element.dual_basis()
@@ -155,12 +155,17 @@ def curveField(self, order, tol=1e-8):
                 ref.append(pt)
     reference_space_points = np.array(ref)
 
-    #Mapping to the physical domain
-    physical_space_points = np.ndarray((ng_dimension, reference_space_points.shape[0], geom_dim))
-    curved_space_points = np.ndarray((ng_dimension, reference_space_points.shape[0], geom_dim))
+    # Map to the physical domain
+    physical_space_points = np.ndarray(
+        (ng_dimension, reference_space_points.shape[0], geom_dim)
+    )
+    curved_space_points = np.ndarray(
+        (ng_dimension, reference_space_points.shape[0], geom_dim)
+    )
 
+    # Curve the mesh on rank 0 only
+    # JBTODO: (why?)
     if self.comm.rank == 0:
-        #Curving the mesh on rank 0
         self.netgen_mesh.CalcElementMapping(reference_space_points, physical_space_points)
         self.netgen_mesh.Curve(order)
         self.netgen_mesh.CalcElementMapping(reference_space_points, curved_space_points)
@@ -187,13 +192,15 @@ def curveField(self, order, tol=1e-8):
     barycentres = barycentres[owned]
     ng_index = [idx for idx, o in zip(ng_index, owned) if o]
 
-    # PyOP2 index
+    # Get the PyOP2 indices corresponding to the netgen indices
     pyop2_index = []
     for ngidx in ng_index:
         pyop2_index.extend(cell_node_map.values[ngidx])
     np.array(pyop2_index)
 
     # Find the correct coordinate permutation for each cell
+    # JBTODO: This should be moved to the next loop if we have to loop
+    # over cells any way to actually perform the permutation
     permutation = find_permutation(
         physical_space_points,
         new_coordinates.dat.data[pyop2_index].reshape(physical_space_points.shape),
