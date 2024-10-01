@@ -181,8 +181,6 @@ def curveField(self, order, tol=1e-8):
     barycentres = barycentres[owned]
     ng_index = [idx for idx, o in zip(ng_index, owned) if o]
 
-    breakpoint()
-
     # PyOP2 index
     pyop2_index = []
     for ngidx in ng_index:
