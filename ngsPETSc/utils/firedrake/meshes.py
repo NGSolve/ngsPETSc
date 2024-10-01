@@ -78,11 +78,11 @@ def refineMarkedElements(self, mark):
 
 
 def _slow_cdist(XA, XB):
-        dist = np.zeros([len(XA), len(XB)])
-        for ii, a in enumerate(XA):
-            for jj, b in enumerate(XB):
-                dist[ii, jj] = np.linalg.norm(b - a)
-        return dist
+    dist = np.zeros([len(XA), len(XB)])
+    for ii, a in enumerate(XA):
+        for jj, b in enumerate(XB):
+            dist[ii, jj] = np.linalg.norm(b - a)
+    return dist
 
 
 if not HAVE_SCIPY:
@@ -106,11 +106,17 @@ def find_permutation(points_a, points_b, tol=1e-5):
     p = [np.where(cdist(a, b).T < tol)[1] for a, b in zip(points_a, points_b)]
     try:
         permutation = np.array(p, ndmin=2)
-    except ValueError:
-        raise ValueError("It was not possible to find a permutation for every cell within the provided tolerance")
+    except ValueError as e:
+        raise ValueError(
+            "It was not possible to find a permutation for every cell"
+            " within the provided tolerance"
+        ) from e
 
     if permutation.shape != points_a.shape[0:2]:
-        raise ValueError("It was not possible to find a permutation for every cell within the provided tolerance")
+        raise ValueError(
+            "It was not possible to find a permutation for every cell"
+            " within the provided tolerance"
+        )
 
     return permutation
 
@@ -190,7 +196,8 @@ def curveField(self, order, tol=1e-8):
     # Find the correct coordinate permutation for each cell
     permutation = find_permutation(
         physical_space_points,
-        new_coordinates.dat.data[pyop2_index].reshape(physical_space_points.shape)
+        new_coordinates.dat.data[pyop2_index].reshape(physical_space_points.shape),
+        tol=tol
     )
 
     # Apply the permutation to each cell in turn
