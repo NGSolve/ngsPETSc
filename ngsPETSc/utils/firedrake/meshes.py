@@ -86,9 +86,10 @@ def _slow_cdist(XA, XB):
 
 
 if not HAVE_SCIPY:
-    cdist = _slow_cdist
+    cdist = PETSc.Log.EventDecorator()(_slow_cdist)
 
 
+@PETSc.Log.EventDecorator()
 def find_permutation(points_a, points_b, tol=1e-5):
     """ Find all permutations between a list of two sets of points.
 
@@ -121,6 +122,7 @@ def find_permutation(points_a, points_b, tol=1e-5):
     return permutation
 
 
+@PETSc.Log.EventDecorator()
 def curveField(self, order, tol=1e-8):
     '''
     This method returns a curved mesh as a Firedrake function.
