@@ -183,7 +183,7 @@ def curveField(self, order, tol=1e-8):
     physical_space_points = physical_space_points[curved]
     curved_space_points = curved_space_points[curved]
     barycentres = np.average(physical_space_points, axis=1)
-    ng_index = [*map(self.locate_cell, barycentres)]
+    ng_index = [*map(lambda x: self.locate_cell(x, tolerance=0.01), barycentres)]
     owned = [(0 <= ii < len(cell_node_map.values)) if ii is not None else False for ii in ng_index]
 
     # Select only the points owned by this rank
