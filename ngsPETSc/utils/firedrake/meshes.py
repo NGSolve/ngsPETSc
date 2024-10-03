@@ -123,7 +123,7 @@ def find_permutation(points_a, points_b, tol=1e-5):
 
 
 @PETSc.Log.EventDecorator()
-def curveField(self, order, tol=1e-8):
+def curveField(self, order, tol=1e-8, CG=False):
     '''
     This method returns a curved mesh as a Firedrake function.
 
@@ -139,9 +139,12 @@ def curveField(self, order, tol=1e-8):
     geom_dim = self.geometric_dimension()
 
     # Construct the mesh as a Firedrake function
-    low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
-    ufl_element = low_order_element.reconstruct(degree=order)
-    firedrake_space = fd.VectorFunctionSpace(self, fd.BrokenElement(ufl_element))
+    if CG:
+        firedrake_space = fd.VectorFunctionSpace(self, "CG", order)
+    else:
+        low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
+        ufl_element = low_order_element.reconstruct(degree=order)
+        firedrake_space = fd.VectorFunctionSpace(self, fd.BrokenElement(ufl_element))
     new_coordinates = fd.assemble(interpolate(self.coordinates, firedrake_space))
 
     # Compute reference points using fiat

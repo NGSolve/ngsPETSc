@@ -4,6 +4,9 @@ This module contains all the functions related
 try:
     import firedrake as fd
     from firedrake.cython import mgimpl as impl
+    from firedrake.__future__ import interpolate
+    from firedrake import dmhooks
+    import ufl
 except ImportError:
     fd = None
 
@@ -30,6 +33,86 @@ def snapToNetgenDMPlex(ngmesh, petscPlex):
         petscPlex.setCoordinatesLocal(petscPlexCoordinates)
     else:
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
+
+def snapToCoarse(coarse, linear, degree, snap_smoothing, cg):
+    '''
+    This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
+    '''
+    dim = linear.geometric_dimension()
+    if dim == 2:
+        space = fd.VectorFunctionSpace(linear, "CG", degree)
+        ho = fd.assemble(interpolate(coarse, space))
+        if snap_smoothing == "hyperelastic":
+            #Hyperelastic Smoothing
+            bcs = [fd.DirichletBC(space, ho, "on_boundary")]
+            quad_degree = 2*(degree+1)-1
+            d = linear.topological_dimension()
+            Q = fd.TensorFunctionSpace(linear, "DG", degree=0)
+            Jinv = ufl.JacobianInverse(linear)
+            hinv = fd.Function(Q)
+            hinv.interpolate(Jinv)
+            G = ufl.Jacobian(linear) * hinv
+            ijac = 1/abs(ufl.det(G))
+
+            def ref_grad(u):
+                return ufl.dot(ufl.grad(u),G)
+
+            params = {
+                "snes_type": "newtonls",
+                "snes_linesearch_type": "l2",
+                "snes_max_it": 50,
+                "snes_rtol": 1E-8,
+                "snes_atol": 1E-8,
+                "snes_ksp_ew": True,
+                "snes_ksp_ew_rtol0": 1E-2,
+                "snes_ksp_ew_rtol_max": 1E-2,
+            }
+            params["mat_type"] = "aij"
+            coarse = {
+                "ksp_type": "preonly",
+                "pc_type": "lu",
+                "pc_mat_factor_type": "mumps",
+            }
+            gmg = {
+                "pc_type": "mg",
+                "mg_coarse": coarse,
+                "mg_levels": {
+                    "ksp_max_it": 2,
+                    "ksp_type": "chebyshev",
+                    "pc_type": "jacobi",
+                },
+            }
+            l = fd.mg.utils.get_level(linear)[1]
+            pc = gmg if l else coarse
+            params.update(pc)
+            ksp = {
+                "ksp_rtol": 1E-8,
+                "ksp_atol": 0,
+                "ksp_type": "minres",
+                "ksp_norm_type": "preconditioned",
+            }
+            params.update(ksp)
+            u = ho
+            F = ref_grad(u)
+            J = ufl.det(F)
+            psi = (1/2) * (ufl.inner(F, F)-d - ufl.ln(J**2))
+            U = (psi * ijac)*fd.dx(degree=quad_degree)
+            dU = ufl.derivative(U, u, fd.TestFunction(space))
+            problem = fd.NonlinearVariationalProblem(dU, u, bcs)
+            solver = fd.NonlinearVariationalSolver(problem, solver_parameters=params)
+            solver.set_transfer_manager(None)
+            ctx = solver._ctx
+            for c in problem.F.coefficients():
+                dm = c.function_space().dm
+                dmhooks.push_appctx(dm, ctx)
+            solver.solve()
+        if not cg:
+            element = ho.function_space().ufl_element().sub_elements[0].reconstruct(degree=degree)
+            space = fd.VectorFunctionSpace(linear, fd.BrokenElement(element))
+            ho = fd.Function(space).interpolate(ho)
+    else:
+        raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
+    return fd.Mesh(ho, comm=linear.comm, distribution_parameters=linear._distribution_parameters)
 
 def uniformRefinementRoutine(ngmesh, cdm):
     '''
@@ -124,6 +207,10 @@ def NetgenHierarchy(mesh, levs, flags):
     tol = flagsUtils(flags, "tol", 1e-8)
     refType = flagsUtils(flags, "refinement_type", "uniform")
     optMoves = flagsUtils(flags, "optimisation_moves", False)
+    snap = flagsUtils(flags, "snap_to", "geometry")
+    snap_smoothing = flagsUtils(flags, "snap_smoothing", "hyperelastic")
+    cg = flagsUtils(flags, "cg", False)
+    nested = flagsUtils(flags, "nested", snap in ["coarse"])
     #Firedrake quoantities
     meshes = []
     coarse_to_fine_cells = []
@@ -134,8 +221,8 @@ def NetgenHierarchy(mesh, levs, flags):
         raise RuntimeError("Cannot refine parallel overlapped meshes ")
     #We curve the mesh
     if order[0]>1:
-        mesh = fd.Mesh(mesh.curve_field(order=order[0], tol=tol),
-                       distribution_parameters=params, comm=comm)
+        ho_field  = mesh.curve_field(order=order[0], tol=tol, CG=cg)
+        mesh = fd.Mesh(ho_field,distribution_parameters=params, comm=comm)
     meshes += [mesh]
     cdm = meshes[-1].topology_dm
     for l in range(levs):
@@ -144,7 +231,8 @@ def NetgenHierarchy(mesh, levs, flags):
         rdm, ngmesh = refinementTypes[refType][0](ngmesh, cdm)
         cdm = rdm
         #We snap the mesh to the Netgen mesh
-        snapToNetgenDMPlex(ngmesh, rdm)
+        if snap == "geometry":
+            snapToNetgenDMPlex(ngmesh, rdm)
         #We construct a Firedrake mesh from the DMPlex mesh
         mesh = fd.Mesh(rdm, dim=meshes[-1].ufl_cell().geometric_dimension(), reorder=False,
                                     distribution_parameters=params, comm=comm)
@@ -159,10 +247,13 @@ def NetgenHierarchy(mesh, levs, flags):
         mesh.netgen_mesh = ngmesh
         #We curve the mesh
         if order[l+1] > 1:
-            mesh = fd.Mesh(mesh.curve_field(order=order[l+1], tol=1e-8),
-                           distribution_parameters=params, comm=comm)
+            if snap == "geometry":
+                mesh = fd.Mesh(mesh.curve_field(order=order[l+1], tol=tol),
+                               distribution_parameters=params, comm=comm)
+            elif snap == "coarse":
+                mesh = snapToCoarse(ho_field, mesh, order[l+1], snap_smoothing, cg)
         meshes += [mesh]
     #We populate the coarse to fine map
     coarse_to_fine_cells, fine_to_coarse_cells = refinementTypes[refType][1](meshes)
     return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
-                            1, nested=False)
+                            1, nested=nested)
