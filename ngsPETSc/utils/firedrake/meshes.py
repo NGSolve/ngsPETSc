@@ -1,6 +1,6 @@
 '''
 This module contains all the functions related to wrapping NGSolve meshes to Firedrake
-We adopt the same docstring conventiona as the Firedrake project, since this part of
+We adopt the same docstring conventions as the Firedrake project, since this part of
 the package will only be used in combination with Firedrake.
 '''
 try:
@@ -164,26 +164,43 @@ def curveField(self, order, tol=1e-8):
     )
 
     # Curve the mesh on rank 0 only
-    # JBTODO: (why?)
     if self.comm.rank == 0:
+        # Construct numpy arrays for physical domain data
+        physical_space_points = np.ndarray(
+            (ng_dimension, reference_space_points.shape[0], geom_dim)
+        )
+        curved_space_points = np.ndarray(
+            (ng_dimension, reference_space_points.shape[0], geom_dim)
+        )
         self.netgen_mesh.CalcElementMapping(reference_space_points, physical_space_points)
         self.netgen_mesh.Curve(order)
         self.netgen_mesh.CalcElementMapping(reference_space_points, curved_space_points)
         curved = ng_element().NumPy()["curved"]
+        # Broadcast a boolean array identifying curved cells
+        curved = self.comm.bcast(curved, root=0)
+        physical_space_points = physical_space_points[curved]
+        curved_space_points = curved_space_points[curved]
     else:
-        curved = np.array((ng_dimension, 1))
+        curved = self.comm.bcast(None, root=0)
+        # Construct numpy arrays as buffers to receive physical domain data
+        ncurved = np.sum(curved)
+        physical_space_points = np.ndarray(
+            (ncurved, reference_space_points.shape[0], geom_dim)
+        )
+        curved_space_points = np.ndarray(
+            (ncurved, reference_space_points.shape[0], geom_dim)
+        )
 
-    # Broadcast curving data
-    physical_space_points = self.comm.bcast(physical_space_points, root=0)
-    curved_space_points = self.comm.bcast(curved_space_points, root=0)
-    curved = self.comm.bcast(curved, root=0)
+    # Broadcast curved cell point data
+    self.comm.Bcast(physical_space_points, root=0)
+    self.comm.Bcast(curved_space_points, root=0)
     cell_node_map = new_coordinates.cell_node_map()
 
     # Select only the points in curved cells
-    physical_space_points = physical_space_points[curved]
-    curved_space_points = curved_space_points[curved]
     barycentres = np.average(physical_space_points, axis=1)
     ng_index = [*map(lambda x: self.locate_cell(x, tolerance=0.01), barycentres)]
+
+    # Select only the indices of points owned by this rank
     owned = [(0 <= ii < len(cell_node_map.values)) if ii is not None else False for ii in ng_index]
 
     # Select only the points owned by this rank
@@ -196,11 +213,8 @@ def curveField(self, order, tol=1e-8):
     pyop2_index = []
     for ngidx in ng_index:
         pyop2_index.extend(cell_node_map.values[ngidx])
-    np.array(pyop2_index)
 
     # Find the correct coordinate permutation for each cell
-    # JBTODO: This should be moved to the next loop if we have to loop
-    # over cells any way to actually perform the permutation
     permutation = find_permutation(
         physical_space_points,
         new_coordinates.dat.data[pyop2_index].reshape(physical_space_points.shape),
