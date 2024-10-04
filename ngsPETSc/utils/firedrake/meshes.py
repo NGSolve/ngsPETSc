@@ -123,11 +123,13 @@ def find_permutation(points_a, points_b, tol=1e-5):
 
 
 @PETSc.Log.EventDecorator()
-def curveField(self, order, tol=1e-8, CG=False):
+def curveField(self, order, perm_tol=1e-8, bary_tol=1e-1, CG=False):
     '''
     This method returns a curved mesh as a Firedrake function.
 
     :arg order: the order of the curved mesh
+    :arg perm_tol: tolerance used to construct the permutation of the reference element.
+    :arg bary_tol: tolerance used to locate the cell a point belongs to.
 
     '''
     # Check if the mesh is a surface mesh or two dimensional mesh
@@ -195,7 +197,7 @@ def curveField(self, order, tol=1e-8, CG=False):
 
     # Select only the points in curved cells
     barycentres = np.average(physical_space_points, axis=1)
-    ng_index = [*map(lambda x: self.locate_cell(x, tolerance=0.01), barycentres)]
+    ng_index = [*map(lambda x: self.locate_cell(x, tolerance=bary_tol), barycentres)]
 
     # Select only the indices of points owned by this rank
     owned = [(0 <= ii < len(cell_node_map.values)) if ii is not None else False for ii in ng_index]
@@ -215,7 +217,7 @@ def curveField(self, order, tol=1e-8, CG=False):
     permutation = find_permutation(
         physical_space_points,
         new_coordinates.dat.data[pyop2_index].reshape(physical_space_points.shape),
-        tol=tol
+        tol=perm_tol
     )
 
     # Apply the permutation to each cell in turn
