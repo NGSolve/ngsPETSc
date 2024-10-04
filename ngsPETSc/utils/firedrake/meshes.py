@@ -11,12 +11,7 @@ except ImportError:
 
 import numpy as np
 from petsc4py import PETSc
-
-try:
-    from scipy.spatial.distance import cdist
-    HAVE_SCIPY = True
-except ImportError:
-    HAVE_SCIPY = False
+from scipy.spatial.distance import cdist
 
 import netgen
 import netgen.meshing as ngm
@@ -75,18 +70,6 @@ def refineMarkedElements(self, mark):
             return fd.Mesh(netgen.libngpy._meshing.Mesh(dim))
     else:
         raise NotImplementedError("No implementation for dimension other than 2 and 3.")
-
-
-def _slow_cdist(XA, XB):
-    dist = np.zeros([len(XA), len(XB)])
-    for ii, a in enumerate(XA):
-        for jj, b in enumerate(XB):
-            dist[ii, jj] = np.linalg.norm(b - a)
-    return dist
-
-
-if not HAVE_SCIPY:
-    cdist = PETSc.Log.EventDecorator()(_slow_cdist)
 
 
 @PETSc.Log.EventDecorator()
