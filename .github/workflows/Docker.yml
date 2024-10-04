@@ -1,18 +1,21 @@
 # .github/workflows/app.yaml
 name: Docker
 on:
-    schedule:
-    - cron:  '30 10 7,14,21,28 * *'
+  schedule:
+  - cron:  '30 10 7,14,21,28 * *'
 
-    workflow_dispatch:
+  workflow_dispatch:
 
-    push:
-        paths:
-        - Dockerfile
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile
 
 jobs:
   docker:
     runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' }}
     timeout-minutes: 480
     steps:
       - name: Checkout code
