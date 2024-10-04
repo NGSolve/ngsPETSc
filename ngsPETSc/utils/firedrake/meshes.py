@@ -160,21 +160,13 @@ def curveField(self, order, tol=1e-8, CG=False):
                 ref.append(pt)
     reference_space_points = np.array(ref)
 
-    # Map to the physical domain
-    physical_space_points = np.ndarray(
-        (ng_dimension, reference_space_points.shape[0], geom_dim)
-    )
-    curved_space_points = np.ndarray(
-        (ng_dimension, reference_space_points.shape[0], geom_dim)
-    )
-
     # Curve the mesh on rank 0 only
     if self.comm.rank == 0:
         # Construct numpy arrays for physical domain data
-        physical_space_points = np.ndarray(
+        physical_space_points = np.zeros(
             (ng_dimension, reference_space_points.shape[0], geom_dim)
         )
-        curved_space_points = np.ndarray(
+        curved_space_points = np.zeros(
             (ng_dimension, reference_space_points.shape[0], geom_dim)
         )
         self.netgen_mesh.CalcElementMapping(reference_space_points, physical_space_points)
@@ -189,10 +181,10 @@ def curveField(self, order, tol=1e-8, CG=False):
         curved = self.comm.bcast(None, root=0)
         # Construct numpy arrays as buffers to receive physical domain data
         ncurved = np.sum(curved)
-        physical_space_points = np.ndarray(
+        physical_space_points = np.zeros(
             (ncurved, reference_space_points.shape[0], geom_dim)
         )
-        curved_space_points = np.ndarray(
+        curved_space_points = np.zeros(
             (ncurved, reference_space_points.shape[0], geom_dim)
         )
 
