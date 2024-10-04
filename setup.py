@@ -2,7 +2,9 @@ import setuptools, os
 
 with open("README.md", "r", encoding = "utf-8") as fh:
     long_description = fh.read()
-
+    
+scipy = '' if 'NGSPETSC_NO_SCIPY' in os.environ else 'scipy'
+    
 if 'NGSPETSC_NO_INSTALL_REQUIRED' in os.environ:
     install_requires = []
 elif 'NGS_FROM_SOURCE' in os.environ:
@@ -10,6 +12,7 @@ elif 'NGS_FROM_SOURCE' in os.environ:
         'petsc4py',
         'mpi4py',
         'numpy',
+        scipy,
         'pytest', #For testing
         'pylint', #For formatting
         ]
@@ -19,6 +22,7 @@ else:
         'ngsolve',
         'petsc4py',
         'mpi4py',
+        scipy,
         'pytest', #For testing
         'pylint', #For formatting
     ]
