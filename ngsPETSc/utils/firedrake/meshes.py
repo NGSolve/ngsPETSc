@@ -123,13 +123,15 @@ def find_permutation(points_a, points_b, tol=1e-5):
 
 
 @PETSc.Log.EventDecorator()
-def curveField(self, order, perm_tol=1e-8, bary_tol=1e-1, CG=False):
+def curveField(self, order, perm_tol=1e-8, bary_tol=1e-1, cg_field=False):
     '''
     This method returns a curved mesh as a Firedrake function.
 
-    :arg order: the order of the curved mesh
+    :arg order: the order of the curved mesh.
     :arg perm_tol: tolerance used to construct the permutation of the reference element.
     :arg bary_tol: tolerance used to locate the cell a point belongs to.
+    :arg cg_field: return a CG function field representing the mesh, rather than the 
+                   default DG field.
 
     '''
     # Check if the mesh is a surface mesh or two dimensional mesh
@@ -141,7 +143,7 @@ def curveField(self, order, perm_tol=1e-8, bary_tol=1e-1, CG=False):
     geom_dim = self.geometric_dimension()
 
     # Construct the mesh as a Firedrake function
-    if CG:
+    if cg_field:
         firedrake_space = fd.VectorFunctionSpace(self, "CG", order)
     else:
         low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
