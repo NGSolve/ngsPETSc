@@ -199,9 +199,12 @@ def curveField(self, order, permutation_tol=1e-8, location_tol=1e-1, cg_field=Fa
         pyop2_index.extend(cell_node_map.values[ngidx])
 
     # Find the correct coordinate permutation for each cell
+    # NB: Coordinates must be cast to real when running Firedrake in complex mode
     permutation = find_permutation(
         physical_space_points,
-        new_coordinates.dat.data[pyop2_index].reshape(physical_space_points.shape),
+        new_coordinates.dat.data[pyop2_index].reshape(
+            physical_space_points.shape
+        ).astype(np.float64, copy=False),
         tol=permutation_tol
     )
 
