@@ -73,11 +73,11 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
-      
+
       - name: Install pytest
         run: |
           pip install pytest --break-system-packages
-      
+
       - name: Install Netgen and ngsPETSc
         run: |
           pip install netgen-mesher --break-system-packages
@@ -105,6 +105,32 @@ jobs:
           . /home/firedrake/firedrake/bin/activate
           cp -R $SLEPC_DIR/src/binding/slepc4py $VIRTUAL_ENV/src
           pip install --no-build-isolation --no-binary mpi4py,randomgen,numpy --no-deps $VIRTUAL_ENV/src/slepc4py/
+
+      - name: Install Netgen and ngsPETSc
+        run: |
+          . /home/firedrake/firedrake/bin/activate
+          pip install netgen-mesher
+          pip install xdist pytest-timeout ipympl
+          NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
+
+      - name: Run part of the Firedrake test suite
+        run: |
+          . /home/firedrake/firedrake/bin/activate
+          cd $VIRTUAL_ENV/src/firedrake
+          pytest tests/regression/test_poisson_strong_bcs.py
+          pytest tests/multigrid/test_netgen_gmg.py
+          pytest tests/regression/test_netgen.py
+
+  firedrake-complex:
+    runs-on: ubuntu-latest
+    container:
+      image: firedrakeproject/firedrake-complex:latest
+      options: --user root
+    timeout-minutes: 50
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
 
       - name: Install Netgen and ngsPETSc
         run: |
