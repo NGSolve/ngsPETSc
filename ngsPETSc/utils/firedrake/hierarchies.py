@@ -1,5 +1,5 @@
 '''
-This module contains all the functions related 
+This module contains all the functions related
 '''
 try:
     import firedrake as fd
@@ -204,7 +204,7 @@ def NetgenHierarchy(mesh, levs, flags):
     order = flagsUtils(flags, "degree", 1)
     if isinstance(order, int):
         order= [order]*(levs+1)
-    tol = flagsUtils(flags, "tol", 1e-8)
+    permutation_tol = flagsUtils(flags, "tol", 1e-8)
     refType = flagsUtils(flags, "refinement_type", "uniform")
     optMoves = flagsUtils(flags, "optimisation_moves", False)
     snap = flagsUtils(flags, "snap_to", "geometry")
@@ -221,7 +221,11 @@ def NetgenHierarchy(mesh, levs, flags):
         raise RuntimeError("Cannot refine parallel overlapped meshes ")
     #We curve the mesh
     if order[0]>1:
-        ho_field  = mesh.curve_field(order=order[0], tol=tol, CG=cg)
+        ho_field  = mesh.curve_field(
+            order=order[0],
+            permutation_tol=permutation_tol,
+            cg_field=cg
+        )
         mesh = fd.Mesh(ho_field,distribution_parameters=params, comm=comm)
     meshes += [mesh]
     cdm = meshes[-1].topology_dm
@@ -248,8 +252,11 @@ def NetgenHierarchy(mesh, levs, flags):
         #We curve the mesh
         if order[l+1] > 1:
             if snap == "geometry":
-                mesh = fd.Mesh(mesh.curve_field(order=order[l+1], tol=tol),
-                               distribution_parameters=params, comm=comm)
+                mesh = fd.Mesh(
+                    mesh.curve_field(order=order[l+1], permutation_tol=permutation_tol),
+                    distribution_parameters=params,
+                    comm=comm
+                )
             elif snap == "coarse":
                 mesh = snapToCoarse(ho_field, mesh, order[l+1], snap_smoothing, cg)
         meshes += [mesh]

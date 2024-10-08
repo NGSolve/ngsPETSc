@@ -1,3 +1,41 @@
+[project]
+name = "ngsPETSc"
+version = "0.0.5"
+description = "NGSolve/Netgen interface to PETSc."
+readme = "README.md"
+authors = [
+  {name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk"},
+  {name = "Patrick E. Farrell", email = "patrick.farrell@maths.ox.ac.uk"},
+  {name = "Stefano Zampini", email = "stefano.zampini@kaust.edu.sa"},
+  {name = "Jack Betteridge", email = "J.Betteridge@imperial.ac.uk"},
+]
+maintainers = [
+  {name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk"},
+]
+license = {file = "LICENSE.txt"}
+dependencies = [
+  "mpi4py",
+  "numpy",
+  "scipy",
+]
+requires-python = ">=3.8"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Development Status :: 3 - Alpha",
+]
+
+[project.urls]
+Documentation = "https://ngspetsc.readthedocs.io/en/latest/"
+Repository = "https://github.com/NGSolve/ngsPETSc"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pylint",
+]
+
 [build-system]
 requires = ['setuptools>=42']
 build-backend = 'setuptools.build_meta'

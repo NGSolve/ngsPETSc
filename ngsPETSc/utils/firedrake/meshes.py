@@ -1,6 +1,6 @@
 '''
 This module contains all the functions related to wrapping NGSolve meshes to Firedrake
-We adopt the same docstring conventiona as the Firedrake project, since this part of
+We adopt the same docstring conventions as the Firedrake project, since this part of
 the package will only be used in combination with Firedrake.
 '''
 try:
@@ -11,6 +11,7 @@ except ImportError:
 
 import numpy as np
 from petsc4py import PETSc
+from scipy.spatial.distance import cdist
 
 import netgen
 import netgen.meshing as ngm
@@ -70,105 +71,148 @@ def refineMarkedElements(self, mark):
     else:
         raise NotImplementedError("No implementation for dimension other than 2 and 3.")
 
-def curveField(self, order, tol=1e-8, CG=False):
+
+@PETSc.Log.EventDecorator()
+def find_permutation(points_a, points_b, tol=1e-5):
+    """ Find all permutations between a list of two sets of points.
+
+    Given two numpy arrays of shape (ncells, npoints, dim) containing
+    floating point coordinates for each cell, determine each index
+    permutation that takes `points_a` to `points_b`. Ie:
+    ```
+    permutation = find_permutation(points_a, points_b)
+    assert np.allclose(points_a[permutation], points_b, rtol=0, atol=tol)
+    ```
+    """
+    if points_a.shape != points_b.shape:
+        raise ValueError("`points_a` and `points_b` must have the same shape.")
+
+    p = [np.where(cdist(a, b).T < tol)[1] for a, b in zip(points_a, points_b)]
+    try:
+        permutation = np.array(p, ndmin=2)
+    except ValueError as e:
+        raise ValueError(
+            "It was not possible to find a permutation for every cell"
+            " within the provided tolerance"
+        ) from e
+
+    if permutation.shape != points_a.shape[0:2]:
+        raise ValueError(
+            "It was not possible to find a permutation for every cell"
+            " within the provided tolerance"
+        )
+
+    return permutation
+
+
+@PETSc.Log.EventDecorator()
+def curveField(self, order, permutation_tol=1e-8, location_tol=1e-1, cg_field=False):
     '''
     This method returns a curved mesh as a Firedrake function.
 
-    :arg order: the order of the curved mesh
+    :arg order: the order of the curved mesh.
+    :arg permutation_tol: tolerance used to construct the permutation of the reference element.
+    :arg location_tol: tolerance used to locate the cell a point belongs to.
+    :arg cg_field: return a CG function field representing the mesh, rather than the
+                   default DG field.
 
     '''
-    #Checking if the mesh is a surface mesh or two dimensional mesh
-    surf = len(self.netgen_mesh.Elements3D()) == 0
-    #Constructing mesh as a function
-    if CG:
-        space = fd.VectorFunctionSpace(self, "CG", order)
+    # Check if the mesh is a surface mesh or two dimensional mesh
+    if len(self.netgen_mesh.Elements3D()) == 0:
+        ng_element = self.netgen_mesh.Elements2D
+    else:
+        ng_element = self.netgen_mesh.Elements3D
+    ng_dimension = len(ng_element())
+    geom_dim = self.geometric_dimension()
+
+    # Construct the mesh as a Firedrake function
+    if cg_field:
+        firedrake_space = fd.VectorFunctionSpace(self, "CG", order)
     else:
         low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
-        element = low_order_element.reconstruct(degree=order)
-        space = fd.VectorFunctionSpace(self, fd.BrokenElement(element))
-    newFunctionCoordinates = fd.assemble(interpolate(self.coordinates, space))
-    #Computing reference points using fiat
-    fiat_element = newFunctionCoordinates.function_space().finat_element.fiat_equivalent
+        ufl_element = low_order_element.reconstruct(degree=order)
+        firedrake_space = fd.VectorFunctionSpace(self, fd.BrokenElement(ufl_element))
+    new_coordinates = fd.assemble(interpolate(self.coordinates, firedrake_space))
+
+    # Compute reference points using fiat
+    fiat_element = new_coordinates.function_space().finat_element.fiat_equivalent
     entity_ids = fiat_element.entity_dofs()
     nodes = fiat_element.dual_basis()
-    refPts = []
+    ref = []
     for dim in entity_ids:
         for entity in entity_ids[dim]:
             for dof in entity_ids[dim][entity]:
                 # Assert singleton point for each node.
                 pt, = nodes[dof].get_point_dict().keys()
-                refPts.append(pt)
-    V = newFunctionCoordinates.dat.data
-    refPts = np.array(refPts)
-    els = {True: self.netgen_mesh.Elements2D, False: self.netgen_mesh.Elements3D}
-    #Mapping to the physical domain
-    if self.comm.rank == 0:
-        physPts = np.ndarray((len(els[surf]()),
-                                refPts.shape[0], self.geometric_dimension()))
-        self.netgen_mesh.CalcElementMapping(refPts, physPts)
-        #Cruving the mesh
-        self.netgen_mesh.Curve(order)
-        curvedPhysPts = np.ndarray((len(els[surf]()),
-                                    refPts.shape[0], self.geometric_dimension()))
-        self.netgen_mesh.CalcElementMapping(refPts, curvedPhysPts)
-        curved = els[surf]().NumPy()["curved"]
-    else:
-        physPts = np.ndarray((len(els[surf]()),
-                                refPts.shape[0], self.geometric_dimension()))
-        curvedPhysPts = np.ndarray((len(els[surf]()),
-                                    refPts.shape[0], self.geometric_dimension()))
-        curved = np.array((len(els[surf]()),1))
-    physPts = self.comm.bcast(physPts, root=0)
-    curvedPhysPts = self.comm.bcast(curvedPhysPts, root=0)
-    curved = self.comm.bcast(curved, root=0)
-    cellMap = newFunctionCoordinates.cell_node_map()
-    for i in range(physPts.shape[0]):
-        #Inefficent code but runs only on curved elements
-        if curved[i]:
-            pts = physPts[i][0:refPts.shape[0]]
-            bary = sum([np.array(pts[i]) for i in range(len(pts))])/len(pts)
-            Idx = self.locate_cell(bary)
-            isInMesh = (0<=Idx<len(cellMap.values)) if Idx is not None else False
-            #Check if element is shared across processes
-            shared = self.comm.gather(isInMesh, root=0)
-            shared = self.comm.bcast(shared, root=0)
-            #Bend if not shared
-            if np.sum(shared) == 1:
-                if isInMesh:
-                    p = [np.argmin(np.sum((pts - pt)**2, axis=1))
-                            for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
-                    curvedPhysPts[i] = curvedPhysPts[i][p]
-                    res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
-                    if res > tol:
-                        fd.logging.warning("[{}] Not able to curve Firedrake element {} \
-                            ({}) -- residual: {}".format(self.comm.rank, Idx,i, res))
-                    else:
-                        for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
-                            for dim in range(self.geometric_dimension()):
-                                coo = curvedPhysPts[i][j][dim]
-                                newFunctionCoordinates.sub(dim).dat.data[datIdx] = coo
-            else:
-                if isInMesh:
-                    p = [np.argmin(np.sum((pts - pt)**2, axis=1))
-                            for pt in V[cellMap.values[Idx]][0:refPts.shape[0]]]
-                    curvedPhysPts[i] = curvedPhysPts[i][p]
-                    res = np.linalg.norm(pts[p]-V[cellMap.values[Idx]][0:refPts.shape[0]])
-                else:
-                    res = np.inf
-                res = self.comm.gather(res, root=0)
-                res = self.comm.bcast(res, root=0)
-                rank = np.argmin(res)
-                if self.comm.rank == rank:
-                    if res[rank] > tol:
-                        fd.logging.warning("[{}, {}] Not able to curve Firedrake element {} \
-                            ({}) -- residual: {}".format(self.comm.rank, shared, Idx,i, res))
-                    else:
-                        for j, datIdx in enumerate(cellMap.values[Idx][0:refPts.shape[0]]):
-                            for dim in range(self.geometric_dimension()):
-                                coo = curvedPhysPts[i][j][dim]
-                                newFunctionCoordinates.sub(dim).dat.data[datIdx] = coo
+                ref.append(pt)
+    reference_space_points = np.array(ref)
 
-    return newFunctionCoordinates
+    # Curve the mesh on rank 0 only
+    if self.comm.rank == 0:
+        # Construct numpy arrays for physical domain data
+        physical_space_points = np.zeros(
+            (ng_dimension, reference_space_points.shape[0], geom_dim)
+        )
+        curved_space_points = np.zeros(
+            (ng_dimension, reference_space_points.shape[0], geom_dim)
+        )
+        self.netgen_mesh.CalcElementMapping(reference_space_points, physical_space_points)
+        self.netgen_mesh.Curve(order)
+        self.netgen_mesh.CalcElementMapping(reference_space_points, curved_space_points)
+        curved = ng_element().NumPy()["curved"]
+        # Broadcast a boolean array identifying curved cells
+        curved = self.comm.bcast(curved, root=0)
+        physical_space_points = physical_space_points[curved]
+        curved_space_points = curved_space_points[curved]
+    else:
+        curved = self.comm.bcast(None, root=0)
+        # Construct numpy arrays as buffers to receive physical domain data
+        ncurved = np.sum(curved)
+        physical_space_points = np.zeros(
+            (ncurved, reference_space_points.shape[0], geom_dim)
+        )
+        curved_space_points = np.zeros(
+            (ncurved, reference_space_points.shape[0], geom_dim)
+        )
+
+    # Broadcast curved cell point data
+    self.comm.Bcast(physical_space_points, root=0)
+    self.comm.Bcast(curved_space_points, root=0)
+    cell_node_map = new_coordinates.cell_node_map()
+
+    # Select only the points in curved cells
+    barycentres = np.average(physical_space_points, axis=1)
+    ng_index = [*map(lambda x: self.locate_cell(x, tolerance=location_tol), barycentres)]
+
+    # Select only the indices of points owned by this rank
+    owned = [(0 <= ii < len(cell_node_map.values)) if ii is not None else False for ii in ng_index]
+
+    # Select only the points owned by this rank
+    physical_space_points = physical_space_points[owned]
+    curved_space_points = curved_space_points[owned]
+    barycentres = barycentres[owned]
+    ng_index = [idx for idx, o in zip(ng_index, owned) if o]
+
+    # Get the PyOP2 indices corresponding to the netgen indices
+    pyop2_index = []
+    for ngidx in ng_index:
+        pyop2_index.extend(cell_node_map.values[ngidx])
+
+    # Find the correct coordinate permutation for each cell
+    permutation = find_permutation(
+        physical_space_points,
+        new_coordinates.dat.data[pyop2_index].reshape(physical_space_points.shape),
+        tol=permutation_tol
+    )
+
+    # Apply the permutation to each cell in turn
+    for ii, p in enumerate(curved_space_points):
+        curved_space_points[ii] = p[permutation[ii]]
+
+    # Assign the curved coordinates to the dat
+    new_coordinates.dat.data[pyop2_index] = curved_space_points.reshape(-1, geom_dim)
+
+    return new_coordinates
 
 def splitToQuads(plex, dim, comm):
     '''
