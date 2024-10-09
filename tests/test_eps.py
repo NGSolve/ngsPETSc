@@ -10,6 +10,13 @@ from netgen.geom2d import SplineGeometry
 import netgen.meshing as ngm
 
 from mpi4py.MPI import COMM_WORLD
+try:
+    from slepc4py import SLEPc
+except ImportError:
+    pytest.skip(
+        reason="SLEPc unavailable, skipping eigenvalue test",
+        allow_module_level=True
+    )
 
 from ngsPETSc import EigenSolver
 
@@ -17,11 +24,6 @@ def test_eps_ghepi_eigvals():
     '''
     Testing the mapping PETSc KSP using MUMPS
     '''
-    try:
-        from slepc4py import SLEPc
-    except ImportError:
-        pytest.skip(msg="SLEPc unavailable, skipping eigenvalue test")
-
     exact = [2,5,5,8]
     if COMM_WORLD.rank == 0:
         geo = SplineGeometry()
@@ -50,11 +52,6 @@ def test_eps_ghep_eigfuncs():
     Testing the mapping PETSc KSP using MUMPS
     This test DOES NOT work in parallel
     '''
-    try:
-        from slepc4py import SLEPc
-    except ImportError:
-        pytest.skip(msg="SLEPc unavailable, skipping eigenvalue test")
-
     if COMM_WORLD.rank == 0:
         geo = SplineGeometry()
         geo.AddRectangle((0,0),(pi,pi),bc="bnd")
