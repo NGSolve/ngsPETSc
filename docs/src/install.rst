@@ -86,6 +86,70 @@ We are now finally ready to install ngsPETSc:
     cd ngsPETSc
     NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
 
+Contributing
+-------------
+
+🎉**Thanks for taking the time to contribute!** 🎉
+
+To get an overview of the project, check out the [README](README.md).
+
+The `issue tracker <https://github.com/NGSolve/ngsPETSc/issues>`__.
+is the preferred channel for bug reports.
+
+A bug is a demonstrable problem that is caused by the code in the repository.
+Bug reports are extremely helpful - thank you!
+
+Guidelines for bug reports:
+
+1. **Check if the issue has been fixed**: try to reproduce it using the latest `main` or development branch in the repository.
+
+2. **Use the GitHub issue search**: check if the issue has already been reported.
+
+3. **Isolate the problem**: Create a minimal example showing the problem.
+
+4. **Open an issue**: Using the `issue tracker <https://github.com/NGSolve/ngsPETSc/issues>`__, describe the expected outcome and report the OS, the compiler, NGSolve/Netgen and PETSc version you are using.
+
+Pull requests - patches, improvements, new features - are a fantastic
+help. They should remain focused in scope and avoid containing unrelated commits.
+**Please ask first** before embarking on any significant pull request.
+
+Tips on opening a pull request:
+
+1. `Fork <http://help.github.com/fork-a-repo/>`__. the project.
+
+2. Create a branch and implement your feature.
+   ::
+   
+        git checkout -b <your-feature-name>
+   
+
+3. Run the test suite by calling 
+   ::
+
+        make test test_mpi
+   
+   in your build directory. Consider adding new tests for your feature - have a look in the test folder.
+   Keep in mind ngsPETSc test only tests NGSolve add-on features, while Firedrake can be found `here <https://github.com/firedrakeproject/firedrake/blob/master/tests/regression/test_netgen.py>`__ and `here <https://github.com/firedrakeproject/firedrake/blob/master/tests/multigrid/test_netgen_gmg.py>`__.
+When you open a pull request all the testing is also carried out automatically for both Firedrake and Netgen by our `CI <https://github.com/NGSolve/ngsPETSc/blob/main/.github/workflows/ngsPETSc.yml>`__.
+
+4. Once the implementation is done, use Git's
+   `interactive rebase <https://help.github.com/articles/interactive-rebase>`__.
+   feature to tidy up your commits.
+   ::
+   
+        git rebase --interactive --fork-point main <your-feature-name> 
+   
+
+5. Push your topic branch up to your fork and `open a Pull Request <https://help.github.com/articles/using-pull-requests/>`__.
+
+**IMPORTANT**: By submitting a patch, you agree to allow the project owners to license your work under the terms of the *GPL License*.
+
+A code style is enforced using pylint. You can check your code passes the linting as follows:
+::
+
+    make lint
+
+To actively discuss pull requests and issues you can use our `Discord channel <https://discord.gg/DpfXPdRSgV>`__.
 
 Authors
 ----------
