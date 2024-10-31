@@ -9,14 +9,22 @@ authors:
     orcid: 0000-0002-1241-7060
     equal-contrib: true
     affiliation: 1
-  - name: Joachim Schöberl
+  - name: Matthias Hochsteger
+    orcid: 0009-0001-8842-3221
+    equal-contrib: true
     affiliation: 2
+  - name: Christopher Lackner
+    orcid: 0009-0000-3448-3002
+    equal-contrib: true
+    affiliation: 2
+  - name: Joachim Schöberl
+    affiliation: 2,3
     equal-contrib: true 
     orcid: 0000-0002-1250-5087
   - name: Stefano Zampini
     orcid: 0000-0002-0435-0433
     equal-contrib: true 
-    affiliation: 3
+    affiliation: 4
   - name: Umberto Zerbinati
     orcid: 0000-0002-2577-1106
     corresponding: true
@@ -25,17 +33,19 @@ authors:
 affiliations:
  - name: University of Oxford, United Kingdom
    index: 1
- - name: TU Wien, Austria
+ - name: CERBSIM
    index: 2
- - name: King Abdullah University of Science and Technology, Saudi Arabia
+ - name: TU Wien, Austria
    index: 3
+ - name: King Abdullah University of Science and Technology, Saudi Arabia
+   index: 4
 date: 1 July 2024
 bibliography: paper.bib
 ---
 
 # Summary
 
-Combining advanced meshing techniques with robust solver capabilities is essential for solving difficult problems in computational science and engineering.In recent years, various software packages have been developed to support the integration of meshing tools with finite element solvers. To mention a few, FreeFEM [@FreeFEM] includes built-in support for mesh generation, allowing users to create and manipulate meshes directly within the software. Similarly, deal.II [@dealII] provides a GridGenerator class for generating standard mesh geometries like grids and cylinders. Other finite element libraries, such as Firedrake [@Firedrake], DUNE-FEM [@DUNE], and FEniCSx [@dolfinX], rely on external tools like Gmsh and Tetgen for mesh generation. This paper introduces ngsPETSc, software built with petsc4py [@petsc4py] that seamlessly integrates the NETGEN mesher [@Netgen], the NGSolve finite element library [@NGSolve], and the PETSc toolkit [@PETSc]. ngsPETSc enables the use of NETGEN meshes and geometries in PETSc-based solvers, and provides NGSolve users access to the wide array of linear, nonlinear solvers, and time-steppers available in PETSc.
+Combining advanced meshing techniques with robust solver capabilities is essential for solving difficult problems in computational science and engineering. In recent years, various software packages have been developed to support the integration of meshing tools with finite element solvers. To mention a few, FreeFEM [@FreeFEM] includes built-in support for mesh generation, allowing users to create and manipulate meshes directly within the software. Similarly, deal.II [@dealII] provides a GridGenerator class for generating standard mesh geometries like grids and cylinders. Other finite element libraries, such as Firedrake [@Firedrake], DUNE-FEM [@DUNE], and FEniCSx [@dolfinX], rely on external tools like Gmsh and Tetgen for mesh generation. This paper introduces ngsPETSc, software built with petsc4py [@petsc4py] that seamlessly integrates the NETGEN mesher [@Netgen], the NGSolve finite element library [@NGSolve], and the PETSc toolkit [@PETSc]. ngsPETSc enables the use of NETGEN meshes and geometries in PETSc-based solvers, and provides NGSolve users access to the wide array of linear, nonlinear solvers, and time-steppers available in PETSc.
 
 # Statement of Need
 
