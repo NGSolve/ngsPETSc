@@ -33,7 +33,7 @@ authors:
 affiliations:
  - name: University of Oxford, United Kingdom
    index: 1
- - name: CERBSIM
+ - name: CERBSim GmbH, Austria
    index: 2
  - name: TU Wien, Austria
    index: 3
