@@ -9,14 +9,22 @@ authors:
     orcid: 0000-0002-1241-7060
     equal-contrib: true
     affiliation: 1
-  - name: Joachim Schöberl
+  - name: Matthias Hochsteger
+    orcid: 0009-0001-8842-3221
+    equal-contrib: true
     affiliation: 2
+  - name: Christopher Lackner
+    orcid: 0009-0000-3448-3002
+    equal-contrib: true
+    affiliation: 2
+  - name: Joachim Schöberl
+    affiliation: 2,3
     equal-contrib: true 
     orcid: 0000-0002-1250-5087
   - name: Stefano Zampini
     orcid: 0000-0002-0435-0433
     equal-contrib: true 
-    affiliation: 3
+    affiliation: 4
   - name: Umberto Zerbinati
     orcid: 0000-0002-2577-1106
     corresponding: true
@@ -25,10 +33,12 @@ authors:
 affiliations:
  - name: University of Oxford, United Kingdom
    index: 1
- - name: TU Wien, Austria
+ - name: CERBSim GmbH, Austria
    index: 2
- - name: King Abdullah University of Science and Technology, Saudi Arabia
+ - name: TU Wien, Austria
    index: 3
+ - name: King Abdullah University of Science and Technology, Saudi Arabia
+   index: 4
 date: 1 July 2024
 bibliography: paper.bib
 ---
