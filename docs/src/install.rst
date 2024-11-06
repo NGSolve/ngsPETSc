@@ -17,9 +17,7 @@ We now install PETSc from scratch in a suitable folder, with OpenMPI, HYPRE, Met
 ::
     git clone https://gitlab.com/petsc/petsc.git
     cd petsc
-    python configure --download-chaco \
-    --download-cmake \
-    --download-eigen \
+    python configure --download-cmake \
     --download-openmpi \
     --download-hypre \
     --download-metis \
@@ -28,13 +26,13 @@ We now install PETSc from scratch in a suitable folder, with OpenMPI, HYPRE, Met
     --download-mumps \
     --download-scalapack \
     --download-superlu_dist \
-    --with-c2html=0 \
-    --with-cxx-dialect=C++11 \
-    --with-debugging=0 \
     --download-fblaslapack=1 \
+    --with-c2html=0 \
+    --with-debugging=0 \
     --with-fortran-bindings=0 \
     --with-shared-libraries=1 \
-    --with-petsc4py=1 \
+    --with-petsc4py=1
+
 To build PETSc you need to run the Makefile as suggested at the end of the configuration script.
 We now need to set in the ``.bashrc`` (on OSX in ``.bash_profile``) file the ``PETSC_DIR``, ``PETSC_ARCH`` system variables as they appear when we finish build PETSc.
 You also need to add to your ``PYTHONPATH`` the ``PYTHONPATH`` that appears when we finished building PETSc.
@@ -71,9 +69,11 @@ Now we build NGSolve from source.
     cmake -DCMAKE_INSTALL_PREFIX=${BASEDIR}/ngsolve-install ${BASEDIR}/ngsolve-src -DUSE_MPI=ON
     make
     make install
+
 You should add to your ``.bashrc`` the ``BASEDIR`` system variable:
 ::
-  echo "export $BASEDIR=${BASEDIR}" >> ~/.bashrc  
+    echo "export $BASEDIR=${BASEDIR}" >> ~/.bashrc  
+
 We suggest you add the following lines to your ``.bashrc``:
 ::
     export NETGENDIR="${BASEDIR}/ngsolve-install/bin"
