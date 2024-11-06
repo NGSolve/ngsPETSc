@@ -43,3 +43,34 @@ ngsolve = [
 firedrake = [
     "firedrake",
 ]
+
+[tool.poetry]
+name = "ngsPETSc"
+version = "0.0.6"
+description = "NGSolve/Netgen interface to PETSc"
+authors = [
+  "Umberto Zerbinati <umberto.zerbinati@maths.ox.ac.uk>",
+  "Patrick E. Farrell <patrick.farrell@maths.ox.ac.uk>",
+  "Stefano Zampini <stefano.zampini@kaust.edu.sa>",
+  "Jack Betteridge <J.Betteridge@imperial.ac.uk>",
+]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+netgen-mesher = "^6.2"
+netgen-occt = "^7.8"
+mpi4py = "^4"
+numpy = "^2.0"
+scipy = "^1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+pylint = "^3.3"
+
+[tool.poetry.group.ngsolve.dependencies]
+ngsolve = "^6.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
