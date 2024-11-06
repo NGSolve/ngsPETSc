@@ -11,7 +11,7 @@ First we install all the needed packages using apt and pip or an equivalent pack
 ::
     apt-get update
     apt-get -y install git build-essential cmake python3 python3-distutils python3-tk libpython3-dev libxmu-dev tk-dev tcl-dev g++ libglu1-mesa-dev liblapacke-dev libblas-dev liblapack-dev
-    pip install numpy cython pytest pytest-mpi
+    pip install numpy cython pytest pytest-mpi netgen-occt
 
 We now install PETSc from scratch in a suitable folder, with OpenMPI, HYPRE, Metis, MUMPS, SuprLU, Scalapack and eigen.
 ::
@@ -66,7 +66,7 @@ Now we build NGSolve from source.
     mkdir $BASEDIR/ngsolve-build
     mkdir $BASEDIR/ngsolve-install
     cd $BASEDIR/ngsolve-build
-    cmake -DCMAKE_INSTALL_PREFIX=${BASEDIR}/ngsolve-install ${BASEDIR}/ngsolve-src -DUSE_MPI=ON
+    cmake -DCMAKE_INSTALL_PREFIX=${BASEDIR}/ngsolve-install ${BASEDIR}/ngsolve-src -DUSE_MPI=ON -DUSE_OCC=ON
     make
     make install
 
