@@ -30,8 +30,7 @@ class GeometricModel:
         [_MPI.Comm, int, int, dolfinx.cpp.graph.AdjacencyList_int32],
         dolfinx.cpp.graph.AdjacencyList_int32] =
         dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.none),
-        transform: typing.Any = None, routine: typing.Any = None) -> typing.Tuple[dolfinx.mesh.Mesh,
-        dolfinx.cpp.mesh.MeshTags_int32,dolfinx.cpp.mesh.MeshTags_int32]:
+        transform: typing.Any = None, routine: typing.Any = None) -> dolfinx.mesh.Mesh:
         """Given a NetGen model, take all physical entities of the highest
         topological dimension and create the corresponding DOLFINx mesh.
 
