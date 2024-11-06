@@ -55,11 +55,15 @@ authors = [
   "Jack Betteridge <J.Betteridge@imperial.ac.uk>",
 ]
 readme = "README.md"
+packages = [
+    {include = "ngsPETSc"}
+]
 
 [tool.poetry.dependencies]
 python = "^3.9"
 netgen-mesher = "^6.2"
 netgen-occt = "^7.8"
+petsc4py =  "^3.22.1"
 mpi4py = "^4"
 numpy = "^2.0"
 scipy = "^1"
