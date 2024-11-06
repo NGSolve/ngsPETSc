@@ -1,37 +1,3 @@
-[project]
-name = "ngsPETSc"
-version = "0.0.5"
-description = "NGSolve/Netgen interface to PETSc."
-readme = "README.md"
-authors = [
-  {name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk"},
-  {name = "Patrick E. Farrell", email = "patrick.farrell@maths.ox.ac.uk"},
-  {name = "Stefano Zampini", email = "stefano.zampini@kaust.edu.sa"},
-  {name = "Jack Betteridge", email = "J.Betteridge@imperial.ac.uk"},
-]
-maintainers = [
-  {name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk"},
-]
-license = {file = "LICENSE.txt"}
-dependencies = [
-  "netgen-mesher",
-  "petsc4py",
-  "mpi4py",
-  "numpy",
-  "scipy",
-]
-requires-python = ">=3.9"
-classifiers = [
-  "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent",
-  "Development Status :: 3 - Alpha",
-]
-
-[project.urls]
-Documentation = "https://ngspetsc.readthedocs.io/en/latest/"
-Repository = "https://github.com/NGSolve/ngsPETSc"
-
 [project.optional-dependencies]
 dev = [
     "pytest",
@@ -54,9 +20,21 @@ authors = [
   "Stefano Zampini <stefano.zampini@kaust.edu.sa>",
   "Jack Betteridge <J.Betteridge@imperial.ac.uk>",
 ]
+maintainers = [
+  "Umberto Zerbinati <umberto.zerbinati@maths.ox.ac.uk>",
+]
 readme = "README.md"
+licence = "MIT"
 packages = [
     {include = "ngsPETSc"}
+]
+documentation = "https://ngspetsc.readthedocs.io/en/latest/"
+repository = "https://github.com/NGSolve/ngsPETSc"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Development Status :: 3 - Alpha",
 ]
 
 [tool.poetry.dependencies]
