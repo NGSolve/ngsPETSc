@@ -109,7 +109,6 @@ jobs:
       - name: Install Netgen and ngsPETSc
         run: |
           . /home/firedrake/firedrake/bin/activate
-          pip install netgen-mesher
           pip install xdist pytest-timeout ipympl
           pip install .
 
@@ -135,7 +134,6 @@ jobs:
       - name: Install Netgen and ngsPETSc
         run: |
           . /home/firedrake/firedrake/bin/activate
-          pip install netgen-mesher
           pip install xdist pytest-timeout ipympl
           pip install .
 
