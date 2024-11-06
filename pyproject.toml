@@ -14,11 +14,13 @@ maintainers = [
 ]
 license = {file = "LICENSE.txt"}
 dependencies = [
+  "netgen-mesher",
+  "petsc4py",
   "mpi4py",
   "numpy",
   "scipy",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
@@ -35,7 +37,9 @@ dev = [
     "pytest",
     "pylint",
 ]
-
-[build-system]
-requires = ['setuptools>=42']
-build-backend = 'setuptools.build_meta'
+ngsolve = [
+    "ngsolve",
+]
+firedrake = [
+    "firedrake",
+]
