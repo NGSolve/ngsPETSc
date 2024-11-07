@@ -81,6 +81,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Setup MPI
+        uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: "mpich"
+
       - name: Build and install PETSc
         run: |
           cd ..
