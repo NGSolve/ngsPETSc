@@ -5,40 +5,46 @@ tags:
   - FEM
   - Meshing
 authors:
+  - name: Jack Betteridge
+    orcid: 0000-0002-3919-8603
+    equal-contrib: true
+    affiliation: 1
   - name: Patrick E. Farrell
     orcid: 0000-0002-1241-7060
     equal-contrib: true
-    affiliation: 1
+    affiliation: 2
   - name: Matthias Hochsteger
     orcid: 0009-0001-8842-3221
     equal-contrib: true
-    affiliation: 2
+    affiliation: 3
   - name: Christopher Lackner
     orcid: 0009-0000-3448-3002
     equal-contrib: true
-    affiliation: 2
+    affiliation: 3
   - name: Joachim Schöberl
-    affiliation: 2,3
+    affiliation: 3,4
     equal-contrib: true 
     orcid: 0000-0002-1250-5087
   - name: Stefano Zampini
     orcid: 0000-0002-0435-0433
     equal-contrib: true 
-    affiliation: 4
+    affiliation: 5
   - name: Umberto Zerbinati
     orcid: 0000-0002-2577-1106
     corresponding: true
     equal-contrib: true 
-    affiliation: 1
+    affiliation: 2
 affiliations:
- - name: University of Oxford, United Kingdom
+ - name: Imperial College London, United Kingdom
    index: 1
  - name: CERBSim GmbH, Austria
-   index: 2
- - name: TU Wien, Austria
+ - index: 2
+ - name: University of Oxford, United Kingdom
    index: 3
- - name: King Abdullah University of Science and Technology, Saudi Arabia
+ - name: TU Wien, Austria
    index: 4
+ - name: King Abdullah University of Science and Technology, Saudi Arabia
+   index: 5
 date: 1 July 2024
 bibliography: paper.bib
 ---

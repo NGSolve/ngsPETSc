@@ -13,7 +13,7 @@ If you already have NGSolve (with MPI support) and PETSc installed, you can inst
     cd ngsPETSc
     pip install .
 ```
-Alternatively, you can also build PETSc, SLEPc, and NGSolve from source following the instructions in the [documentation](https://ngspetsc.readthedocs.io/en/latest/installation.html).
+Alternatively, you can also build PETSc, SLEPc, and NGSolve from source following the instructions in the [documentation](https://ngspetsc.readthedocs.io/en/latest/install.html).
 
 ## Getting started
 
