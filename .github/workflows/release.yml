@@ -80,6 +80,20 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Build and install PETSc
+        run: |
+          cd ..
+          git clone https://gitlab.com/petsc/petsc.git petsc
+          cd petsc
+          git checkout -b stefanozampini/fix-petsc4py-sdist
+          ./configure \
+            --with-c2html=0 \
+            --with-debugging=0 \
+            --with-fortran-bindings=0 \
+            --with-shared-libraries=1 \
+            --with-petsc4py
+          make
+
       - name: Install Poetry
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
@@ -90,7 +104,9 @@ jobs:
           poetry version ${{ needs.details.outputs.new_version }}
 
       - name: Install dependencies
-        run: poetry install --sync --no-interaction
+        run: |
+          pip install ../petsc/src/binding/petsc4py
+          poetry install --sync --no-interaction
 
       - name: Build source and wheel distribution
         run: |
