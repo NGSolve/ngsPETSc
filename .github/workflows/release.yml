@@ -88,6 +88,7 @@ jobs:
 
       - name: Build and install PETSc
         run: |
+          pip install numpy setuptools
           cd ..
           git clone https://gitlab.com/petsc/petsc.git petsc
           cd petsc
