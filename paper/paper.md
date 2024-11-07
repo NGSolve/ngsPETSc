@@ -12,17 +12,17 @@ authors:
   - name: Patrick E. Farrell
     orcid: 0000-0002-1241-7060
     equal-contrib: true
-    affiliation: 2
+    affiliation: 3
   - name: Matthias Hochsteger
     orcid: 0009-0001-8842-3221
     equal-contrib: true
-    affiliation: 3
+    affiliation: 2
   - name: Christopher Lackner
     orcid: 0009-0000-3448-3002
     equal-contrib: true
-    affiliation: 3
+    affiliation: 2
   - name: Joachim Schöberl
-    affiliation: 3,4
+    affiliation: 2,4
     equal-contrib: true 
     orcid: 0000-0002-1250-5087
   - name: Stefano Zampini
