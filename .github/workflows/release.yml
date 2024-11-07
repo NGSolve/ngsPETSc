@@ -112,6 +112,8 @@ jobs:
 
       - name: Install dependencies
         run: |
+          export PETSC_DIR=/home/runner/work/ngsPETSc/petsc
+          export PETSC_ARCH=arch-linux-c-opt
           pip install ../petsc/src/binding/petsc4py
           poetry install --sync --no-interaction
 
