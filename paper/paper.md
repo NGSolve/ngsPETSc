@@ -38,7 +38,7 @@ affiliations:
  - name: Imperial College London, United Kingdom
    index: 1
  - name: CERBSim GmbH, Austria
- - index: 2
+   index: 2
  - name: University of Oxford, United Kingdom
    index: 3
  - name: TU Wien, Austria
