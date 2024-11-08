@@ -20,7 +20,7 @@ If you already have NGSolve (with MPI support) and PETSc installed, you can inst
 git clone https://github.com/UZerbinati/ngsPETSc.git
 pip install ./ngsPETSc
 ```
-Alternatively, you can also build PETSc, SLEPc, and NGSolve from source following the instructions in the [documentation](https://ngspetsc.readthedocs.io/en/latest/installation.html).
+Alternatively, you can also build PETSc, SLEPc, and NGSolve from source following the instructions in the [documentation](https://ngspetsc.readthedocs.io/en/latest/install.html).
 
 ### Testing
 To test the installation, you can run the tests in the `tests` folder, via the Makefile in the root directory of the repository:
