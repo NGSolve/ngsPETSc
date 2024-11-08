@@ -74,13 +74,6 @@ jobs:
     needs: [details, check_pypi]
     runs-on: ubuntu-latest
     steps:
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        with:
-          detached: true
-          timeout-minutes: 20
-          limit-access-to-actor: true
-
       - uses: actions/checkout@v4
 
       - name: Set up Python
