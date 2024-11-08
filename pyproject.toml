@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ngsPETSc"
-version = "0.0.7a6"
+version = "0.0.7a7"
 description = "NGSolve/Netgen interface to PETSc"
 authors = [
   "Umberto Zerbinati <umberto.zerbinati@maths.ox.ac.uk>",
