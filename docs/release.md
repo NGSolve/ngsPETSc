@@ -45,10 +45,10 @@ poetry version minor
 poetry version minor
 
 git add pyproject.toml
-git commit -m "Release $(poetry version)"
+git commit -m "Release v$(poetry version)"
 
-git tag -a -m "Release $(poetry version)" $(poetry version)
+git tag -a -m "Release v$(poetry version)" v$(poetry version)
 
 git push
-git push origin $(poetry version)
+git push origin v$(poetry version)
 ```
