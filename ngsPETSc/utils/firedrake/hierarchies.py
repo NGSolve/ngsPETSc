@@ -191,7 +191,7 @@ def NetgenHierarchy(mesh, levs, flags):
         -degree, either an integer denoting the degree of curvature of all levels of
         the mesh or a list of levs+1 integers denoting the degree of curvature of
         each level of the mesh.
-        -tol, geometric tollerance adopted in snapToNetgenDMPlex.
+        -tol, geometric tolerance adopted in snapToNetgenDMPlex.
         -refinement_type, the refinment type to be used: uniform (default), Alfeld
     '''
     if mesh.geometric_dimension() == 3:
@@ -238,8 +238,8 @@ def NetgenHierarchy(mesh, levs, flags):
         if snap == "geometry":
             snapToNetgenDMPlex(ngmesh, rdm)
         #We construct a Firedrake mesh from the DMPlex mesh
-        mesh = fd.Mesh(rdm, dim=meshes[-1].ufl_cell().geometric_dimension(), reorder=False,
-                                    distribution_parameters=params, comm=comm)
+        mesh = fd.Mesh(rdm, dim=meshes[-1].geometric_dimension(), reorder=False,
+                       distribution_parameters=params, comm=comm)
         if optMoves:
             #Optimises the mesh, for example smoothing
             if ngmesh.dim == 2:
