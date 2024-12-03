@@ -14,7 +14,7 @@ First we install all the needed packages using apt and pip or an equivalent pack
 ::
     apt-get update
     apt-get -y install git build-essential cmake python3 python3-distutils python3-tk libpython3-dev libxmu-dev tk-dev tcl-dev g++ libglu1-mesa-dev liblapacke-dev libblas-dev liblapack-dev
-    pip install numpy cython pytest pytest-mpi netgen-occt
+    pip install numpy cython pytest pytest-mpi netgen-occt netgen-occt-devel
 
 We now install PETSc from scratch in a suitable folder, with OpenMPI, HYPRE, Metis, MUMPS, SuprLU, Scalapack and eigen.
 ::
