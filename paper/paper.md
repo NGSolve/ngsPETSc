@@ -111,3 +111,5 @@ Figures 2 and 3 show simulations in Firedrake that were not previously possible.
 
 
 More examples can be found in the documentation of ngsPETSc manual [@manual].
+
+# References
