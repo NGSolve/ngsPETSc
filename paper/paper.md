@@ -22,7 +22,7 @@ authors:
     equal-contrib: true
     affiliation: 2
   - name: Joachim Schöberl
-    affiliation: 2,4
+    affiliation: 4
     equal-contrib: true 
     orcid: 0000-0002-1250-5087
   - name: Stefano Zampini
