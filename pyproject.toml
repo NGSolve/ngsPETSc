@@ -1,24 +1,23 @@
-[project]
+[tool.poetry]
 name = "ngsPETSc"
-version = "0.0.5"
-description = "NGSolve/Netgen interface to PETSc."
-readme = "README.md"
+version = "0.0.8"
+description = "NGSolve/Netgen interface to PETSc"
 authors = [
-  {name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk"},
-  {name = "Patrick E. Farrell", email = "patrick.farrell@maths.ox.ac.uk"},
-  {name = "Stefano Zampini", email = "stefano.zampini@kaust.edu.sa"},
-  {name = "Jack Betteridge", email = "J.Betteridge@imperial.ac.uk"},
+  "Umberto Zerbinati <umberto.zerbinati@maths.ox.ac.uk>",
+  "Patrick E. Farrell <patrick.farrell@maths.ox.ac.uk>",
+  "Stefano Zampini <stefano.zampini@kaust.edu.sa>",
+  "Jack Betteridge <J.Betteridge@imperial.ac.uk>",
 ]
 maintainers = [
-  {name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk"},
+  "Umberto Zerbinati <umberto.zerbinati@maths.ox.ac.uk>",
 ]
-license = {file = "LICENSE.txt"}
-dependencies = [
-  "mpi4py",
-  "numpy",
-  "scipy",
+readme = "README.md"
+license = "MIT"
+packages = [
+    {include = "ngsPETSc"}
 ]
-requires-python = ">=3.8"
+documentation = "https://ngspetsc.readthedocs.io/en/latest/"
+repository = "https://github.com/NGSolve/ngsPETSc"
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
@@ -26,16 +25,27 @@ classifiers = [
   "Development Status :: 3 - Alpha",
 ]
 
-[project.urls]
-Documentation = "https://ngspetsc.readthedocs.io/en/latest/"
-Repository = "https://github.com/NGSolve/ngsPETSc"
+[tool.poetry.dependencies]
+python = "^3.9"
+netgen-mesher = "^6.2"
+netgen-occt = "^7.8"
+petsc4py =  "^3.22.1"
+numpy = "^2"
+scipy = "^1"
 
-[project.optional-dependencies]
-dev = [
-    "pytest",
-    "pylint",
-]
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+pylint = "^3.3"
+
+[tool.poetry.group.ngsolve.dependencies]
+ngsolve = "^6.2"
+mpi4py = "^4"
 
 [build-system]
-requires = ['setuptools>=42']
-build-backend = 'setuptools.build_meta'
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[project.optional-dependencies]
+firedrake = [
+    "firedrake",
+]

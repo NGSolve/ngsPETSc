@@ -17,8 +17,6 @@ except ImportError:
             "dummy class"
             Mesh = type(None)
 
-from mpi4py import MPI
-
 FACE_SETS_LABEL = "Face Sets"
 CELL_SETS_LABEL = "Cell Sets"
 EDGE_SETS_LABEL = "Edge Sets"
@@ -33,7 +31,7 @@ class MeshMapping:
 
     '''
 
-    def __init__(self, mesh=None, comm=MPI.COMM_WORLD, name="Default"):
+    def __init__(self, mesh=None, comm=PETSc.COMM_WORLD.tompi4py(), name="Default"):
         self.name = name
         self.comm = comm
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):

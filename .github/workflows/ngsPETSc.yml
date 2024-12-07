@@ -83,7 +83,7 @@ jobs:
           pip install netgen-mesher --break-system-packages
           export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.10/site-packages
           echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV
-          NGSPETSC_NO_INSTALL_REQUIRED=ON pip install -e . --break-system-packages
+          pip install -e . --break-system-packages
 
       - name: Run test suite in serial
         run: |
@@ -109,9 +109,8 @@ jobs:
       - name: Install Netgen and ngsPETSc
         run: |
           . /home/firedrake/firedrake/bin/activate
-          pip install netgen-mesher
           pip install xdist pytest-timeout ipympl
-          NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
+          pip install .
 
       - name: Run part of the Firedrake test suite
         run: |
@@ -135,9 +134,8 @@ jobs:
       - name: Install Netgen and ngsPETSc
         run: |
           . /home/firedrake/firedrake/bin/activate
-          pip install netgen-mesher
           pip install xdist pytest-timeout ipympl
-          NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
+          pip install .
 
       - name: Run part of the Firedrake test suite
         run: |
