@@ -117,8 +117,9 @@ jobs:
         run: |
           . /home/firedrake/firedrake/bin/activate
           cd $VIRTUAL_ENV/src/firedrake
-          pytest tests/multigrid/test_netgen_gmg.py
-          pytest tests/regression/test_netgen.py
+          pytest tests/firedrake/regression/test_poisson_strong_bcs.py
+          pytest tests/firedrake/multigrid/test_netgen_gmg.py
+          pytest tests/firedrake/regression/test_netgen.py
 
   firedrake-complex:
     runs-on: ubuntu-latest
@@ -142,6 +143,6 @@ jobs:
         run: |
           . /home/firedrake/firedrake/bin/activate
           cd $VIRTUAL_ENV/src/firedrake
-          pytest tests/regression/test_poisson_strong_bcs.py
-          pytest tests/multigrid/test_netgen_gmg.py
-          pytest tests/regression/test_netgen.py
+          pytest tests/firedrake/regression/test_poisson_strong_bcs.py
+          pytest tests/firedrake/multigrid/test_netgen_gmg.py
+          pytest tests/firedrake/regression/test_netgen.py
