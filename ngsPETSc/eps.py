@@ -10,8 +10,6 @@ except ImportError:
     warnings.warn("Import Warning: it was not possible to import SLEPc")
     SLEPc = None
 
-from mpi4py import MPI
-
 from ngsolve import GridFunction
 
 from ngsPETSc import Matrix, VectorMapping
@@ -41,7 +39,7 @@ class EigenSolver():
     if SLEPc is not None:
         def __init__(self, pencil, fes, nev, ncv=SLEPc.DECIDE, optionsPrefix=None,
                     solverParameters=None):
-            self.comm = MPI.COMM_WORLD
+            self.comm = PETSc.COMM_WORLD.tompi4py()
             if not isinstance(pencil, tuple): pencil=tuple([pencil])
             self.penLength = len(pencil)
             self.fes = fes

@@ -30,7 +30,6 @@ python = "^3.9"
 netgen-mesher = "^6.2"
 netgen-occt = "^7.8"
 petsc4py =  "^3.22.1"
-mpi4py = "^4"
 numpy = "^2"
 scipy = "^1"
 
@@ -40,6 +39,7 @@ pylint = "^3.3"
 
 [tool.poetry.group.ngsolve.dependencies]
 ngsolve = "^6.2"
+mpi4py = "^4"
 
 [build-system]
 requires = ["poetry-core"]
