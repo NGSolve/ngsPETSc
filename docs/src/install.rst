@@ -1,17 +1,20 @@
 Installation
 -----------------
-To install ngsPETSc you need to clone the GitHub repository, and then you can install it using pip.
+To install ngsPETSc (if you have a working PETSc and petsc4py installation) you need to clone the GitHub repository, and then you can install it using pip.
 ::
     git clone https://github.com/UZerbinati/ngsPETSc.git
     cd ngsPETSc
     pip install .
+Or you can use the wheel we publish on PyPi.
+::
+    pip install ngsPETSc
 
 Alternatively, you can also build PETSc, SLEPc and NGSolve from source and then install ngsPETSc.
 First we install all the needed packages using apt and pip or an equivalent package manager.
 ::
     apt-get update
     apt-get -y install git build-essential cmake python3 python3-distutils python3-tk libpython3-dev libxmu-dev tk-dev tcl-dev g++ libglu1-mesa-dev liblapacke-dev libblas-dev liblapack-dev
-    pip install numpy cython pytest pytest-mpi netgen-occt
+    pip install numpy cython pytest pytest-mpi netgen-occt netgen-occt-devel
 
 We now install PETSc from scratch in a suitable folder, with OpenMPI, HYPRE, Metis, MUMPS, SuprLU, Scalapack and eigen.
 ::

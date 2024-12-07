@@ -116,7 +116,6 @@ jobs:
         run: |
           . /home/firedrake/firedrake/bin/activate
           cd $VIRTUAL_ENV/src/firedrake
-          pytest tests/regression/test_poisson_strong_bcs.py
           pytest tests/multigrid/test_netgen_gmg.py
           pytest tests/regression/test_netgen.py
 
