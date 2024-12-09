@@ -1,6 +1,8 @@
 # ngsPETSc
 [![ngsPETSc](https://github.com/UZerbinati/ngsPETSc/actions/workflows/ngsPETSc.yml/badge.svg)](https://github.com/UZerbinati/ngsPETSc/actions/workflows/ngsPETSc.yml)
 [![Documentation Status](https://readthedocs.org/projects/ngspetsc/badge/?version=latest)](https://ngspetsc.readthedocs.io/en/latest/?badge=latest)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.07359/status.svg)](https://doi.org/10.21105/joss.07359)
+
 ngsPETSc is an interface between PETSc and NGSolve/NETGEN that enables the use of NETGEN meshes and geometries in PETSc-based solvers while providing NGSolve users access to the wide array of linear, nonlinear solvers, and time-steppers available in PETSc.
 
 ## Installation
