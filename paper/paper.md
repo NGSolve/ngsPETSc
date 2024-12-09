@@ -112,4 +112,8 @@ Figures 2 and 3 show simulations in Firedrake that were not previously possible.
 
 More examples can be found in the documentation of ngsPETSc manual [@manual].
 
+# Acknowledgement
+This work was funded by the Engineering and Physical Sciences Research Council [grant numbers EP/R029423/1 and EP/W026163/1].
+For the purpose of open access, the author has applied a CC BY public copyright licence to any Author Accepted Manuscript (AAM) version arising from this submission.
+
 # References
