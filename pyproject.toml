@@ -1,37 +1,50 @@
-[tool.poetry]
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[project]
 name = "ngsPETSc"
 version = "0.0.8"
 description = "NGSolve/Netgen interface to PETSc"
 authors = [
-  "Umberto Zerbinati <umberto.zerbinati@maths.ox.ac.uk>",
-  "Patrick E. Farrell <patrick.farrell@maths.ox.ac.uk>",
-  "Stefano Zampini <stefano.zampini@kaust.edu.sa>",
-  "Jack Betteridge <J.Betteridge@imperial.ac.uk>",
+  { name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk" },
+  { name = "Patrick E. Farrell", email = "patrick.farrell@maths.ox.ac.uk" },
+  { name = "Stefano Zampini", email = "stefano.zampini@kaust.edu.sa" },
+  { name = "Jack Betteridge", email = "J.Betteridge@imperial.ac.uk" }
 ]
 maintainers = [
-  "Umberto Zerbinati <umberto.zerbinati@maths.ox.ac.uk>",
+  { name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk" }
 ]
 readme = "README.md"
 license = "MIT"
-packages = [
-    {include = "ngsPETSc"}
-]
-documentation = "https://ngspetsc.readthedocs.io/en/latest/"
-repository = "https://github.com/NGSolve/ngsPETSc"
+requires-python = ">=3.9,<4.0"
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 3 - Alpha"
+]
+dependencies = [
+  "netgen-mesher >= 6.2",
+  "netgen-occt >=7.8",
+  "petsc4py >=3.22.1",
+  "numpy >=2",
+  "scipy >=1"
 ]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-netgen-mesher = "^6.2"
-netgen-occt = "^7.8"
-petsc4py =  "^3.22.1"
-numpy = "^2"
-scipy = "^1"
+[project.urls]
+Documentation = "https://ngspetsc.readthedocs.io/en/latest/"
+Repository = "https://github.com/NGSolve/ngsPETSc"
+
+[project.optional-dependencies]
+firedrake = [
+  "firedrake"
+]
+
+[tool.poetry]
+packages = [
+  { include = "ngsPETSc" }
+]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3"
@@ -40,12 +53,3 @@ pylint = "^3.3"
 [tool.poetry.group.ngsolve.dependencies]
 ngsolve = "^6.2"
 mpi4py = "^4"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[project.optional-dependencies]
-firedrake = [
-    "firedrake",
-]
