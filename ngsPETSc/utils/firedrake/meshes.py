@@ -27,6 +27,7 @@ except ImportError:
 
 from ngsPETSc import MeshMapping
 
+
 def flagsUtils(flags, option, default):
     '''
     utility fuction used to parse Netgen flag options
@@ -36,6 +37,7 @@ def flagsUtils(flags, option, default):
     except KeyError:
         return default
 
+
 def refineMarkedElements(self, mark):
     '''
     This method is used to refine a mesh based on a marking function
@@ -44,14 +46,16 @@ def refineMarkedElements(self, mark):
     :arg mark: the marking function which is a Firedrake DG0 function.
 
     '''
+    DistParams = mark.function_space().mesh()._distribution_parameters
+
     els = {2: self.netgen_mesh.Elements2D, 3: self.netgen_mesh.Elements3D}
     dim = self.geometric_dimension()
-    if dim in [2,3]:
+    if dim in [2, 3]:
         with mark.dat.vec as marked:
             marked0 = marked
             getIdx = self._cell_numbering.getOffset
             if self.sfBCInv is not None:
-                getIdx = lambda x: x #pylint: disable=C3001
+                def getIdx(x): return x  # pylint: disable=C3001
                 _, marked0 = self.topology_dm.distributeField(self.sfBCInv,
                                                               self._cell_numbering,
                                                               marked)
@@ -66,10 +70,11 @@ def refineMarkedElements(self, mark):
                             el.refine = False
                     self.netgen_mesh.Refine(adaptive=True)
                     mark = mark-np.ones(mark.shape)
-                return fd.Mesh(self.netgen_mesh)
-            return fd.Mesh(netgen.libngpy._meshing.Mesh(dim))
+                return fd.Mesh(self.netgen_mesh, distribution_parameters=DistParams)
+            return fd.Mesh(netgen.libngpy._meshing.Mesh(dim), distribution_parameters=DistParams)
     else:
-        raise NotImplementedError("No implementation for dimension other than 2 and 3.")
+        raise NotImplementedError(
+            "No implementation for dimension other than 2 and 3.")
 
 
 @PETSc.Log.EventDecorator()
@@ -129,10 +134,13 @@ def curveField(self, order, permutation_tol=1e-8, location_tol=1e-1, cg_field=Fa
     if cg_field:
         firedrake_space = fd.VectorFunctionSpace(self, "CG", order)
     else:
-        low_order_element = self.coordinates.function_space().ufl_element().sub_elements[0]
+        low_order_element = self.coordinates.function_space(
+        ).ufl_element().sub_elements[0]
         ufl_element = low_order_element.reconstruct(degree=order)
-        firedrake_space = fd.VectorFunctionSpace(self, fd.BrokenElement(ufl_element))
-    new_coordinates = fd.assemble(interpolate(self.coordinates, firedrake_space))
+        firedrake_space = fd.VectorFunctionSpace(
+            self, fd.BrokenElement(ufl_element))
+    new_coordinates = fd.assemble(
+        interpolate(self.coordinates, firedrake_space))
 
     # Compute reference points using fiat
     fiat_element = new_coordinates.function_space().finat_element.fiat_equivalent
@@ -156,9 +164,11 @@ def curveField(self, order, permutation_tol=1e-8, location_tol=1e-1, cg_field=Fa
         curved_space_points = np.zeros(
             (ng_dimension, reference_space_points.shape[0], geom_dim)
         )
-        self.netgen_mesh.CalcElementMapping(reference_space_points, physical_space_points)
+        self.netgen_mesh.CalcElementMapping(
+            reference_space_points, physical_space_points)
         self.netgen_mesh.Curve(order)
-        self.netgen_mesh.CalcElementMapping(reference_space_points, curved_space_points)
+        self.netgen_mesh.CalcElementMapping(
+            reference_space_points, curved_space_points)
         curved = ng_element().NumPy()["curved"]
         # Broadcast a boolean array identifying curved cells
         curved = self.comm.bcast(curved, root=0)
@@ -182,10 +192,12 @@ def curveField(self, order, permutation_tol=1e-8, location_tol=1e-1, cg_field=Fa
 
     # Select only the points in curved cells
     barycentres = np.average(physical_space_points, axis=1)
-    ng_index = [*map(lambda x: self.locate_cell(x, tolerance=location_tol), barycentres)]
+    ng_index = [
+        *map(lambda x: self.locate_cell(x, tolerance=location_tol), barycentres)]
 
     # Select only the indices of points owned by this rank
-    owned = [(0 <= ii < len(cell_node_map.values)) if ii is not None else False for ii in ng_index]
+    owned = [(0 <= ii < len(cell_node_map.values))
+             if ii is not None else False for ii in ng_index]
 
     # Select only the points owned by this rank
     physical_space_points = physical_space_points[owned]
@@ -213,9 +225,11 @@ def curveField(self, order, permutation_tol=1e-8, location_tol=1e-1, cg_field=Fa
         curved_space_points[ii] = p[permutation[ii]]
 
     # Assign the curved coordinates to the dat
-    new_coordinates.dat.data[pyop2_index] = curved_space_points.reshape(-1, geom_dim)
+    new_coordinates.dat.data[pyop2_index] = curved_space_points.reshape(
+        -1, geom_dim)
 
     return new_coordinates
+
 
 def splitToQuads(plex, dim, comm):
     '''
@@ -230,12 +244,15 @@ def splitToQuads(plex, dim, comm):
         transform.setDM(plex)
         transform.setUp()
     else:
-        raise RuntimeError("Splitting to quads is only possible for 2D meshes.")
+        raise RuntimeError(
+            "Splitting to quads is only possible for 2D meshes.")
     newplex = transform.apply(plex)
     return newplex
 
+
 splitTypes = {"Alfeld": lambda x: x.SplitAlfeld(),
               "Powell-Sabin": lambda x: x.SplitPowellSabin()}
+
 
 class FiredrakeMesh:
     '''
@@ -245,35 +262,38 @@ class FiredrakeMesh:
     :param netgen_flags: The dictionary of flags to be passed to ngsPETSc.
     :arg comm: the MPI communicator.
     '''
+
     def __init__(self, mesh, netgen_flags, user_comm=fd.COMM_WORLD):
         self.comm = user_comm
-        #Parsing netgen flags
+        # Parsing netgen flags
         if not isinstance(netgen_flags, dict):
             netgen_flags = {}
         split2tets = flagsUtils(netgen_flags, "split_to_tets", False)
         split = flagsUtils(netgen_flags, "split", False)
         quad = flagsUtils(netgen_flags, "quad", False)
         optMoves = flagsUtils(netgen_flags, "optimisation_moves", False)
-        #Checking the mesh format
-        if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
+        # Checking the mesh format
+        if isinstance(mesh, (ngs.comp.Mesh, ngm.Mesh)):
             if split2tets:
                 mesh = mesh.Split2Tets()
             if split:
-                #Split mesh this includes Alfeld and Powell-Sabin
+                # Split mesh this includes Alfeld and Powell-Sabin
                 splitTypes[split](mesh)
             if optMoves:
-                #Optimises the mesh, for example smoothing
+                # Optimises the mesh, for example smoothing
                 if mesh.dim == 2:
                     mesh.OptimizeMesh2d(MeshingParameters(optimize2d=optMoves))
                 elif mesh.dim == 3:
-                    mesh.OptimizeVolumeMesh(MeshingParameters(optimize3d=optMoves))
+                    mesh.OptimizeVolumeMesh(
+                        MeshingParameters(optimize3d=optMoves))
                 else:
                     raise ValueError("Only 2D and 3D meshes can be optimised.")
-            #We create the plex from the netgen mesh
+            # We create the plex from the netgen mesh
             self.meshMap = MeshMapping(mesh, comm=self.comm)
-            #We apply the DMPLEX transform
+            # We apply the DMPLEX transform
             if quad:
-                newplex = splitToQuads(self.meshMap.petscPlex, mesh.dim, comm=self.comm)
+                newplex = splitToQuads(
+                    self.meshMap.petscPlex, mesh.dim, comm=self.comm)
                 self.meshMap = MeshMapping(newplex)
         else:
             raise ValueError("Mesh format not recognised.")
@@ -291,7 +311,8 @@ class FiredrakeMesh:
         geometric_dim = topology.topology_dm.getCoordinateDim()
         element = fd.VectorElement("Lagrange", cell, 1, dim=geometric_dim)
         # Create mesh object
-        self.firedrakeMesh = fd.MeshGeometry.__new__(fd.MeshGeometry, element, comm)
+        self.firedrakeMesh = fd.MeshGeometry.__new__(
+            fd.MeshGeometry, element, comm)
         self.firedrakeMesh._init_topology(topology)
         self.firedrakeMesh.name = name
         # Adding Netgen mesh and inverse sfBC as attributes
@@ -300,7 +321,7 @@ class FiredrakeMesh:
             self.firedrakeMesh.sfBCInv = self.firedrakeMesh.sfBC.createInverse()
         else:
             self.firedrakeMesh.sfBCInv = None
-        #Generating ngs to Firedrake cell index map
-        #Adding refine_marked_elements and curve_field methods
+        # Generating ngs to Firedrake cell index map
+        # Adding refine_marked_elements and curve_field methods
         setattr(fd.MeshGeometry, "refine_marked_elements", refineMarkedElements)
         setattr(fd.MeshGeometry, "curve_field", curveField)
