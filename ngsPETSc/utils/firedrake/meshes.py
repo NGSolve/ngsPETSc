@@ -44,6 +44,7 @@ def refineMarkedElements(self, mark):
     :arg mark: the marking function which is a Firedrake DG0 function.
 
     '''
+    DistParams = mark.function_space().mesh()._distribution_parameters
     els = {2: self.netgen_mesh.Elements2D, 3: self.netgen_mesh.Elements3D}
     dim = self.geometric_dimension()
     if dim in [2,3]:
@@ -66,8 +67,8 @@ def refineMarkedElements(self, mark):
                             el.refine = False
                     self.netgen_mesh.Refine(adaptive=True)
                     mark = mark-np.ones(mark.shape)
-                return fd.Mesh(self.netgen_mesh)
-            return fd.Mesh(netgen.libngpy._meshing.Mesh(dim))
+                return fd.Mesh(self.netgen_mesh, distribution_parameters=DistParams)
+            return fd.Mesh(netgen.libngpy._meshing.Mesh(dim), distribution_parameters=DistParams)
     else:
         raise NotImplementedError("No implementation for dimension other than 2 and 3.")
 
