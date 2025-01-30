@@ -44,7 +44,7 @@ def refineMarkedElements(self, mark):
     :arg mark: the marking function which is a Firedrake DG0 function.
 
     '''
-    DistParams = mark.function_space().mesh()._distribution_parameters
+    DistParams = self._distribution_parameters
     els = {2: self.netgen_mesh.Elements2D, 3: self.netgen_mesh.Elements3D}
     dim = self.geometric_dimension()
     if dim in [2,3]:
