@@ -1,6 +1,9 @@
 # .github/workflows/app.yaml
 name: ngsPETSc tests
 on:
+    pull_request:
+      types: [synchronize]
+
     push:
       branches-ignore:
       - 'no-ci/*'
