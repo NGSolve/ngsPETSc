@@ -36,17 +36,21 @@ def flagsUtils(flags, option, default):
     except KeyError:
         return default
 
-def refineMarkedElements(self, mark):
+def refineMarkedElements(self, mark, netgen_flags={}):
     '''
     This method is used to refine a mesh based on a marking function
     which is a Firedrake DG0 function.
 
     :arg mark: the marking function which is a Firedrake DG0 function.
+    :arg netgen_flags: the dictionary of flags to be passed to ngsPETSc.
+    It includes the option:
+        - refine_faces, which is a boolean specifyiong if you want to refine faces.
 
     '''
     DistParams = self._distribution_parameters
     els = {2: self.netgen_mesh.Elements2D, 3: self.netgen_mesh.Elements3D}
     dim = self.geometric_dimension()
+    refine_faces = flagsUtils(netgen_flags, "refine_faces", False)
     if dim in [2,3]:
         with mark.dat.vec as marked:
             marked0 = marked
@@ -65,6 +69,8 @@ def refineMarkedElements(self, mark):
                             el.refine = True
                         else:
                             el.refine = False
+                    if not refine_faces and dim == 3:
+                        self.netgen_mesh.Elements2D().NumPy()["refine"] = 0
                     self.netgen_mesh.Refine(adaptive=True)
                     mark = mark-np.ones(mark.shape)
                 return fd.Mesh(self.netgen_mesh, distribution_parameters=DistParams)
