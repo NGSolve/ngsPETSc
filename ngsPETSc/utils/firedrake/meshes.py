@@ -73,8 +73,9 @@ def refineMarkedElements(self, mark, netgen_flags={}):
                         self.netgen_mesh.Elements2D().NumPy()["refine"] = 0
                     self.netgen_mesh.Refine(adaptive=True)
                     mark = mark-np.ones(mark.shape)
-                return fd.Mesh(self.netgen_mesh, distribution_parameters=DistParams)
-            return fd.Mesh(netgen.libngpy._meshing.Mesh(dim), distribution_parameters=DistParams)
+                return fd.Mesh(self.netgen_mesh, distribution_parameters=DistParams, comm=self.comm)
+            return fd.Mesh(netgen.libngpy._meshing.Mesh(dim),
+                           distribution_parameters=DistParams, comm=self.comm)
     else:
         raise NotImplementedError("No implementation for dimension other than 2 and 3.")
 
