@@ -90,7 +90,7 @@ jobs:
         run: |
           pip install numpy setuptools
           cd ..
-          git clone https://github.com/UZerbinati/petsc.git petsc
+          git clone --branch v3.23.0 https://gitlab.com/petsc/petsc.git
           cd petsc
           ./configure \
             --with-c2html=0 \
