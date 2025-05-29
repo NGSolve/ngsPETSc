@@ -116,10 +116,6 @@ jobs:
           export PETSC_ARCH=arch-linux-c-opt
           poetry remove petsc4py
           poetry install --sync --no-interaction
-          poetry add ../petsc/src/binding/petsc4py
-          sed -i -E "s/petsc4py = (\{.+\})/petsc4py = \"^3.23.0\"/" pyproject.toml
-          # Replace when fixed with:
-          # poetry install --sync --no-interaction
 
       - name: Build source and wheel distribution
         run: |
