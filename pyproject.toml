@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "ngsPETSc"
-version = "0.0.8"
+version = "0.1.0"
 description = "NGSolve/Netgen interface to PETSc"
 authors = [
   { name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk" },
@@ -17,7 +17,7 @@ maintainers = [
 ]
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.9,<4.0"
+requires-python = ">=3.10,<4.0"
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
