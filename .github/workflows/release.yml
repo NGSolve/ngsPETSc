@@ -90,15 +90,15 @@ jobs:
         run: |
           pip install numpy setuptools
           cd ..
-          git clone https://gitlab.com/petsc/petsc.git petsc
+          git clone https://github.com/UZerbinati/petsc.git petsc
           cd petsc
-          git checkout -b stefanozampini/fix-petsc4py-sdist
           ./configure \
             --with-c2html=0 \
             --with-debugging=0 \
             --with-fortran-bindings=0 \
             --with-shared-libraries=1 \
-            --with-petsc4py
+            --with-petsc4py \
+            --download-fblaslapack=1
           make
 
       - name: Install Poetry
