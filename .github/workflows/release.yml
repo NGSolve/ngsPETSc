@@ -88,9 +88,9 @@ jobs:
 
       - name: Build and install PETSc
         run: |
-          pip install numpy setuptools
+          pip install numpy setuptools cython==3.0.12
           cd ..
-          git clone https://github.com/UZerbinati/petsc.git petsc
+          git clone --branch v3.23.0 https://gitlab.com/petsc/petsc.git
           cd petsc
           ./configure \
             --with-c2html=0 \
@@ -114,11 +114,10 @@ jobs:
         run: |
           export PETSC_DIR=/home/runner/work/ngsPETSc/petsc
           export PETSC_ARCH=arch-linux-c-opt
-          # Hopefully this song and dance goes away after petsc4py release 3.22.2
           poetry remove petsc4py
           poetry install --sync --no-interaction
           poetry add ../petsc/src/binding/petsc4py
-          sed -i -E "s/petsc4py = (\{.+\})/petsc4py = \"^3.22.1\"/" pyproject.toml
+          sed -i -E "s/petsc4py = (\{.+\})/petsc4py = \"^3.23.0\"/" pyproject.toml
           # Replace when fixed with:
           # poetry install --sync --no-interaction
 
