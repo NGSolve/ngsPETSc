@@ -3,7 +3,7 @@ This module contains all the functions related
 '''
 try:
     import firedrake as fd
-    from firedrake.cython import mgimpl as impl
+    from firedrake.cython import mgimpl as impl, dmcommon
     from firedrake.__future__ import interpolate
     from firedrake import dmhooks
     import ufl
@@ -128,19 +128,12 @@ def uniformRefinementRoutine(ngmesh, cdm):
     rdm.removeLabel("pyop2_ghost")
     return (rdm, ngmesh)
 
-def uniformMapRoutine(meshes):
+def uniformMapRoutine(meshes, lgmaps):
     '''
     This function computes the coarse to fine and fine to coarse maps
     for a uniform mesh hierarchy.
     '''
     refinements_per_level = 1
-    lgmaps = []
-    for i, m in enumerate(meshes):
-        no = impl.create_lgmap(m.topology_dm)
-        m.init()
-        o = impl.create_lgmap(m.topology_dm)
-        m.topology_dm.setRefineLevel(i)
-        lgmaps.append((no, o))
     coarse_to_fine_cells = []
     fine_to_coarse_cells = [None]
     for (coarse, fine), (clgmaps, flgmaps) in zip(zip(meshes[:-1], meshes[1:]),
@@ -196,7 +189,6 @@ def NetgenHierarchy(mesh, levs, flags):
     '''
     if mesh.geometric_dimension() == 3:
         raise NotImplementedError("Netgen hierachies are only implemented for 2D meshes.")
-    ngmesh = mesh.netgen_mesh
     comm = mesh.comm
     #Parsing netgen flags
     if not isinstance(flags, dict):
@@ -213,22 +205,32 @@ def NetgenHierarchy(mesh, levs, flags):
     nested = flagsUtils(flags, "nested", snap in ["coarse"])
     #Firedrake quoantities
     meshes = []
-    coarse_to_fine_cells = []
-    fine_to_coarse_cells = [None]
+    lgmaps = []
     params = {"partition": False}
-    #We construct the unrefined linear mesh
-    if mesh.comm.size > 1 and mesh._grown_halos:
-        raise RuntimeError("Cannot refine parallel overlapped meshes ")
     #We curve the mesh
     if order[0]>1:
-        ho_field  = mesh.curve_field(
+        ho_field = mesh.curve_field(
             order=order[0],
             permutation_tol=permutation_tol,
             cg_field=cg
         )
-        mesh = fd.Mesh(ho_field,distribution_parameters=params, comm=comm)
+        temp = fd.Mesh(ho_field,distribution_parameters=params, comm=comm)
+        temp.netgen_mesh = mesh.netgen_mesh
+        temp._tolerance = mesh.tolerance
+        mesh = temp
+    # Make a plex (cdm) without overlap.
+    dm_cell_type, = mesh.dm_cell_types
+    tdim = mesh.topology_dm.getDimension()
+    cdm = dmcommon.submesh_create(mesh.topology_dm, tdim, "celltype", dm_cell_type, True)
+    cdm.removeLabel("pyop2_core")
+    cdm.removeLabel("pyop2_owned")
+    cdm.removeLabel("pyop2_ghost")
+    no = impl.create_lgmap(cdm)
+    o = impl.create_lgmap(mesh.topology_dm)
+    lgmaps.append((no, o))
+    mesh.topology_dm.setRefineLevel(0)
     meshes += [mesh]
-    cdm = meshes[-1].topology_dm
+    ngmesh = mesh.netgen_mesh
     for l in range(levs):
         #Streightening the mesh
         ngmesh.Curve(1)
@@ -238,8 +240,11 @@ def NetgenHierarchy(mesh, levs, flags):
         if snap == "geometry":
             snapToNetgenDMPlex(ngmesh, rdm)
         #We construct a Firedrake mesh from the DMPlex mesh
+        no = impl.create_lgmap(rdm)
         mesh = fd.Mesh(rdm, dim=meshes[-1].geometric_dimension(), reorder=False,
                        distribution_parameters=params, comm=comm)
+        o = impl.create_lgmap(mesh.topology_dm)
+        lgmaps.append((no, o))
         if optMoves:
             #Optimises the mesh, for example smoothing
             if ngmesh.dim == 2:
@@ -259,8 +264,9 @@ def NetgenHierarchy(mesh, levs, flags):
                 )
             elif snap == "coarse":
                 mesh = snapToCoarse(ho_field, mesh, order[l+1], snap_smoothing, cg)
+        mesh.topology_dm.setRefineLevel(1 + l)
         meshes += [mesh]
     #We populate the coarse to fine map
-    coarse_to_fine_cells, fine_to_coarse_cells = refinementTypes[refType][1](meshes)
+    coarse_to_fine_cells, fine_to_coarse_cells = refinementTypes[refType][1](meshes, lgmaps)
     return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
                             1, nested=nested)
