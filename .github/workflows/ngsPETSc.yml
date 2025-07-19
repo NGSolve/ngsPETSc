@@ -105,19 +105,18 @@ jobs:
 
       - name: Add SLEPc to vanilla Firedrake
         run: |
-          . /home/firedrake/firedrake/bin/activate
-          cp -R $SLEPC_DIR/src/binding/slepc4py $VIRTUAL_ENV/src
-          pip install --no-build-isolation --no-binary mpi4py,randomgen,numpy --no-deps $VIRTUAL_ENV/src/slepc4py/
+          cd /home/firedrake
+          pip install --no-build-isolation --no-binary mpi4py,randomgen,numpy,slepc4py
 
       - name: Install Netgen and ngsPETSc
         run: |
           . /home/firedrake/firedrake/bin/activate
+          cd /gom/firedrake
           pip install xdist pytest-timeout ipympl
           pip install .
 
       - name: Run part of the Firedrake test suite
         run: |
-          . /home/firedrake/firedrake/bin/activate
           cd $VIRTUAL_ENV/src/firedrake
           pytest tests/firedrake/regression/test_poisson_strong_bcs.py
           pytest tests/firedrake/multigrid/test_netgen_gmg.py
