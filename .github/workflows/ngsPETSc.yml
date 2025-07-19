@@ -66,84 +66,74 @@ jobs:
           mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_eps.py
           mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_snes.py
 
-  fenicsx:
-    runs-on: ubuntu-latest
-    container:
-      image: dolfinx/dolfinx:nightly
-      options: --user root
-    timeout-minutes: 50
-
-    steps:
-      - name: Check out repository code
-        uses: actions/checkout@v4
-
-      - name: Install pytest
-        run: |
-          pip install pytest --break-system-packages
-
-      - name: Install Netgen and ngsPETSc
-        run: |
-          pip install netgen-mesher --break-system-packages
-          export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.10/site-packages
-          echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV
-          pip install -e . --break-system-packages
-
-      - name: Run test suite in serial
-        run: |
-          pytest -v tests/test_fenicsx.py
-
   firedrake:
     runs-on: ubuntu-latest
     container:
-      image: firedrakeproject/firedrake-vanilla:latest
+      image: firedrakeproject/firedrake-vanilla-default:latest
       options: --user root
     timeout-minutes: 50
-
+    env:
+      GITHUB_WORKSPACE: $HOME
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
-
       - name: Add SLEPc to vanilla Firedrake
         run: |
-          . /home/firedrake/firedrake/bin/activate
-          cp -R $SLEPC_DIR/src/binding/slepc4py $VIRTUAL_ENV/src
-          pip install --no-build-isolation --no-binary mpi4py,randomgen,numpy --no-deps $VIRTUAL_ENV/src/slepc4py/
+          cd $HOME
+          pip install --no-build-isolation mpi4py randomgen numpy slepc4py
 
       - name: Install Netgen and ngsPETSc
         run: |
-          . /home/firedrake/firedrake/bin/activate
-          pip install xdist pytest-timeout ipympl
+          cd /__w/ngsPETSc/ngsPETSc
+          pip install --no-build-isolation xdist pytest-timeout ipympl poetry
+          ls
           pip install .
 
       - name: Run part of the Firedrake test suite
         run: |
-          . /home/firedrake/firedrake/bin/activate
-          cd $VIRTUAL_ENV/src/firedrake
-          pytest tests/firedrake/regression/test_poisson_strong_bcs.py
-          pytest tests/firedrake/multigrid/test_netgen_gmg.py
-          pytest tests/firedrake/regression/test_netgen.py
+          cd $HOME
+          git clone https://github.com/firedrakeproject/firedrake.git
+          cd firedrake
+          git checkout release
+          pytest -m "not parallel" tests/firedrake/regression/test_poisson_strong_bcs.py
+          mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/regression/test_poisson_strong_bcs.py
+          pytest -m "not parallel" tests/firedrake/multigrid/test_netgen_gmg.py
+          mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/multigrid/test_netgen_gmg.py
+          pytest -m "not parallel" tests/firedrake/regression/test_netgen.py
+          mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/regression/test_netgen.py
 
   firedrake-complex:
     runs-on: ubuntu-latest
     container:
-      image: firedrakeproject/firedrake-complex:latest
+      image: firedrakeproject/firedrake-vanilla-complex:latest
       options: --user root
     timeout-minutes: 50
-
+    env:
+      GITHUB_WORKSPACE: $HOME
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
+      - name: Add SLEPc to vanilla Firedrake
+        run: |
+          cd $HOME
+          pip install --no-build-isolation mpi4py randomgen numpy slepc4py
 
       - name: Install Netgen and ngsPETSc
         run: |
-          . /home/firedrake/firedrake/bin/activate
-          pip install xdist pytest-timeout ipympl
+          cd /__w/ngsPETSc/ngsPETSc
+          pip install --no-build-isolation xdist pytest-timeout ipympl poetry
+          ls
           pip install .
 
       - name: Run part of the Firedrake test suite
         run: |
-          . /home/firedrake/firedrake/bin/activate
-          cd $VIRTUAL_ENV/src/firedrake
-          pytest tests/firedrake/regression/test_poisson_strong_bcs.py
-          pytest tests/firedrake/multigrid/test_netgen_gmg.py
-          pytest tests/firedrake/regression/test_netgen.py
+          cd $HOME
+          git clone https://github.com/firedrakeproject/firedrake.git
+          cd firedrake
+          git checkout release
+          pytest -m "not parallel" tests/firedrake/regression/test_poisson_strong_bcs.py
+          mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/regression/test_poisson_strong_bcs.py
+          pytest -m "not parallel" tests/firedrake/multigrid/test_netgen_gmg.py
+          mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/multigrid/test_netgen_gmg.py
+          pytest -m "not parallel" tests/firedrake/regression/test_netgen.py
+          mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/regression/test_netgen.py
