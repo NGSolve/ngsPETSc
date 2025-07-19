@@ -95,7 +95,7 @@ jobs:
   firedrake:
     runs-on: ubuntu-latest
     container:
-      image: firedrakeproject/firedrake-vanilla:latest
+      image: firedrakeproject/firedrake-vanilla-default:latest
       options: --user root
     timeout-minutes: 50
 
