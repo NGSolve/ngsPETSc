@@ -100,18 +100,22 @@ jobs:
     timeout-minutes: 50
 
     steps:
+      - name: Fix HOME
+        # For unknown reasons GitHub actions overwrite HOME to /github/home
+        # which will break everything unless fixed
+        # (https://github.com/actions/runner/issues/863)
+        run: echo "HOME=/home/firedrake" >> "$GITHUB_ENV"
       - name: Check out repository code
         uses: actions/checkout@v4
 
       - name: Add SLEPc to vanilla Firedrake
         run: |
-          cd /home/firedrake
+          cd $HOME
           pip install --no-build-isolation --no-binary mpi4py,randomgen,numpy,slepc4py
 
       - name: Install Netgen and ngsPETSc
         run: |
-          . /home/firedrake/firedrake/bin/activate
-          cd /gom/firedrake
+          cd $HOME
           pip install xdist pytest-timeout ipympl
           pip install .
 
