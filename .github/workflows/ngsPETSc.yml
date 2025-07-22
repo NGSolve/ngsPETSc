@@ -107,7 +107,12 @@ jobs:
         run: export GITHUB_WORKSPACE=$HOME
       - name: Check out repository code
         uses: actions/checkout@v4
-
+      - name: Test
+        run: |
+          cd $GITHUB_WORKSPACE
+          echo $PWD
+          export var = $(ls)
+          echo $var
       - name: Add SLEPc to vanilla Firedrake
         run: |
           cd $HOME
