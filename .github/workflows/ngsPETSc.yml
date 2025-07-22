@@ -100,6 +100,11 @@ jobs:
     timeout-minutes: 50
 
     steps:
+      - name: Fix HOME
+        # For unknown reasons GitHub actions overwrite HOME to /github/home
+        # which will break everything unless fixed
+        # (https://github.com/actions/runner/issues/863)
+        run: GITHUB_WORKSPACE=$HOME
       - name: Check out repository code
         uses: actions/checkout@v4
 
@@ -111,6 +116,7 @@ jobs:
       - name: Install Netgen and ngsPETSc
         run: |
           cd $HOME
+          cd ngsPETSc
           pip install xdist pytest-timeout ipympl
           pip install .
 
