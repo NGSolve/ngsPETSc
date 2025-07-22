@@ -111,8 +111,8 @@ jobs:
       - name: Install Netgen and ngsPETSc
         run: |
           cd /__w/ngsPETSc/ngsPETSc
-          pip --no-build-isolation install xdist pytest-timeout ipympl
-          pip --no-build-isolation install .
+          pip install --no-build-isolation xdist pytest-timeout ipympl
+          pip install --no-build-isolation .
 
       - name: Run part of the Firedrake test suite
         run: |
