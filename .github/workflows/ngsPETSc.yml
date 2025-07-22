@@ -104,7 +104,7 @@ jobs:
         # For unknown reasons GitHub actions overwrite HOME to /github/home
         # which will break everything unless fixed
         # (https://github.com/actions/runner/issues/863)
-        run: GITHUB_WORKSPACE=$HOME
+        run: export GITHUB_WORKSPACE=$HOME
       - name: Check out repository code
         uses: actions/checkout@v4
 
@@ -139,12 +139,14 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
+        run: |
+          echo $PWD
 
       - name: Install Netgen and ngsPETSc
         run: |
           . /home/firedrake/firedrake/bin/activate
           pip install xdist pytest-timeout ipympl
-          pip install .
+          echo $PWD
 
       - name: Run part of the Firedrake test suite
         run: |
