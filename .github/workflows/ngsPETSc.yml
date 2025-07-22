@@ -116,7 +116,6 @@ jobs:
       - name: Install Netgen and ngsPETSc
         run: |
           cd $HOME
-          cd ngsPETSc
           pip install xdist pytest-timeout ipympl
           pip install .
 
