@@ -98,21 +98,17 @@ jobs:
       image: firedrakeproject/firedrake-vanilla-default:latest
       options: --user root
     timeout-minutes: 50
-
+    env:
+      GITHUB_WORKSPACE: $HOME
     steps:
-      - name: Fix HOME
-        # For unknown reasons GitHub actions overwrite HOME to /github/home
-        # which will break everything unless fixed
-        # (https://github.com/actions/runner/issues/863)
-        run: export GITHUB_WORKSPACE=$HOME
       - name: Check out repository code
         uses: actions/checkout@v4
       - name: Test
         run: |
           cd $GITHUB_WORKSPACE
           echo $PWD
-          export var = $(ls)
-          echo $var
+          export outcome = $(ls)
+          echo $outcome
       - name: Add SLEPc to vanilla Firedrake
         run: |
           cd $HOME
