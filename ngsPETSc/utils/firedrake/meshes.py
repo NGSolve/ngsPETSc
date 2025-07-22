@@ -283,6 +283,8 @@ class FiredrakeMesh:
             if quad:
                 newplex = splitToQuads(self.meshMap.petscPlex, mesh.dim, comm=self.comm)
                 self.meshMap = MeshMapping(newplex)
+        elif isinstance(mesh, PETSc.DMPlex):
+            self.meshMap = MeshMapping(mesh)
         else:
             raise ValueError("Mesh format not recognised.")
 
