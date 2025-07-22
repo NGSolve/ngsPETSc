@@ -101,28 +101,38 @@ jobs:
           mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/multigrid/test_netgen_gmg.py
           pytest -m "not parallel" tests/firedrake/regression/test_netgen.py
           mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/regression/test_netgen.py
-
   firedrake-complex:
     runs-on: ubuntu-latest
     container:
-      image: firedrakeproject/firedrake-complex:latest
+      image: firedrakeproject/firedrake-vanilla-complex:latest
       options: --user root
     timeout-minutes: 50
-
+    env:
+      GITHUB_WORKSPACE: $HOME
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
+      - name: Add SLEPc to vanilla Firedrake
+        run: |
+          cd $HOME
+          pip install --no-build-isolation mpi4py randomgen numpy slepc4py
 
       - name: Install Netgen and ngsPETSc
         run: |
-          . /home/firedrake/firedrake/bin/activate
-          pip install xdist pytest-timeout ipympl
-          echo $PWD
+          cd /__w/ngsPETSc/ngsPETSc
+          pip install --no-build-isolation xdist pytest-timeout ipympl poetry
+          ls
+          pip install .
 
       - name: Run part of the Firedrake test suite
         run: |
-          . /home/firedrake/firedrake/bin/activate
-          cd $VIRTUAL_ENV/src/firedrake
-          pytest tests/firedrake/regression/test_poisson_strong_bcs.py
-          pytest tests/firedrake/multigrid/test_netgen_gmg.py
-          pytest tests/firedrake/regression/test_netgen.py
+          cd $HOME
+          git clone https://github.com/firedrakeproject/firedrake.git
+          cd firedrake
+          git checkout release
+          pytest -m "not parallel" tests/firedrake/regression/test_poisson_strong_bcs.py
+          mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/regression/test_poisson_strong_bcs.py
+          pytest -m "not parallel" tests/firedrake/multigrid/test_netgen_gmg.py
+          mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/multigrid/test_netgen_gmg.py
+          pytest -m "not parallel" tests/firedrake/regression/test_netgen.py
+          mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/regression/test_netgen.py
