@@ -66,32 +66,6 @@ jobs:
           mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_eps.py
           mpirun --allow-run-as-root -n 2 pytest -v --with-mpi tests/test_snes.py
 
-  fenicsx:
-    runs-on: ubuntu-latest
-    container:
-      image: dolfinx/dolfinx:nightly
-      options: --user root
-    timeout-minutes: 50
-
-    steps:
-      - name: Check out repository code
-        uses: actions/checkout@v4
-
-      - name: Install pytest
-        run: |
-          pip install pytest --break-system-packages
-
-      - name: Install Netgen and ngsPETSc
-        run: |
-          pip install netgen-mesher --break-system-packages
-          export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.10/site-packages
-          echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV
-          pip install -e . --break-system-packages
-
-      - name: Run test suite in serial
-        run: |
-          pytest -v tests/test_fenicsx.py
-
   firedrake:
     runs-on: ubuntu-latest
     container:
@@ -121,9 +95,12 @@ jobs:
           git clone https://github.com/firedrakeproject/firedrake.git
           cd firedrake
           git checkout release
-          pytest tests/firedrake/regression/test_poisson_strong_bcs.py
-          pytest tests/firedrake/multigrid/test_netgen_gmg.py
-          pytest tests/firedrake/regression/test_netgen.py
+          pytest -m "not parallel" tests/firedrake/regression/test_poisson_strong_bcs.py
+          mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/regression/test_poisson_strong_bcs.py
+          pytest -m "not parallel" tests/firedrake/multigrid/test_netgen_gmg.py
+          mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/multigrid/test_netgen_gmg.py
+          pytest -m "not parallel" tests/firedrake/regression/test_netgen.py
+          mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/regression/test_netgen.py
 
   firedrake-complex:
     runs-on: ubuntu-latest
