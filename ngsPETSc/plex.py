@@ -4,7 +4,7 @@ PETSc DMPlex using the petsc4py interface.
 '''
 import itertools
 import numpy as np
-
+from packaging.version import Version
 from petsc4py import PETSc
 
 import netgen.meshing as ngm
@@ -161,12 +161,23 @@ class MeshMapping:
             if comm.rank == 0:
                 V = self.ngMesh.Coordinates()
                 T = self.ngMesh.Elements3D().NumPy()["nodes"]
-                T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
+
                 surfMesh, dim = False, 3
                 if len(T) == 0:
                     surfMesh, dim = True, 2
                     T = self.ngMesh.Elements2D().NumPy()["nodes"]
-                    T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
+
+                if Version(np.__version__) >= Version("2.2"):
+                    T = np.trim_zeros(T, "b", axis=1).astype(np.int64) - 1
+                else:
+                    T = (
+                        np.array(
+                            [list(np.trim_zeros(a, "b")) for a in list(T)],
+                            dtype=np.int64,
+                        )
+                        - 1
+                    )
+
                 plex = PETSc.DMPlex().createFromCellList(dim, T, V, comm=comm)
                 plex.setName(self.name)
                 vStart, _ = plex.getDepthStratum(0)
