@@ -73,55 +73,42 @@ def test_poisson_netgen():
     problem.solve()
 
 
-def test_crack_netgen():
-    """Test facet markers in generated crack."""
+def test_markers():
+    """Test cell and facet markers."""
     try:
         from mpi4py import MPI
         import ngsPETSc.utils.fenicsx as ngfx
         import dolfinx
         import ufl
-        from netgen.geom2d import CSG2d, Solid2d, EdgeInfo
+        from netgen.occ import OCCGeometry, WorkPlane, Glue
         import numpy as np
     except ImportError:
         pytest.skip("DOLFINx unavailable, skipping FENICSx test")
-    geo = CSG2d()
-    L = 2
-    H = 3
-    dx = 0.1
-    poly = Solid2d(
-        [
-            (0, 0),
-            EdgeInfo(bc="bottom"),
-            (L, 0),
-            EdgeInfo(bc="right"),
-            (L, H),
-            EdgeInfo(bc="topright"),
-            (L/2 + dx, H),
-            EdgeInfo(bc="crackright"),
-            (L/2, H/2),
-            EdgeInfo(bc="crackleft"),
-            (L/2 - dx, H),
-            EdgeInfo(bc="topleft"),
-            (0, H),
-            EdgeInfo(bc="left"),
-        ]
-    )
-    geo.Add(poly)
 
+    wp = WorkPlane()
+    square = wp.Rectangle(1,1).Face()
+    disk = wp.Circle(0.2, 0.2, 0.1).Face()
+    disk.edges.name = "circle"
+    disk.faces.name = "circle"
+    shape = Glue([square, disk])
+    geo = OCCGeometry(shape, dim=2)
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
-    domain, ft, region_map = geoModel.model_to_mesh(hmax=0.1)
+    domain, (ct, ft), region_map = geoModel.model_to_mesh(hmax=0.015)
+    dS = ufl.Measure("dS", domain=domain, subdomain_data=ft)
 
-    keys =["bottom", "right", "topright", "crackright", "crackleft", "topleft", "left"]
-    for key in keys:
-        assert key in region_map
+    crack_integer_marker = region_map[(1, "circle")]
 
-    ds = ufl.Measure("ds", domain=domain, subdomain_data=ft)
+    local_interface = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1*dS(crack_integer_marker)))
+    interface = domain.comm.allreduce(local_interface, op=MPI.SUM)
+    assert np.isclose(interface, 2*np.pi*0.1, atol=5e-4, rtol=5e-4)
 
-    local_crack = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1*ds(region_map["crackright"])))
-    crack_length = domain.comm.allreduce(local_crack, op=MPI.SUM)
-    assert np.isclose(crack_length, np.sqrt((H/2)**2 + dx**2))
+    dx = ufl.Measure("dx", domain=domain, subdomain_data=ct)
+    steel_circle = region_map[(2, "circle")]
+    local_area = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1*dx(steel_circle)))
+    area = domain.comm.allreduce(local_area, op=MPI.SUM)
+    assert np.isclose(area, np.pi*0.1**2, atol=5e-4, rtol=5e-4)
 
 if __name__ == "__main__":
     test_square_netgen()
     test_poisson_netgen()
-    test_crack_netgen()
+    test_markers()

@@ -156,6 +156,11 @@ jobs:
         run: |
           python3 -m pytest -vs ./tests/test_fenicsx.py
 
+      - name: Run tests (mpi)
+        run: |
+          mpirun -n 2 python3 -m pytest -vs ./tests/test_fenicsx.py
+
+
   fenicsx-nightly:
     runs-on: ubuntu-latest
     container:
@@ -172,5 +177,5 @@ jobs:
      
       - name: Run tests (serial)
         run: |
-          python3 -m pytest -vs ./tests/test_fenicsx.py
+          mpirun -n 2 python3 -m pytest -vs ./tests/test_fenicsx.py
 

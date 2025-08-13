@@ -31,9 +31,10 @@ class GeometricModel:
         partitioner: typing.Callable[
         [_MPI.Comm, int, int, dolfinx.cpp.graph.AdjacencyList_int32],
         dolfinx.cpp.graph.AdjacencyList_int32] =
-        dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.none),
+        dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.shared_facet),
         transform: typing.Any = None, routine: typing.Any = None
-        ) -> tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags, dict[str, tuple[int, ...]]]:
+        ) -> tuple[dolfinx.mesh.Mesh, tuple[dolfinx.mesh.MeshTags,dolfinx.mesh.MeshTags],
+                   dict[tuple[int, str], tuple[int, ...]]]:
         """Given a NetGen model, take all physical entities of the highest
         topological dimension and create the corresponding DOLFINx mesh.
 
@@ -51,13 +52,15 @@ class GeometricModel:
                 same objects after the routine has been applied.
 
         Returns:
-            A DOLFINx mesh for the given NetGen model.
+            A DOLFINx mesh for the given NetGen model. It also extracts cell tags,
+            facet tags and a mapping from the NetGen label to the corresponding integer marker(s).
         """
         # To be parallel safe, we generate on all processes
         # NOTE: This might change in the future.
 
         # First we generate a mesh
         ngmesh = self.geo.GenerateMesh(maxh=hmax)
+        self.ngmesh = ngmesh
         # Apply any ngs routine post meshing
         if routine is not None:
             ngmesh, self.geo = routine(ngmesh, self.geo)
@@ -107,10 +110,32 @@ class GeometricModel:
                                         partitioner=partitioner)
 
         if self.comm.rank == self.comm_rank:
-            regions: dict[str, list[int]] = {name: []
-                                             for name in ngmesh.GetRegionNames(dim=ngmesh.dim-1)}
-            for i, name in enumerate(ngmesh.GetRegionNames(ngmesh.dim-1), 1):
-                regions[name].append(i)
+            cell_values = _dim_to_element_wrapper[ngmesh.dim]().NumPy()["index"].astype(np.int32)
+        else:
+            cell_values = np.zeros((0,), dtype=np.int32)
+
+        local_entities, local_values = dolfinx.io.gmshio.distribute_entity_data(
+            mesh, mesh.topology.dim, T, cell_values)
+        adj_cells = dolfinx.graph.adjacencylist(local_entities)
+        ct = dolfinx.mesh.meshtags_from_entities(
+            mesh,
+            mesh.topology.dim,
+            adj_cells,
+            local_values,
+        )
+        ct.name = "Cell tags"
+
+        # Create lookup from cells/facets materials to integer tags
+        regions: dict[tuple[int, str], list[int]] = {}
+        # Append facet material
+        for dim in (ngmesh.dim, ngmesh.dim - 1):
+            for name in ngmesh.GetRegionNames(dim=dim):
+                regions[(dim, name)] = []
+            for i, name in enumerate(ngmesh.GetRegionNames(dim=dim)):
+                regions[(dim, name)].append(i + 1)
+
+
+        if self.comm.rank == self.comm_rank:
 
             ng_facets = _dim_to_element_wrapper[ngmesh.dim-1]()
             facet_indices = ng_facets.NumPy()["nodes"].astype(np.int64)
@@ -127,12 +152,10 @@ class GeometricModel:
             # Can't use the vectorized version, due to a bug in ngsolve:
             # https://forum.ngsolve.org/t/extract-facet-markers-from-netgen-mesh/3256
             facet_values = np.array([facet.index for facet in ng_facets], dtype=np.int32)
-            regions = self.comm.bcast(regions, root=0)
         else:
             # NOTE: Mixed meshes on non-simplex geometries requires changes
             facets = np.zeros((0, ngmesh.dim), dtype=np.int64)
             facet_values = np.zeros((0,), dtype=np.int32)
-            regions = self.comm.bcast(None, root=0)
 
         local_entities, local_values = dolfinx.io.gmshio.distribute_entity_data(
             mesh, mesh.topology.dim - 1, facets, facet_values
@@ -143,10 +166,10 @@ class GeometricModel:
             mesh,
             mesh.topology.dim - 1,
             adj,
-            local_values.astype(np.int32, copy=False),
+            local_values,
         )
         ft.name = "Facet tags"
 
         for key, value in regions.items():
             regions[key] = tuple(value)
-        return mesh, ft, regions
+        return mesh, (ct, ft), regions
