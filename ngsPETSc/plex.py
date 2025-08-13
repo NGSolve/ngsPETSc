@@ -168,12 +168,12 @@ class MeshMapping:
                     T = self.ngMesh.Elements2D().NumPy()["nodes"]
 
                 if Version(np.__version__) >= Version("2.2"):
-                    T = np.trim_zeros(T, "b", axis=1).astype(np.int64) - 1
+                    T = np.trim_zeros(T, "b", axis=1).astype(np.int32) - 1
                 else:
                     T = (
                         np.array(
                             [list(np.trim_zeros(a, "b")) for a in list(T)],
-                            dtype=np.int64,
+                            dtype=np.int32,
                         )
                         - 1
                     )
