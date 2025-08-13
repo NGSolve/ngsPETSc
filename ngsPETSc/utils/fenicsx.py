@@ -33,7 +33,7 @@ class GeometricModel:
         dolfinx.cpp.graph.AdjacencyList_int32] =
         dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.none),
         transform: typing.Any = None, routine: typing.Any = None
-        ) -> tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags, dict[str, list[int]]]:
+        ) -> tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags, dict[str, tuple[int, ...]]]:
         """Given a NetGen model, take all physical entities of the highest
         topological dimension and create the corresponding DOLFINx mesh.
 
@@ -146,4 +146,7 @@ class GeometricModel:
             local_values.astype(np.int32, copy=False),
         )
         ft.name = "Facet tags"
+
+        for key, value in regions.items():
+            regions[key] = tuple(value)
         return mesh, ft, regions

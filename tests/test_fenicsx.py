@@ -2,7 +2,7 @@
 This module test the utils.fenicsx class
 '''
 import pytest
-
+from packaging.version import Version
 
 def test_square_netgen():
     '''
@@ -30,6 +30,7 @@ def test_poisson_netgen():
     try:
         import numpy as np
         import ufl
+        from dolfinx import __version__ as dfx_version
         from dolfinx import fem, mesh
         from dolfinx.fem.petsc import LinearProblem
         from ufl import dx, grad, inner
@@ -61,49 +62,64 @@ def test_poisson_netgen():
     a = inner(grad(u), grad(v)) * dx
     L = inner(f, v) * dx
     # Backward compatibility
-    try:
-        problem = LinearProblem(a, L, bcs=[bc],
-                  petsc_options={"ksp_type": "cg", "pc_type": "qr"})
-    except TypeError:
-        problem = LinearProblem(a, L, bcs=[bc],
-                  petsc_options={"ksp_type": "cg", "pc_type": "qr"},
-                  petsc_options_prefix="test_solver")
+    if Version(dfx_version) < Version("0.10.0"):
+        options = {}
+    else:
+        options = {"petsc_options_prefix": "test_solver"}
+    problem = LinearProblem(a, L, bcs=[bc],
+                            petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
+                            **options)
+
     problem.solve()
 
 
 def test_crack_netgen():
+    """Test facet markers in generated crack."""
     try:
         from mpi4py import MPI
         import ngsPETSc.utils.fenicsx as ngfx
-        from netgen.geom2d import CSG2d, Solid2d, EdgeInfo, Circle
+        import dolfinx
+        import ufl
+        from netgen.geom2d import CSG2d, Solid2d, EdgeInfo
+        import numpy as np
     except ImportError:
         pytest.skip("DOLFINx unavailable, skipping FENICSx test")
     geo = CSG2d()
+    L = 2
+    H = 3
+    dx = 0.1
     poly = Solid2d(
         [
             (0, 0),
             EdgeInfo(bc="bottom"),
-            (2, 0),
+            (L, 0),
             EdgeInfo(bc="right"),
-            (2, 2),
+            (L, H),
             EdgeInfo(bc="topright"),
-            (1.01, 2),
+            (L/2 + dx, H),
             EdgeInfo(bc="crackright"),
-            (1, 1.5),
+            (L/2, H/2),
             EdgeInfo(bc="crackleft"),
-            (0.99, 2),
+            (L/2 - dx, H),
             EdgeInfo(bc="topleft"),
-            (0, 2),
+            (0, H),
             EdgeInfo(bc="left"),
         ]
     )
-
-    disk = Circle((0.3, 0.3), 0.2, bc="hole")
-    geo.Add(poly - disk)
+    geo.Add(poly)
 
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
     domain, ft, region_map = geoModel.model_to_mesh(hmax=0.1)
 
+    keys =["bottom", "right", "topright", "crackright", "crackleft", "topleft", "left"]
+    for key in keys:
+        assert key in region_map
+
+    ds = ufl.Measure("ds", domain=domain, subdomain_data=ft)
+
+    local_crack = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1*ds(region_map["crackright"])))
+    crack_length = domain.comm.allreduce(local_crack, op=MPI.SUM)
+    assert np.isclose(crack_length, np.sqrt((H/2)**2 + dx**2))
 
 if __name__ == "__main__":
     test_square_netgen()
