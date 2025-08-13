@@ -149,8 +149,8 @@ jobs:
 
       - name: Install Netgen and ngsPETSc
         run: |
-          python3 -m pip install --no-build-isolation pytest
-          python3 -m pip install . --no-build-isolation
+          python3 -m pip install --no-build-isolation pytest poetry
+          python3 -m pip install . --check-build-dependencies --no-build-isolation
 
       - name: Run tests (serial)
         run: |
@@ -167,8 +167,8 @@ jobs:
 
       - name: Install Netgen and ngsPETSc
         run: |
-          python3 -m pip install --no-build-isolation pytest
-          python3 -m pip install . --no-build-isolation
+          python3 -m pip install --no-build-isolation pytest poetry
+          python3 -m pip install . --check-build-dependencies --no-build-isolation
      
       - name: Run tests (serial)
         run: |
