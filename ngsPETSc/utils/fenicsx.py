@@ -78,5 +78,6 @@ class GeometricModel:
         cell_perm = dolfinx.cpp.io.perm_gmsh(dolfinx.cpp.mesh.to_type(str(ufl_domain.ufl_cell())),
                                              T.shape[1])
         T = np.ascontiguousarray(T[:, cell_perm])
-        mesh = dolfinx.mesh.create_mesh(self.comm, cells=T, x=V, e=ufl_domain, partitioner=partitioner)
+        mesh = dolfinx.mesh.create_mesh(self.comm, cells=T, x=V, e=ufl_domain,
+                                        partitioner=partitioner)
         return mesh
