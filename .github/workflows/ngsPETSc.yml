@@ -87,7 +87,7 @@ jobs:
           cd /__w/ngsPETSc/ngsPETSc
           pip install --no-build-isolation xdist pytest-timeout ipympl poetry
           ls
-          pip install .
+          pip install . --no-build-isolation
 
       - name: Run part of the Firedrake test suite
         run: |
@@ -123,7 +123,7 @@ jobs:
           cd /__w/ngsPETSc/ngsPETSc
           pip install --no-build-isolation xdist pytest-timeout ipympl poetry
           ls
-          pip install .
+          pip install . --no-build-isolation
 
       - name: Run part of the Firedrake test suite
         run: |
@@ -150,7 +150,7 @@ jobs:
       - name: Install Netgen and ngsPETSc
         run: |
           python3 -m pip install --no-build-isolation pytest
-          python3 -m pip install .
+          python3 -m pip install . --no-build-isolation
 
       - name: Run tests (serial)
         run: |
@@ -168,7 +168,7 @@ jobs:
       - name: Install Netgen and ngsPETSc
         run: |
           python3 -m pip install --no-build-isolation pytest
-          python3 -m pip install .
+          python3 -m pip install . --no-build-isolation
      
       - name: Run tests (serial)
         run: |
