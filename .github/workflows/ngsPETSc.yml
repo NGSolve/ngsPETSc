@@ -156,7 +156,7 @@ jobs:
         run: |
           python3 -m pytest -vs ./tests/test_fenicsx.py
 
- fenicsx-nightly:
+  fenicsx-nightly:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/fenicsproject/dolfinx/dolfinx:nightly
