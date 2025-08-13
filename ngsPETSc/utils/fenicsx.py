@@ -6,13 +6,14 @@ the package will only be used in combination with FEniCSx.
 import typing
 import dolfinx
 import numpy as np
-
+from packaging.version import Version
 from mpi4py import MPI as _MPI
 
 from ngsPETSc import MeshMapping
 
 # Map from Netgen cell type (integer tuple) to GMSH cell type
 _ngs_to_cells = {(2,3): 2, (2,4):3, (3,4): 4}
+
 
 class GeometricModel:
     """
@@ -21,16 +22,19 @@ class GeometricModel:
             geo: The Netgen model
             comm: The MPI communicator to use for mesh creation
     """
-    def __init__(self,geo, comm: _MPI.Comm):
+    def __init__(self,geo, comm: _MPI.Comm, comm_rank:int = 0):
         self.geo = geo
         self.comm = comm
+        self.comm_rank = comm_rank
 
     def model_to_mesh(self, hmax: float, gdim: int = 2,
         partitioner: typing.Callable[
         [_MPI.Comm, int, int, dolfinx.cpp.graph.AdjacencyList_int32],
         dolfinx.cpp.graph.AdjacencyList_int32] =
-        dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.none),
-        transform: typing.Any = None, routine: typing.Any = None) -> dolfinx.mesh.Mesh:
+        dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.shared_facet),
+        transform: typing.Any = None, routine: typing.Any = None
+        ) -> tuple[dolfinx.mesh.Mesh, tuple[dolfinx.mesh.MeshTags,dolfinx.mesh.MeshTags],
+                   dict[tuple[int, str], tuple[int, ...]]]:
         """Given a NetGen model, take all physical entities of the highest
         topological dimension and create the corresponding DOLFINx mesh.
 
@@ -48,14 +52,18 @@ class GeometricModel:
                 same objects after the routine has been applied.
 
         Returns:
-            A DOLFINx mesh for the given NetGen model.
+            A DOLFINx mesh for the given NetGen model. It also extracts cell tags,
+            facet tags and a mapping from the NetGen label to the corresponding integer marker(s).
         """
+        # To be parallel safe, we generate on all processes
+        # NOTE: This might change in the future.
+
         # First we generate a mesh
         ngmesh = self.geo.GenerateMesh(maxh=hmax)
+        self.ngmesh = ngmesh
         # Apply any ngs routine post meshing
         if routine is not None:
             ngmesh, self.geo = routine(ngmesh, self.geo)
-        # Applying any PETSc Transform
         if transform is not None:
             meshMap = MeshMapping(ngmesh)
             transform.setDM(meshMap.plex)
@@ -63,20 +71,105 @@ class GeometricModel:
             newplex = transform.apply(meshMap.plex)
             meshMap = MeshMapping(newplex)
             ngmesh = meshMap.ngmesh
-        # We extract topology and geometry
+
+        assert ngmesh.dim in (2, 3), "Only 2D and 3D meshes are supported."
+        _dim_to_element_wrapper = {
+            1: ngmesh.Elements1D,
+            2: ngmesh.Elements2D,
+            3: ngmesh.Elements3D}
+
         V, T = None, None
-        if ngmesh.dim == 2:
+        if self.comm.rank == self.comm_rank:
+
+            # Applying any PETSc Transform
+            # We extract topology and geometry
             V = ngmesh.Coordinates()
-            T = ngmesh.Elements2D().NumPy()["nodes"]
-            T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
-        elif ngmesh.dim == 3:
-            V = ngmesh.Coordinates()
-            T = ngmesh.Elements3D().NumPy()["nodes"]
-            T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
+            T = _dim_to_element_wrapper[ngmesh.dim]().NumPy()["nodes"]
+            if Version(np.__version__) >= Version("2.2"):
+                T = np.trim_zeros(T, "b", axis=1).astype(np.int64) - 1
+            else:
+                T = (
+                    np.array(
+                        [list(np.trim_zeros(a, "b")) for a in list(T)],
+                        dtype=np.int64,
+                    )
+                    - 1
+                )
+        else:
+            # NOTE: For mixed meshes, this must change
+            V = np.zeros((0, ngmesh.dim), dtype=np.float64)
+            T = np.zeros((0, ngmesh.dim+1), dtype=np.int64)
+
+        # NOTE: Here we should curve meshes
         ufl_domain = dolfinx.io.gmshio.ufl_mesh(
             _ngs_to_cells[(gdim,T.shape[1])], gdim, dolfinx.default_real_type)
         cell_perm = dolfinx.cpp.io.perm_gmsh(dolfinx.cpp.mesh.to_type(str(ufl_domain.ufl_cell())),
                                              T.shape[1])
         T = np.ascontiguousarray(T[:, cell_perm])
-        mesh = dolfinx.mesh.create_mesh(self.comm, T, V, ufl_domain, partitioner)
-        return mesh
+        mesh = dolfinx.mesh.create_mesh(self.comm, cells=T, x=V, e=ufl_domain,
+                                        partitioner=partitioner)
+
+        if self.comm.rank == self.comm_rank:
+            cell_values = _dim_to_element_wrapper[ngmesh.dim]().NumPy()["index"].astype(np.int32)
+        else:
+            cell_values = np.zeros((0,), dtype=np.int32)
+
+        local_entities, local_values = dolfinx.io.gmshio.distribute_entity_data(
+            mesh, mesh.topology.dim, T, cell_values)
+        adj_cells = dolfinx.graph.adjacencylist(local_entities)
+        ct = dolfinx.mesh.meshtags_from_entities(
+            mesh,
+            mesh.topology.dim,
+            adj_cells,
+            local_values,
+        )
+        ct.name = "Cell tags"
+
+        # Create lookup from cells/facets materials to integer tags
+        regions: dict[tuple[int, str], list[int]] = {}
+        # Append facet material
+        for dim in (ngmesh.dim, ngmesh.dim - 1):
+            for name in ngmesh.GetRegionNames(dim=dim):
+                regions[(dim, name)] = []
+            for i, name in enumerate(ngmesh.GetRegionNames(dim=dim)):
+                regions[(dim, name)].append(i + 1)
+
+
+        if self.comm.rank == self.comm_rank:
+
+            ng_facets = _dim_to_element_wrapper[ngmesh.dim-1]()
+            facet_indices = ng_facets.NumPy()["nodes"].astype(np.int64)
+            if Version(np.__version__) >= Version("2.2"):
+                facets = np.trim_zeros(facet_indices, "b", axis=1).astype(np.int64) - 1
+            else:
+                facets = (
+                    np.array(
+                        [list(np.trim_zeros(a, "b")) for a in list(facet_indices)],
+                        dtype=np.int64,
+                    )
+                    - 1
+                )
+            # Can't use the vectorized version, due to a bug in ngsolve:
+            # https://forum.ngsolve.org/t/extract-facet-markers-from-netgen-mesh/3256
+            facet_values = np.array([facet.index for facet in ng_facets], dtype=np.int32)
+        else:
+            # NOTE: Mixed meshes on non-simplex geometries requires changes
+            facets = np.zeros((0, ngmesh.dim), dtype=np.int64)
+            facet_values = np.zeros((0,), dtype=np.int32)
+
+        local_entities, local_values = dolfinx.io.gmshio.distribute_entity_data(
+            mesh, mesh.topology.dim - 1, facets, facet_values
+        )
+        mesh.topology.create_connectivity(mesh.topology.dim - 1, 0)
+        adj = dolfinx.graph.adjacencylist(local_entities)
+        ft = dolfinx.mesh.meshtags_from_entities(
+            mesh,
+            mesh.topology.dim - 1,
+            adj,
+            local_values,
+        )
+        ft.name = "Facet tags"
+
+        for key, value in regions.items():
+            regions[key] = tuple(value)
+        return mesh, (ct, ft), regions
