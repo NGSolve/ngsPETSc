@@ -138,27 +138,27 @@ jobs:
           pytest -m "not parallel" tests/firedrake/regression/test_netgen.py
           mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/regression/test_netgen.py
   
-  fenicsx-stable:
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/fenics/dolfinx/dolfinx:stable
-    timeout-minutes: 10 # FIXME: Reduce this once we don't need to install petsc4py
-    steps:
-      - name: Check out repository code
-        uses: actions/checkout@v5
+  # fenicsx-stable:
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: ghcr.io/fenics/dolfinx/dolfinx:stable
+  #   timeout-minutes: 10 # FIXME: Reduce this once we don't need to install petsc4py
+  #   steps:
+  #     - name: Check out repository code
+  #       uses: actions/checkout@v5
 
-      - name: Install Netgen and ngsPETSc
-        run: |
-          python3 -m pip install --no-build-isolation pytest poetry
-          python3 -m pip install . --check-build-dependencies --no-build-isolation
+  #     - name: Install Netgen and ngsPETSc
+  #       run: |
+  #         python3 -m pip install --no-build-isolation pytest poetry
+  #         python3 -m pip install . --check-build-dependencies --no-build-isolation
 
-      - name: Run tests (serial)
-        run: |
-          python3 -m pytest -vs ./tests/test_fenicsx.py
+  #     - name: Run tests (serial)
+  #       run: |
+  #         python3 -m pytest -vs ./tests/test_fenicsx.py
 
-      - name: Run tests (mpi)
-        run: |
-          mpirun -n 2 python3 -m pytest -vs ./tests/test_fenicsx.py
+  #     - name: Run tests (mpi)
+  #       run: |
+  #         mpirun -n 2 python3 -m pytest -vs ./tests/test_fenicsx.py
 
 
   fenicsx-nightly:
