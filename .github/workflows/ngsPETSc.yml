@@ -141,7 +141,7 @@ jobs:
   fenicsx-stable:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/fenicsproject/dolfinx/dolfinx:stable
+      image: ghcr.io/fenics/dolfinx/dolfinx:stable
     timeout-minutes: 5
     steps:
       - name: Check out repository code
@@ -159,7 +159,7 @@ jobs:
   fenicsx-nightly:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/fenicsproject/dolfinx/dolfinx:nightly
+      image: ghcr.io/fenics/dolfinx/dolfinx:nightly
     timeout-minutes: 5
     steps:
       - name: Check out repository code
