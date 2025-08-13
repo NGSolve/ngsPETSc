@@ -137,3 +137,40 @@ jobs:
           mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/multigrid/test_netgen_gmg.py
           pytest -m "not parallel" tests/firedrake/regression/test_netgen.py
           mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/regression/test_netgen.py
+  
+  fenicsx-stable:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fenicsproject/dolfinx/dolfinx:stable
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
+
+      - name: Install Netgen and ngsPETSc
+        run: |
+          python3 -m pip install --no-build-isolation pytest
+          python3 -m pip install .
+
+      - name: Run tests (serial)
+        run: |
+          python3 -m pytest -vs ./tests/test_fenicsx.py
+
+ fenicsx-nightly:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fenicsproject/dolfinx/dolfinx:nightly
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
+
+      - name: Install Netgen and ngsPETSc
+        run: |
+          python3 -m pip install --no-build-isolation pytest
+          python3 -m pip install .
+     
+      - name: Run tests (serial)
+        run: |
+          python3 -m pytest -vs ./tests/test_fenicsx.py
+

@@ -59,8 +59,14 @@ def test_poisson_netgen():
     f = ufl.exp(ufl.sin(x[0])*ufl.sin(x[1]))
     a = inner(grad(u), grad(v)) * dx
     L = inner(f, v) * dx
-    problem = LinearProblem(a, L, bcs=[bc],
-              petsc_options={"ksp_type": "cg", "pc_type": "qr"})
+    # Backward compatibility
+    try:
+        problem = LinearProblem(a, L, bcs=[bc],
+                  petsc_options={"ksp_type": "cg", "pc_type": "qr"})
+    except TypeError:
+        problem = LinearProblem(a, L, bcs=[bc],
+                  petsc_options={"ksp_type": "cg", "pc_type": "qr"},
+                  petsc_options_prefix="test_solver")
     problem.solve()
 
 if __name__ == "__main__":
