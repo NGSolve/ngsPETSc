@@ -142,7 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/fenics/dolfinx/dolfinx:stable
-    timeout-minutes: 5
+    timeout-minutes: 10 # FIXME: Reduce this once we don't need to install petsc4py
     steps:
       - name: Check out repository code
         uses: actions/checkout@v5
