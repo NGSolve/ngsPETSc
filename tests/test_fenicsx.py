@@ -83,7 +83,7 @@ def test_markers():
         from netgen.occ import OCCGeometry, WorkPlane, Glue
         import numpy as np
     except ImportError:
-        pytest.skip("DOLFINx unavailable, skipping FENICSx test")
+        pytest.skip("DOLFINx unavailable, skipping FENICSx test.")
 
     wp = WorkPlane()
     square = wp.Rectangle(1,1).Face()
@@ -93,7 +93,12 @@ def test_markers():
     shape = Glue([square, disk])
     geo = OCCGeometry(shape, dim=2)
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
-    domain, (ct, ft), region_map = geoModel.model_to_mesh(hmax=0.015)
+    if dolfinx.has_kahip:
+        partitioner = dolfinx.mesh.create_cell_partitioner(dolfinx.graph.partitioner_kahip())
+    else:
+        partitioner = dolfinx.mesh.create_cell_partitioner(dolfinx.graph.partitioner_scotch())
+    domain, (ct, ft), region_map = geoModel.model_to_mesh(hmax=0.01, partitioner=partitioner)
+
     dS = ufl.Measure("dS", domain=domain, subdomain_data=ft)
 
     crack_integer_marker = region_map[(1, "circle")]
