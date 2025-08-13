@@ -10,10 +10,10 @@ authors = [
   { name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk" },
   { name = "Patrick E. Farrell", email = "patrick.farrell@maths.ox.ac.uk" },
   { name = "Stefano Zampini", email = "stefano.zampini@kaust.edu.sa" },
-  { name = "Jack Betteridge", email = "J.Betteridge@imperial.ac.uk" }
+  { name = "Jack Betteridge", email = "J.Betteridge@imperial.ac.uk" },
 ]
 maintainers = [
-  { name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk" }
+  { name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk" },
 ]
 readme = "README.md"
 license = "MIT"
@@ -22,12 +22,12 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
-  "Development Status :: 3 - Alpha"
+  "Development Status :: 3 - Alpha",
 ]
 dependencies = [
   "netgen-mesher >= 6.2,<7.0",
   "netgen-occt >=7.8,<8.0",
-  "petsc4py >=3.22.1,<4.0",
+  "petsc4py >=3.22,<4.0",
   "numpy >=2,<3",
   "scipy >=1,<2",
 ]
@@ -37,14 +37,10 @@ Documentation = "https://ngspetsc.readthedocs.io/en/latest/"
 Repository = "https://github.com/NGSolve/ngsPETSc"
 
 [project.optional-dependencies]
-firedrake = [
-  "firedrake"
-]
+firedrake = ["firedrake"]
 
 [tool.poetry]
-packages = [
-  { include = "ngsPETSc" }
-]
+packages = [{ include = "ngsPETSc" }]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3"
