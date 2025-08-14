@@ -201,7 +201,6 @@ class GeometricModel:
         ng_dimension = len(ng_element()) # Number of cells in NGS grid (on any rank)
         geom_dim = self.ngmesh.dim
 
-
         el = basix.ufl.element("Lagrange", self._mesh.basix_cell(), order, shape=(geom_dim, ))
 
         rsp = el.basix_element.x # NOTE: FIX empty points in basix nanobind wrapper
