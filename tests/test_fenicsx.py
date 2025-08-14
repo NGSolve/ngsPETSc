@@ -72,8 +72,8 @@ def test_poisson_netgen():
 
     problem.solve()
 
-
-def test_markers():
+@pytest.mark.parametrize("order", [1,2, 3])
+def test_markers(order):
     """Test cell and facet markers."""
     try:
         from mpi4py import MPI
@@ -93,27 +93,37 @@ def test_markers():
     shape = Glue([square, disk])
     geo = OCCGeometry(shape, dim=2)
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
+    gm = dolfinx.mesh.GhostMode.shared_facet
     if dolfinx.has_kahip:
-        partitioner = dolfinx.mesh.create_cell_partitioner(dolfinx.graph.partitioner_kahip())
+        partitioner = dolfinx.mesh.create_cell_partitioner(dolfinx.graph.partitioner_kahip(),
+                                                           ghost_mode=gm)
     else:
-        partitioner = dolfinx.mesh.create_cell_partitioner(dolfinx.graph.partitioner_scotch())
-    domain, (ct, ft), region_map = geoModel.model_to_mesh(hmax=0.01, partitioner=partitioner)
+        partitioner = dolfinx.mesh.create_cell_partitioner(dolfinx.graph.partitioner_scotch(),
+                                                           ghost_mode=gm)
+    _, (ct, ft), region_map = geoModel.model_to_mesh(hmax=0.01, partitioner=partitioner)
 
-    dS = ufl.Measure("dS", domain=domain, subdomain_data=ft)
+    curved_domain = geoModel.curveField(order)
 
+    # Integrate over interior marked interface
+    dS = ufl.Measure("dS", domain=curved_domain, subdomain_data=ft)
     crack_integer_marker = region_map[(1, "circle")]
-
     local_interface = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1*dS(crack_integer_marker)))
-    interface = domain.comm.allreduce(local_interface, op=MPI.SUM)
-    assert np.isclose(interface, 2*np.pi*0.1, atol=5e-4, rtol=5e-4)
+    interface = curved_domain.comm.allreduce(local_interface, op=MPI.SUM)
 
-    dx = ufl.Measure("dx", domain=domain, subdomain_data=ct)
+    # Integrate over marked subdomain
+    dx = ufl.Measure("dx", domain=curved_domain, subdomain_data=ct)
     steel_circle = region_map[(2, "circle")]
     local_area = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1*dx(steel_circle)))
-    area = domain.comm.allreduce(local_area, op=MPI.SUM)
-    assert np.isclose(area, np.pi*0.1**2, atol=5e-4, rtol=5e-4)
+    area = curved_domain.comm.allreduce(local_area, op=MPI.SUM)
+
+    if order == 1:
+        tol = 5e-4
+    else:
+        tol = 1e-6
+    assert np.isclose(interface, 2*np.pi*0.1, atol=tol, rtol=tol)
+    assert np.isclose(area, np.pi*0.1**2, atol=tol, rtol=tol)
 
 if __name__ == "__main__":
     test_square_netgen()
     test_poisson_netgen()
-    test_markers()
+    test_markers(2)

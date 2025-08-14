@@ -11,7 +11,6 @@ except ImportError:
 
 import numpy as np
 from petsc4py import PETSc
-from scipy.spatial.distance import cdist
 
 import netgen
 import netgen.meshing as ngm

@@ -1,11 +1,17 @@
+"""
+Convenience functions that are FiniteElement backend independent.
+"""
+
 import numpy as np
 from petsc4py import PETSc
 from scipy.spatial.distance import cdist
+import numpy.typing as npt
 
 __all__ = ["find_permutation"]
 
 @PETSc.Log.EventDecorator()
-def find_permutation(points_a, points_b, tol=1e-5):
+def find_permutation(points_a:npt.NDArray[np.inexact], points_b:npt.NDArray[np.inexact],
+                     tol:float=1e-5):
     """ Find all permutations between a list of two sets of points.
 
     Given two numpy arrays of shape (ncells, npoints, dim) containing
@@ -35,4 +41,3 @@ def find_permutation(points_a, points_b, tol=1e-5):
         )
 
     return permutation
-

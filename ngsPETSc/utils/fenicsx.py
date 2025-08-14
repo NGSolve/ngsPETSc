@@ -7,11 +7,12 @@ import typing
 import basix.ufl
 import dolfinx
 import numpy as np
+import ufl
 from packaging.version import Version
 from mpi4py import MPI as _MPI
 from ngsPETSc.utils.utils import find_permutation
 from ngsPETSc import MeshMapping
-import ufl
+
 # Map from Netgen cell type (integer tuple) to GMSH cell type
 _ngs_to_cells = {(2,3): 2, (2,4):3, (3,4): 4}
 
@@ -188,6 +189,8 @@ class GeometricModel:
         :arg location_tol: tolerance used to locate the cell a point belongs to.
         '''
         # Check if the mesh is a surface mesh or two dimensional mesh
+        if order == 1:
+            return self._mesh
 
         _dim_to_element_wrapper = {
             1: self.ngmesh.Elements1D,
@@ -260,7 +263,8 @@ class GeometricModel:
 
         # Create bounding box for function evaluation
         bb_tree = dolfinx.geometry.bb_tree(self._mesh, self._mesh.topology.dim,
-                                           np.arange(num_cells_owned, dtype=np.int32))
+                                           np.arange(num_cells_owned, dtype=np.int32),
+                                           padding=location_tol)
 
         # Check against standard table value
         cell_candidates = dolfinx.geometry.compute_collisions_points(bb_tree, barycentres)
@@ -286,23 +290,18 @@ class GeometricModel:
             for ii, p in enumerate(curved_space_points[owned_pos]):
                 curved_space_points[owned_pos[ii]] = p[permutation[ii]]
             # Assign the curved coordinates to the dat
-            x[cell_node_map[owned_cells].flatten(), :geom_dim] = curved_space_points[owned_pos].reshape(-1, geom_dim)
-
-        # Sync ghosted coordinates across all processes
-        coord_func = dolfinx.fem.Function(X_space)
-        num_dofs_local = X_space.dofmap.index_map.size_local * X_space.dofmap.index_map_bs
-        coord_func.x.array[:] = x[:num_dofs_local, :geom_dim].flatten()
-        coord_func.x.scatter_forward()
+            x[cell_node_map[owned_cells].flatten()
+              , :geom_dim] = curved_space_points[owned_pos].reshape(-1, geom_dim)
 
         # Use topology from original mesh
         topology = self._mesh.topology
         # Use geometry from function_space
-        c_el = dolfinx.fem.coordinate_element(el.basix_element)
+        c_el = dolfinx.fem.coordinate_element(el.basix_element)  #  pylint: disable=E1120
         geom_imap = X_space.dofmap.index_map
         local_node_indices = np.arange(geom_imap.size_local + geom_imap.num_ghosts, dtype=np.int32)
         igi = geom_imap.local_to_global(local_node_indices)
         geometry = dolfinx.mesh.create_geometry(geom_imap, cell_node_map, c_el._cpp_object,
-                                                coord_func.x.array.reshape(-1, geom_dim), igi)
+                                                x[:, :geom_dim].copy(), igi)
 
         # Create DOLFINx mesh
         if x.dtype == np.float64:
