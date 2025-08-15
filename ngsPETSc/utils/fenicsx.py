@@ -57,9 +57,7 @@ class GeometricModel:
         dict[tuple[int, str], tuple[int, ...]],
     ]:
         """Given a NetGen model, take all physical entities of the highest
-        topological dimension and create the corresponding DOLFINx mesh.
-
-        This function only works in serial, at the moment.
+        topological dimension and create the corresponding linear DOLFINx mesh.
 
         Args:
             hmax: The maximum diameter of the elements in the triangulation
@@ -95,7 +93,7 @@ class GeometricModel:
 
         assert ngmesh.dim in (2, 3), "Only 2D and 3D meshes are supported."
         regions = self.extract_regions()
-        mesh, ct, ft = self.extract_mesh(gdim=gdim, partitioner=partitioner)
+        mesh, ct, ft = self.extract_linear_mesh(gdim=gdim, partitioner=partitioner)
         return mesh, (ct, ft), regions
 
     def extract_regions(self):
@@ -114,7 +112,7 @@ class GeometricModel:
             regions[key] = tuple(value)
         return regions
 
-    def extract_mesh(
+    def extract_linear_mesh(
         self,
         gdim: int,
         partitioner=dolfinx.mesh.create_cell_partitioner(
@@ -142,22 +140,16 @@ class GeometricModel:
                     - 1
                 )
         else:
-            # NOTE: For mixed meshes, this must change
+            # NOTE: For mixed meshes and or non-simplex meshes, this must change
             V = np.zeros((0, ngmesh.dim), dtype=np.float64)
             T = np.zeros((0, ngmesh.dim + 1), dtype=np.int64)
 
-        # NOTE: Here we should curve meshes
         ufl_domain = dolfinx.io.gmshio.ufl_mesh(
             _ngs_to_cells[(gdim, T.shape[1])], gdim, dolfinx.default_real_type
         )
-        cell_perm = dolfinx.cpp.io.perm_gmsh(
-            dolfinx.cpp.mesh.to_type(str(ufl_domain.ufl_cell())), T.shape[1]
-        )
-        T = np.ascontiguousarray(T[:, cell_perm])
         mesh = dolfinx.mesh.create_mesh(
             self.comm, cells=T, x=V, e=ufl_domain, partitioner=partitioner
         )
-
         self._mesh = mesh
 
         ct = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim)
@@ -268,6 +260,7 @@ class GeometricModel:
         owned_cells = owned.array
         assert len(owned_cells) == len(owned_pos)
 
+        # NOTE: There should be an algorithm for this
         # Find the correct coordinate permutation for each cell
         if len(owned_pos) > 0:
             owned_psp = padded_physical_space_points[owned_pos]
@@ -351,7 +344,7 @@ class GeometricModel:
                 _dim_to_element_wrapper(self.ngmesh)[2]().Numpy()["refine"] = 0
             self.ngmesh.Refine(adaptive=True)
         self._mesh.comm.Barrier()
-        mesh, ct, ft = self.extract_mesh(gdim=gdim)
+        mesh, ct, ft = self.extract_linear_mesh(gdim=gdim)
         return mesh, (ct, ft)
 
 
@@ -368,8 +361,14 @@ def extract_element_tags(
         dolfinx_mesh: The DOLFINx mesh to which the facet tags will be distributed to.
         dim: The topological dimension of the entities to extract.
     """
-    assert ngmesh.dim == dolfinx_mesh.topology.dim
+    tdim = dolfinx_mesh.topology.dim
+    assert ngmesh.dim == tdim, f"Mismatch: ({ngmesh.dim=}!={tdim=})"
+    assert dolfinx_mesh.geometry.cmap.degree == 1, "Can only extract element tags from linear grids"
     comm = dolfinx_mesh.comm
+    sub_entities = basix.cell.subentity_types(dolfinx_mesh.basix_cell())[dim]
+    assert len(np.unique(sub_entities)) == 1, "Only one subentity type is supported"
+    entity_type = dolfinx.mesh.to_type(sub_entities[0].name)
+    num_vertices_per_cell = dolfinx.cpp.mesh.cell_num_vertices(entity_type)
     if comm.rank == comm_rank:
         ng_entities = _dim_to_element_wrapper(ngmesh)[dim]()
         element_indices = ng_entities.NumPy()["nodes"].astype(np.int64)
@@ -393,7 +392,7 @@ def extract_element_tags(
             )
     else:
         # NOTE: Mixed meshes on non-simplex geometries requires changes
-        entitites = np.zeros((0, ngmesh.dim), dtype=np.int64)
+        entitites = np.zeros((0, num_vertices_per_cell), dtype=np.int64)
         entity_markers = np.zeros((0,), dtype=np.int32)
 
     local_entities, local_values = dolfinx.io.gmshio.distribute_entity_data(
