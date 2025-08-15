@@ -130,3 +130,10 @@ dmypy.json
 
 # ECRCML
 *.png
+
+# DOLFINx output
+*.bp/
+*.xdmf
+*.h5
+*.pvd
+*.vtu
