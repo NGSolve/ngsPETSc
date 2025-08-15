@@ -54,7 +54,7 @@ class GeometricModel:
         meshing_options: dict[str, typing.Any] | None = None,
     ) -> tuple[
         dolfinx.mesh.Mesh,
-        tuple[dolfinx.mesh.MeshTags, dolfinx.mesh.MeshTags],
+        tuple[dolfinx.mesh.MeshTags | None, dolfinx.mesh.MeshTags | None],
         dict[tuple[int, str], tuple[int, ...]],
     ]:
         """Given a NetGen model, take all physical entities of the highest
@@ -94,7 +94,6 @@ class GeometricModel:
             meshMap = MeshMapping(newplex)
             ngmesh = meshMap.ngmesh
 
-
         assert ngmesh.dim in (2, 3), "Only 2D and 3D meshes are supported."
         regions = self.extract_regions()
         mesh, ct, ft = self.extract_linear_mesh(gdim=gdim, partitioner=partitioner)
@@ -133,48 +132,65 @@ class GeometricModel:
 
         number_of_vertices = elements_as_numpy["np"]
         sorted_index = np.argsort(number_of_vertices)
-        offset = number_of_vertices[sorted_index[1:]]-number_of_vertices[sorted_index[:-1]]
-        cell_boundaries = np.flatnonzero(offset)+1
-        if len(cell_boundaries) == 0:
+        offset = (
+            number_of_vertices[sorted_index[1:]] - number_of_vertices[sorted_index[:-1]]
+        )
+
+        type_offset = np.concatenate(
+            [
+                np.zeros(1, dtype=np.int64),
+                np.flatnonzero(offset) + 1,
+                np.array([elements_as_numpy.shape[0]], dtype=np.int64),
+            ],
+            dtype=np.int64,
+        )
+
+        num_points_per_cell = number_of_vertices[type_offset[:-1]]
+
+        if len(type_offset) == 2:
             mixed_mesh = False
-            split = -1
         else:
             mixed_mesh = True
-            assert len(cell_boundaries) == 1, "Only two different cell types are expected in a 2D grid."
-            split = cell_boundaries[0]
-        
+            assert len(type_offset) == 3, (
+                "Only two different cell types are expected in a 2D grid."
+            )
+
         if self.comm.rank == self.comm_rank:
             # Applying any PETSc Transform
             # We extract topology and geometry
             V = ngmesh.Coordinates()
-
             if mixed_mesh:
-                num_points_per_cell = [number_of_vertices[sorted_index[0]], number_of_vertices[sorted_index[cell_boundaries[0]]]]
-                cell_offsets = np.array([0, num_points_per_cell[1]+1, elements_as_numpy.shape[0]])
-                _T = []
+                T_sorted = T[sorted_index]
+                del T
+                T = []
                 for i in range(len(num_points_per_cell)):
                     if Version(np.__version__) >= Version("2.2"):
-                        _T.append(np.trim_zeros(T[cell_offsets[i]:cell_offsets[i+1]], "b", axis=1).astype(np.int64) - 1)
-                    else:
-                        _T.append(
-                            np.array(
-                                [list(np.trim_zeros(a, "b")) for a in list(T[cell_offsets[i]:cell_offsets[i+1]])],
-                                dtype=np.int64,
-                            ) - 1
-                            
+                        T.append(
+                            np.trim_zeros(
+                                T_sorted[type_offset[i] : type_offset[i + 1]],
+                                "b",
+                                axis=1,
+                            ).astype(np.int64)
+                            - 1
                         )
-
-                T = _T
-
-
-                breakpoint()
+                    else:
+                        T.append(
+                            np.array(
+                                [
+                                    list(np.trim_zeros(a, "b"))
+                                    for a in list(
+                                        T_sorted[type_offset[i] : type_offset[i + 1]]
+                                    )
+                                ],
+                                dtype=np.int64,
+                            )
+                            - 1
+                        )
                 pass
             else:
                 if Version(np.__version__) >= Version("2.2"):
                     T = np.trim_zeros(T, "b", axis=1).astype(np.int64) - 1
                 else:
-
-
                     T = (
                         np.array(
                             [list(np.trim_zeros(a, "b")) for a in list(T)],
@@ -183,29 +199,74 @@ class GeometricModel:
                         - 1
                     )
         else:
+            V = np.zeros((0, gdim), dtype=np.float64)
             if mixed_mesh:
-                pass
+                T = [np.zeros((0, nv), dtype=np.int64) for nv in num_points_per_cell]
             else:
-                V = np.zeros((0, 3), dtype=np.float64)
                 T = np.zeros((0, number_of_vertices[0]), dtype=np.int64)
-        
-        ufl_domain = dolfinx.io.gmshio.ufl_mesh(
-            _ngs_to_cells[(gdim, T.shape[1])], gdim, dolfinx.default_real_type
-        )
 
-        cell_str = ufl_domain.ufl_coordinate_element().cell_type.name
-        T = T[:, dolfinx.cpp.io.perm_vtk(dolfinx.mesh.to_type(cell_str), T.shape[1])]
+        if mixed_mesh:
+            ufl_domain = [
+                dolfinx.io.gmshio.ufl_mesh(
+                    _ngs_to_cells[(gdim, Ti.shape[1])], gdim, dolfinx.default_real_type
+                )
+                for Ti in T
+            ]
+            cell_strs = []
+            for udi, Ti in zip(ufl_domain, T):
+                cell_str = udi.ufl_coordinate_element().cell_type.name
+                cell_strs.append(cell_str)
+                Ti[:, :] = Ti[
+                    :,
+                    dolfinx.cpp.io.perm_vtk(
+                        dolfinx.mesh.to_type(cell_str), Ti.shape[1]
+                    ),
+                ].copy()
+            c_els = [
+                dolfinx.fem.coordinate_element(
+                    dolfinx.mesh.to_type(cell), 1
+                )._cpp_object
+                for cell in cell_strs
+            ]
+            T = [Ti.flatten().copy() for Ti in T]
+            V = V[:, :gdim].copy()
 
-        mesh = dolfinx.mesh.create_mesh(
-            self.comm, cells=T, x=V[:,:gdim], e=ufl_domain, partitioner=partitioner
-        )
+            cpp_mesh = dolfinx.cpp.mesh.create_mesh(
+                self.comm,
+                T,
+                c_els,
+                V,
+                partitioner,
+            )
+            # Wrap as Python object
+            mesh = dolfinx.mesh.Mesh(cpp_mesh, domain=None)
+
+        else:
+            ufl_domain = dolfinx.io.gmshio.ufl_mesh(
+                _ngs_to_cells[(gdim, T.shape[1])], gdim, dolfinx.default_real_type
+            )
+
+            cell_str = ufl_domain.ufl_coordinate_element().cell_type.name
+            T = T[
+                :, dolfinx.cpp.io.perm_vtk(dolfinx.mesh.to_type(cell_str), T.shape[1])
+            ]
+            V = V[:, :gdim].copy()
+            mesh = dolfinx.mesh.create_mesh(
+                self.comm,
+                cells=T,
+                x=V,
+                e=ufl_domain,
+            )
         self._mesh = mesh
 
-        ct = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim)
-        ct.name = "Cell tags"
-        ft = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim - 1)
-        ft.name = "Facet tags"
-        return mesh, ct, ft
+        if mixed_mesh:
+            return mesh, None, None
+        else:
+            ct = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim)
+            ct.name = "Cell tags"
+            ft = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim - 1)
+            ft.name = "Facet tags"
+            return mesh, ct, ft
 
     def curveField(
         self, order: int, permutation_tol: float = 1e-8, location_tol: float = 1e-10
@@ -413,7 +474,9 @@ def extract_element_tags(
     """
     tdim = dolfinx_mesh.topology.dim
     assert ngmesh.dim == tdim, f"Mismatch: ({ngmesh.dim=}!={tdim=})"
-    assert dolfinx_mesh.geometry.cmap.degree == 1, "Can only extract element tags from linear grids"
+    assert dolfinx_mesh.geometry.cmap.degree == 1, (
+        "Can only extract element tags from linear grids"
+    )
     comm = dolfinx_mesh.comm
     sub_entities = basix.cell.subentity_types(dolfinx_mesh.basix_cell())[dim]
     assert len(np.unique(sub_entities)) == 1, "Only one subentity type is supported"

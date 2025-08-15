@@ -106,9 +106,7 @@ def test_markers(order):
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
     gm = dolfinx.mesh.GhostMode.shared_facet
     partitioner = dolfinx.mesh.create_cell_partitioner(gm)
-    _, (ct, _), region_map = geoModel.model_to_mesh(
-        hmax=0.02, partitioner=partitioner
-    )
+    _, (ct, _), region_map = geoModel.model_to_mesh(hmax=0.02, partitioner=partitioner)
     curved_domain = geoModel.curveField(order)
 
     steel_circle = region_map[(2, "circle")]
@@ -138,6 +136,7 @@ def test_markers(order):
     assert np.isclose(interface, 2 * np.pi * 0.1, atol=tol, rtol=tol)
     assert np.isclose(area, np.pi * 0.1**2, atol=tol, rtol=tol)
 
+
 @pytest.mark.parametrize("order", [1, 2, 3])
 def test_refine(order):
     """Test mesh refinement (with curving)."""
@@ -151,8 +150,8 @@ def test_refine(order):
     except ImportError:
         pytest.skip("DOLFINx unavailable, skipping FENICSx test.")
 
-    center0 = Pnt(0,0,0)
-    center1 = Pnt(0.2,0.2,0)
+    center0 = Pnt(0, 0, 0)
+    center1 = Pnt(0.2, 0.2, 0)
     radius0 = 1
     radius1 = 0.3
     sphere0 = Sphere(center0, radius0)
@@ -178,19 +177,24 @@ def test_refine(order):
     mesh = geoModel.curveField(order)
 
     def locate_facets(x):
-        return np.isclose(x[0]**2 + x[1]**2 + x[2]**2, radius0)
+        return np.isclose(x[0] ** 2 + x[1] ** 2 + x[2] ** 2, radius0)
 
-    facets = dolfinx.mesh.locate_entities_boundary(mesh, mesh.topology.dim-1, locate_facets)
+    facets = dolfinx.mesh.locate_entities_boundary(
+        mesh, mesh.topology.dim - 1, locate_facets
+    )
 
     refined_mesh, (_, ft_refined) = geoModel.refineMarkedElements(
-        mesh.topology.dim-1, facets)
+        mesh.topology.dim - 1, facets
+    )
     refined_mesh = geoModel.curveField(order)
-    local_vol = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1*ufl.dx(domain=refined_mesh)))
+    local_vol = dolfinx.fem.assemble_scalar(
+        dolfinx.fem.form(1 * ufl.dx(domain=refined_mesh))
+    )
     vol = refined_mesh.comm.allreduce(local_vol, op=MPI.SUM)
 
     ds = ufl.ds(domain=refined_mesh, subdomain_data=ft_refined)
-    inner_area = dolfinx.fem.form(1*ds(region_map[(2, "Inner")]))
-    outer_area = dolfinx.fem.form(1*ds(region_map[(2, "Outer")]))
+    inner_area = dolfinx.fem.form(1 * ds(region_map[(2, "Inner")]))
+    outer_area = dolfinx.fem.form(1 * ds(region_map[(2, "Outer")]))
     local_inner = dolfinx.fem.assemble_scalar(inner_area)
     local_outer = dolfinx.fem.assemble_scalar(outer_area)
     inner = refined_mesh.comm.allreduce(local_inner, op=MPI.SUM)
@@ -199,9 +203,11 @@ def test_refine(order):
         tol = 1e-3
     else:
         tol = 5e-5
-    assert np.isclose(vol, 4/3*np.pi*radius0**3 - 4/3*np.pi*radius1**3, rtol=tol)
-    assert np.isclose(inner, 4*np.pi*radius1**2, rtol=tol)
-    assert np.isclose(outer, 4*np.pi*radius0**2, rtol=tol)
+    assert np.isclose(
+        vol, 4 / 3 * np.pi * radius0**3 - 4 / 3 * np.pi * radius1**3, rtol=tol
+    )
+    assert np.isclose(inner, 4 * np.pi * radius1**2, rtol=tol)
+    assert np.isclose(outer, 4 * np.pi * radius0**2, rtol=tol)
 
 
 def test_mixed():
@@ -219,13 +225,14 @@ def test_mixed():
 
     geo = SplineGeometry()
     geo.AddCircle((0, 0), 1)
-    #geo.AddRectangle((0,0),(1,1))
+    # geo.AddRectangle((0,0),(1,1))
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
-    domain, _, _ = geoModel.model_to_mesh(hmax=0.1, meshing_options={"quad_dominated": True})
-    print(domain.comm.rank, domain.comm.size, domain.topology.index_map(2).size_global,  flush=True)
-    with dolfinx.io.XDMFFile(domain.comm, "mesh.xdmf", "w") as xdmf:
-        xdmf.write_mesh(domain)
-    print("aihfao", flush=True)
+    part = dolfinx.mesh.create_cell_partitioner(
+        dolfinx.graph.partitioner_kahip(), dolfinx.mesh.GhostMode.none
+    )
+    domain, _, _ = geoModel.model_to_mesh(
+        hmax=0.03, meshing_options={"quad_dominated": False}, partitioner=part, gdim=2
+    )
 
 if __name__ == "__main__":
     # test_square_netgen()
