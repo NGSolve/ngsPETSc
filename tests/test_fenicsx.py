@@ -142,7 +142,7 @@ def test_markers(order):
     assert np.isclose(area, np.pi * 0.1**2, atol=tol, rtol=tol)
 
 def test_refine():
-    """Test cell and facet markers."""
+    """Test mesh refinement (with curving)."""
     try:
         from mpi4py import MPI
         import ngsPETSc.utils.fenicsx as ngfx
