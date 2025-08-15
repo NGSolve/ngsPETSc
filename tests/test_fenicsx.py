@@ -1,13 +1,15 @@
-'''
+"""
 This module test the utils.fenicsx class
-'''
+"""
+
 import pytest
 from packaging.version import Version
 
+
 def test_square_netgen():
-    '''
+    """
     Testing FEniCSx interface with Netgen generating a square mesh
-    '''
+    """
     try:
         from mpi4py import MPI
         import ngsPETSc.utils.fenicsx as ngfx
@@ -16,17 +18,19 @@ def test_square_netgen():
         pytest.skip("DOLFINx unavailable, skipping FENICSx test")
 
     from netgen.geom2d import SplineGeometry
+
     geo = SplineGeometry()
-    geo.AddRectangle((0,0),(1,1))
+    geo.AddRectangle((0, 0), (1, 1))
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
-    domain, _, _  = geoModel.model_to_mesh(hmax=0.1)
+    domain, _, _ = geoModel.model_to_mesh(hmax=0.1)
     with XDMFFile(domain.comm, "XDMF/mesh.xdmf", "w") as xdmf:
         xdmf.write_mesh(domain)
 
+
 def test_poisson_netgen():
-    '''
+    """
     Testing FEniCSx interface with Netgen generating a square mesh
-    '''
+    """
     try:
         import numpy as np
         import ufl
@@ -41,24 +45,29 @@ def test_poisson_netgen():
         pytest.skip("DOLFINx unavailable, skipping FENICSx test")
 
     from netgen.geom2d import SplineGeometry
+
     geo = SplineGeometry()
-    geo.AddRectangle((0,0),(np.pi,np.pi))
+    geo.AddRectangle((0, 0), (np.pi, np.pi))
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
-    msh, _, _  = geoModel.model_to_mesh(hmax=0.1)
-    V = fem.functionspace(msh, ("Lagrange", 2)) #pylint: disable=E1120
-    facetsLR = mesh.locate_entities_boundary(msh, dim=(msh.topology.dim - 1),
-             marker=lambda x: np.logical_or(np.isclose(x[0], 0.0),
-             np.isclose(x[0], np.pi)))
-    facetsTB = mesh.locate_entities_boundary(msh, dim=(msh.topology.dim - 1),
-             marker=lambda x: np.logical_or(np.isclose(x[1], 0.0),
-             np.isclose(x[1], np.pi)))
-    facets = np.append(facetsLR,facetsTB)
+    msh, _, _ = geoModel.model_to_mesh(hmax=0.1)
+    V = fem.functionspace(msh, ("Lagrange", 2))  # pylint: disable=E1120
+    facetsLR = mesh.locate_entities_boundary(
+        msh,
+        dim=(msh.topology.dim - 1),
+        marker=lambda x: np.logical_or(np.isclose(x[0], 0.0), np.isclose(x[0], np.pi)),
+    )
+    facetsTB = mesh.locate_entities_boundary(
+        msh,
+        dim=(msh.topology.dim - 1),
+        marker=lambda x: np.logical_or(np.isclose(x[1], 0.0), np.isclose(x[1], np.pi)),
+    )
+    facets = np.append(facetsLR, facetsTB)
     dofs = fem.locate_dofs_topological(V=V, entity_dim=1, entities=facets)
     bc = fem.dirichletbc(value=ScalarType(0), dofs=dofs, V=V)
     u = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
     x = ufl.SpatialCoordinate(msh)
-    f = ufl.exp(ufl.sin(x[0])*ufl.sin(x[1]))
+    f = ufl.exp(ufl.sin(x[0]) * ufl.sin(x[1]))
     a = inner(grad(u), grad(v)) * dx
     L = inner(f, v) * dx
     # Backward compatibility
@@ -66,13 +75,18 @@ def test_poisson_netgen():
         options = {}
     else:
         options = {"petsc_options_prefix": "test_solver"}
-    problem = LinearProblem(a, L, bcs=[bc],
-                            petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
-                            **options)
+    problem = LinearProblem(
+        a,
+        L,
+        bcs=[bc],
+        petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
+        **options,
+    )
 
     problem.solve()
 
-@pytest.mark.parametrize("order", [1,2, 3])
+
+@pytest.mark.parametrize("order", [1, 2, 3])
 def test_markers(order):
     """Test cell and facet markers."""
     try:
@@ -86,7 +100,7 @@ def test_markers(order):
         pytest.skip("DOLFINx unavailable, skipping FENICSx test.")
 
     wp = WorkPlane()
-    square = wp.Rectangle(1,1).Face()
+    square = wp.Rectangle(1, 1).Face()
     disk = wp.Circle(0.2, 0.2, 0.1).Face()
     disk.edges.name = "circle"
     disk.faces.name = "circle"
@@ -95,33 +109,60 @@ def test_markers(order):
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
     gm = dolfinx.mesh.GhostMode.shared_facet
     if dolfinx.has_kahip:
-        partitioner = dolfinx.mesh.create_cell_partitioner(dolfinx.graph.partitioner_kahip(),
-                                                           ghost_mode=gm)
+        partitioner = dolfinx.mesh.create_cell_partitioner(
+            dolfinx.graph.partitioner_kahip(), ghost_mode=gm
+        )
     else:
-        partitioner = dolfinx.mesh.create_cell_partitioner(dolfinx.graph.partitioner_scotch(),
-                                                           ghost_mode=gm)
-    _, (ct, ft), region_map = geoModel.model_to_mesh(hmax=0.01, partitioner=partitioner)
+        partitioner = dolfinx.mesh.create_cell_partitioner(
+            dolfinx.graph.partitioner_scotch(), ghost_mode=gm
+        )
+    mesh, (ct, ft), region_map = geoModel.model_to_mesh(
+        hmax=0.1, partitioner=partitioner
+    )
 
+    steel_circle = region_map[(2, "circle")]
+
+    refined_mesh, (ct_refined, ft_refined) = geoModel.refineMarkedElements(
+        ct.dim, ct.indices[np.isin(ct.values, steel_circle)]
+    )
+
+    with dolfinx.io.XDMFFile(mesh.comm, "XDMF/mesh.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        xdmf.write_meshtags(ct, mesh.geometry)
+        mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
+        xdmf.write_meshtags(ft, mesh.geometry)
+
+    with dolfinx.io.XDMFFile(refined_mesh.comm, "XDMF/refined_mesh.xdmf", "w") as xdmf:
+        xdmf.write_mesh(refined_mesh)
+        xdmf.write_meshtags(ct_refined, refined_mesh.geometry)
+        refined_mesh.topology.create_connectivity(
+            refined_mesh.topology.dim - 1, refined_mesh.topology.dim
+        )
+        xdmf.write_meshtags(ft_refined, refined_mesh.geometry)
+    exit()
     curved_domain = geoModel.curveField(order)
 
     # Integrate over interior marked interface
     dS = ufl.Measure("dS", domain=curved_domain, subdomain_data=ft)
     crack_integer_marker = region_map[(1, "circle")]
-    local_interface = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1*dS(crack_integer_marker)))
+    local_interface = dolfinx.fem.assemble_scalar(
+        dolfinx.fem.form(1 * dS(crack_integer_marker))
+    )
     interface = curved_domain.comm.allreduce(local_interface, op=MPI.SUM)
 
     # Integrate over marked subdomain
     dx = ufl.Measure("dx", domain=curved_domain, subdomain_data=ct)
     steel_circle = region_map[(2, "circle")]
-    local_area = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1*dx(steel_circle)))
+    local_area = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1 * dx(steel_circle)))
     area = curved_domain.comm.allreduce(local_area, op=MPI.SUM)
 
     if order == 1:
         tol = 5e-4
     else:
         tol = 1e-6
-    assert np.isclose(interface, 2*np.pi*0.1, atol=tol, rtol=tol)
-    assert np.isclose(area, np.pi*0.1**2, atol=tol, rtol=tol)
+    assert np.isclose(interface, 2 * np.pi * 0.1, atol=tol, rtol=tol)
+    assert np.isclose(area, np.pi * 0.1**2, atol=tol, rtol=tol)
+
 
 if __name__ == "__main__":
     test_square_netgen()

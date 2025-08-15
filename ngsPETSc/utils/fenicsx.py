@@ -8,6 +8,7 @@ import typing
 import basix.ufl
 import dolfinx
 import numpy as np
+import numpy.typing as npt
 import ufl
 from packaging.version import Version
 from mpi4py import MPI as _MPI
@@ -93,8 +94,38 @@ class GeometricModel:
             ngmesh = meshMap.ngmesh
 
         assert ngmesh.dim in (2, 3), "Only 2D and 3D meshes are supported."
+        regions = self.extract_regions()
+        mesh, ct, ft = self.extract_mesh(gdim=gdim, partitioner=partitioner)
+        return mesh, (ct, ft), regions
 
+    def extract_regions(self):
+        """Extract regions from the Netgen mesh."""
+        ngmesh = self.ngmesh
+        # Create lookup from cells/facets materials to integer tags
+        regions: dict[tuple[int, str], list[int]] = {}
+        # Append facet material
+        for dim in (ngmesh.dim, ngmesh.dim - 1):
+            for name in ngmesh.GetRegionNames(dim=dim):
+                regions[(dim, name)] = []
+            for i, name in enumerate(ngmesh.GetRegionNames(dim=dim)):
+                regions[(dim, name)].append(i + 1)
+
+        for key, value in regions.items():
+            regions[key] = tuple(value)
+        return regions
+
+    def extract_mesh(
+        self,
+        gdim: int,
+        partitioner=dolfinx.mesh.create_cell_partitioner(
+            dolfinx.mesh.GhostMode.shared_facet
+        ),
+    ) -> tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags, dolfinx.mesh.MeshTags]:
+        """
+        Extract a DOLFINx mesh (and correpsonding cell and facet tags) from the Netgen mesh.
+        """
         V, T = None, None
+        ngmesh = self.ngmesh
         if self.comm.rank == self.comm_rank:
             # Applying any PETSc Transform
             # We extract topology and geometry
@@ -127,17 +158,6 @@ class GeometricModel:
             self.comm, cells=T, x=V, e=ufl_domain, partitioner=partitioner
         )
 
-        # Create lookup from cells/facets materials to integer tags
-        regions: dict[tuple[int, str], list[int]] = {}
-        # Append facet material
-        for dim in (ngmesh.dim, ngmesh.dim - 1):
-            for name in ngmesh.GetRegionNames(dim=dim):
-                regions[(dim, name)] = []
-            for i, name in enumerate(ngmesh.GetRegionNames(dim=dim)):
-                regions[(dim, name)].append(i + 1)
-
-        for key, value in regions.items():
-            regions[key] = tuple(value)
         self._mesh = mesh
 
         ct = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim)
@@ -145,10 +165,7 @@ class GeometricModel:
         ft = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim - 1)
         ft.name = "Facet tags"
 
-        self._tags = (ct, ft)
-        self._regions = regions
-
-        return mesh, (ct, ft), regions
+        return mesh, ct, ft
 
     def curveField(
         self, order: int, permutation_tol: float = 1e-8, location_tol: float = 1e-1
@@ -296,6 +313,46 @@ class GeometricModel:
             raise RuntimeError(f"Unsupported dtype for mesh {x.dtype}")
         # Wrap as Python object
         return dolfinx.mesh.Mesh(cpp_mesh, domain=ufl.Mesh(el))
+
+    def refineMarkedElements(
+        self,
+        dim: int,
+        elements: npt.NDArray[np.int32],
+        netgen_flags: dict | None = None,
+    ):
+        """Refine mesh based on marked elements."""
+        netgen_flags = netgen_flags or {}
+        refine_faces = netgen_flags.get("refine_faces", False)
+        gdim = self._mesh.geometry.dim
+        if gdim not in (2, 3):
+            raise RuntimeError("Refinement of 2D and 3D meshes is supported only.")
+        # Gather all the element indices for refinement on rank 0.
+        # Map elements to incidient cells.
+        self._mesh.topology.create_connectivity(dim, self._mesh.topology.dim)
+        local_cells = dolfinx.mesh.compute_incident_entities(
+            self._mesh.topology, elements, dim, self._mesh.topology.dim
+        )
+        igi = self._mesh.topology.original_cell_index[local_cells]
+        gathered_igi = self._mesh.comm.gather(igi, root=self.comm_rank)
+
+        if self._mesh.comm.rank == self.comm_rank:
+            ng_elements = _dim_to_element_wrapper(self.ngmesh)[
+                self._mesh.topology.dim
+            ]()
+            ng_dimension = len(ng_elements)
+            marker = np.zeros(ng_dimension, dtype=np.int8)
+            marker[np.hstack(gathered_igi)] = 1
+            for refine, el in zip(marker, ng_elements, strict=True):
+                if refine:
+                    el.refine = True
+                else:
+                    el.refine = False
+            if not refine_faces and dim == 3:
+                _dim_to_element_wrapper(self.ngmesh)[2]().Numpy()["refine"] = 0
+            self.ngmesh.Refine(adaptive=True)
+        self._mesh.comm.Barrier()
+        mesh, ct, ft = self.extract_mesh(gdim=gdim)
+        return mesh, (ct, ft)
 
 
 def extract_element_tags(
