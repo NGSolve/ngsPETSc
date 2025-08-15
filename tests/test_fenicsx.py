@@ -108,14 +108,7 @@ def test_markers(order):
     geo = OCCGeometry(shape, dim=2)
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
     gm = dolfinx.mesh.GhostMode.shared_facet
-    if dolfinx.has_kahip:
-        partitioner = dolfinx.mesh.create_cell_partitioner(
-            dolfinx.graph.partitioner_kahip(), ghost_mode=gm
-        )
-    else:
-        partitioner = dolfinx.mesh.create_cell_partitioner(
-            dolfinx.graph.partitioner_scotch(), ghost_mode=gm
-        )
+    partitioner = dolfinx.mesh.create_cell_partitioner(gm)
     _, (ct, _), region_map = geoModel.model_to_mesh(
         hmax=0.02, partitioner=partitioner
     )
@@ -177,8 +170,7 @@ def test_refine():
 
     gm = dolfinx.mesh.GhostMode.shared_facet
     partitioner = dolfinx.mesh.create_cell_partitioner(gm)
-
-    mesh, (ct, ft), region_map = geoModel.model_to_mesh(
+    mesh, (_, _), region_map = geoModel.model_to_mesh(
         hmax=0.1, partitioner=partitioner, gdim=3
     )
     # NOTE: IF the following is called, netgen segfaults at curve after refine
@@ -188,7 +180,7 @@ def test_refine():
 
     facets = dolfinx.mesh.locate_entities_boundary(mesh, mesh.topology.dim-1, locate_facets)
 
-    refined_mesh, (ct_refined, ft_refined) = geoModel.refineMarkedElements(
+    refined_mesh, (_, ft_refined) = geoModel.refineMarkedElements(
         mesh.topology.dim-1, facets)
     refined_mesh = geoModel.curveField(2)
 
@@ -202,11 +194,9 @@ def test_refine():
     local_outer = dolfinx.fem.assemble_scalar(outer_area)
     inner = refined_mesh.comm.allreduce(local_inner, op=MPI.SUM)
     outer = refined_mesh.comm.allreduce(local_outer, op=MPI.SUM)
-    tol = 1e-4
+    tol = 5e-5
     assert np.isclose(vol, 4/3*np.pi*radius0**3 - 4/3*np.pi*radius1**3)
-    print(inner, 4*np.pi*radius1**2, inner-4*np.pi*radius1**2)
     assert np.isclose(inner, 4*np.pi*radius1**2, rtol=tol)
-    print(outer, 4*np.pi*radius0**2, outer-4*np.pi*radius0**2)
     assert np.isclose(outer, 4*np.pi*radius0**2, rtol=tol)
 
 

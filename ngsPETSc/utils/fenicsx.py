@@ -160,7 +160,7 @@ class GeometricModel:
         return mesh, ct, ft
 
     def curveField(
-        self, order: int, permutation_tol: float = 1e-8, location_tol: float = 1e-1
+        self, order: int, permutation_tol: float = 1e-8, location_tol: float = 1e-10
     ):
         """
         This method returns a curved mesh as a Firedrake function.
@@ -190,7 +190,7 @@ class GeometricModel:
         reference_space_points = np.vstack(reference_space_points)
 
         # Curve the mesh on rank 0 only
-        if self.comm.rank == 0:
+        if self.comm.rank == self.comm_rank:
             # Construct numpy arrays for physical domain data
             physical_space_points = np.zeros(
                 (ng_dimension, reference_space_points.shape[0], geom_dim)
@@ -205,11 +205,11 @@ class GeometricModel:
             self.ngmesh.CalcElementMapping(reference_space_points, curved_space_points)
             curved = ng_element().NumPy()["curved"]
             # Broadcast a boolean array identifying curved cells
-            curved = self.comm.bcast(curved, root=0)
+            curved = self.comm.bcast(curved, root=self.comm_rank)
             physical_space_points = physical_space_points[curved]
             curved_space_points = curved_space_points[curved]
         else:
-            curved = self.comm.bcast(None, root=0)
+            curved = self.comm.bcast(None, root=self.comm_rank)
             # Construct numpy arrays as buffers to receive physical domain data
             ncurved = np.sum(curved)
             physical_space_points = np.zeros(
@@ -220,8 +220,8 @@ class GeometricModel:
             )
 
         # Broadcast curved cell point data
-        self.comm.Bcast(physical_space_points, root=0)
-        self.comm.Bcast(curved_space_points, root=0)
+        self.comm.Bcast(physical_space_points, root=self.comm_rank)
+        self.comm.Bcast(curved_space_points, root=self.comm_rank)
 
         # Get coordinates of higher order space on linarized geometry
         X_space = dolfinx.fem.functionspace(self._mesh, el)
@@ -275,6 +275,7 @@ class GeometricModel:
             permutation = np.zeros(
                 (0, padded_physical_space_points.shape[1]), dtype=np.int64
             )
+
         # Apply the permutation to each cell in turn
         if len(owned_cells) > 0:
             for ii, p in enumerate(curved_space_points[owned_pos]):
