@@ -135,32 +135,60 @@ class GeometricModel:
         sorted_index = np.argsort(number_of_vertices)
         offset = number_of_vertices[sorted_index[1:]]-number_of_vertices[sorted_index[:-1]]
         cell_boundaries = np.flatnonzero(offset)+1
-        breakpoint()
-        assert len(cell_boundaries) == 1, "Only two different cell types are expected in a 2D grid."
-
-
+        if len(cell_boundaries) == 0:
+            mixed_mesh = False
+            split = -1
+        else:
+            mixed_mesh = True
+            assert len(cell_boundaries) == 1, "Only two different cell types are expected in a 2D grid."
+            split = cell_boundaries[0]
         
         if self.comm.rank == self.comm_rank:
             # Applying any PETSc Transform
             # We extract topology and geometry
             V = ngmesh.Coordinates()
-            if Version(np.__version__) >= Version("2.2"):
-                T = np.trim_zeros(T, "b", axis=1).astype(np.int64) - 1
+
+            if mixed_mesh:
+                num_points_per_cell = [number_of_vertices[sorted_index[0]], number_of_vertices[sorted_index[cell_boundaries[0]]]]
+                cell_offsets = np.array([0, num_points_per_cell[1]+1, elements_as_numpy.shape[0]])
+                _T = []
+                for i in range(len(num_points_per_cell)):
+                    if Version(np.__version__) >= Version("2.2"):
+                        _T.append(np.trim_zeros(T[cell_offsets[i]:cell_offsets[i+1]], "b", axis=1).astype(np.int64) - 1)
+                    else:
+                        _T.append(
+                            np.array(
+                                [list(np.trim_zeros(a, "b")) for a in list(T[cell_offsets[i]:cell_offsets[i+1]])],
+                                dtype=np.int64,
+                            ) - 1
+                            
+                        )
+
+                T = _T
+
+
+                breakpoint()
+                pass
             else:
+                if Version(np.__version__) >= Version("2.2"):
+                    T = np.trim_zeros(T, "b", axis=1).astype(np.int64) - 1
+                else:
 
 
-                T = (
-                    np.array(
-                        [list(np.trim_zeros(a, "b")) for a in list(T)],
-                        dtype=np.int64,
+                    T = (
+                        np.array(
+                            [list(np.trim_zeros(a, "b")) for a in list(T)],
+                            dtype=np.int64,
+                        )
+                        - 1
                     )
-                    - 1
-                )
         else:
-            # NOTE: For mixed meshes and or non-simplex meshes, this must change
-            V = np.zeros((0, ngmesh.dim), dtype=np.float64)
-            T = np.zeros((0, ngmesh.dim + 1), dtype=np.int64)
-
+            if mixed_mesh:
+                pass
+            else:
+                V = np.zeros((0, 3), dtype=np.float64)
+                T = np.zeros((0, number_of_vertices[0]), dtype=np.int64)
+        
         ufl_domain = dolfinx.io.gmshio.ufl_mesh(
             _ngs_to_cells[(gdim, T.shape[1])], gdim, dolfinx.default_real_type
         )
@@ -169,7 +197,7 @@ class GeometricModel:
         T = T[:, dolfinx.cpp.io.perm_vtk(dolfinx.mesh.to_type(cell_str), T.shape[1])]
 
         mesh = dolfinx.mesh.create_mesh(
-            self.comm, cells=T, x=V, e=ufl_domain, partitioner=partitioner
+            self.comm, cells=T, x=V[:,:gdim], e=ufl_domain, partitioner=partitioner
         )
         self._mesh = mesh
 
@@ -177,7 +205,6 @@ class GeometricModel:
         ct.name = "Cell tags"
         ft = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim - 1)
         ft.name = "Facet tags"
-
         return mesh, ct, ft
 
     def curveField(

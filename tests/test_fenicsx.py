@@ -210,6 +210,7 @@ def test_mixed():
     """
     try:
         from mpi4py import MPI
+        import dolfinx
         import ngsPETSc.utils.fenicsx as ngfx
     except ImportError:
         pytest.skip("DOLFINx unavailable, skipping FENICSx test")
@@ -218,12 +219,13 @@ def test_mixed():
 
     geo = SplineGeometry()
     geo.AddCircle((0, 0), 1)
+    #geo.AddRectangle((0,0),(1,1))
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
     domain, _, _ = geoModel.model_to_mesh(hmax=0.1, meshing_options={"quad_dominated": True})
-    import dolfinx
-    with dolfinx.io.XDMFFile(domain.comm, "XDMF/mesh.xdmf", "w") as xdmf:
+    print(domain.comm.rank, domain.comm.size, domain.topology.index_map(2).size_global,  flush=True)
+    with dolfinx.io.XDMFFile(domain.comm, "mesh.xdmf", "w") as xdmf:
         xdmf.write_mesh(domain)
-
+    print("aihfao", flush=True)
 
 if __name__ == "__main__":
     # test_square_netgen()
