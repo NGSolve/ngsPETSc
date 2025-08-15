@@ -117,8 +117,9 @@ def test_markers(order):
             dolfinx.graph.partitioner_scotch(), ghost_mode=gm
         )
     mesh, (ct, ft), region_map = geoModel.model_to_mesh(
-        hmax=0.1, partitioner=partitioner
+        hmax=0.02, partitioner=partitioner
     )
+    curved_domain = geoModel.curveField(order)
 
     steel_circle = region_map[(2, "circle")]
 
@@ -140,10 +141,9 @@ def test_markers(order):
     #         curved_domain.topology.dim - 1, curved_domain.topology.dim
     #     )
     #     xdmf.write_meshtags(ft_refined, curved_domain.geometry)
-    curved_domain = geoModel.curveField(order)
 
     # Integrate over interior marked interface
-    dS = ufl.Measure("dS", domain=curved_domain, subdomain_data=ft)
+    dS = ufl.Measure("dS", domain=curved_domain, subdomain_data=ft_refined)
     crack_integer_marker = region_map[(1, "circle")]
     local_interface = dolfinx.fem.assemble_scalar(
         dolfinx.fem.form(1 * dS(crack_integer_marker))
@@ -151,7 +151,7 @@ def test_markers(order):
     interface = curved_domain.comm.allreduce(local_interface, op=MPI.SUM)
 
     # Integrate over marked subdomain
-    dx = ufl.Measure("dx", domain=curved_domain, subdomain_data=ct)
+    dx = ufl.Measure("dx", domain=curved_domain, subdomain_data=ct_refined)
     steel_circle = region_map[(2, "circle")]
     local_area = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1 * dx(steel_circle)))
     area = curved_domain.comm.allreduce(local_area, op=MPI.SUM)
@@ -160,11 +160,103 @@ def test_markers(order):
         tol = 5e-4
     else:
         tol = 1e-6
+    print(interface, 2 * np.pi * 0.1, interface - 2*np.pi*0.1)
     assert np.isclose(interface, 2 * np.pi * 0.1, atol=tol, rtol=tol)
     assert np.isclose(area, np.pi * 0.1**2, atol=tol, rtol=tol)
 
+def test_refine():
+    """Test cell and facet markers."""
+    try:
+        from mpi4py import MPI
+        import ngsPETSc.utils.fenicsx as ngfx
+        import dolfinx
+        import ufl
+        from netgen.occ import OCCGeometry, Glue
+        from netgen.csg import Sphere, Pnt, CSGeometry
+        import numpy as np
+    except ImportError:
+        pytest.skip("DOLFINx unavailable, skipping FENICSx test.")
+
+    center0 = Pnt(0,0,0)
+    center1 = Pnt(0.2,0.2,0)
+    radius0 = 1
+    radius1 = 0.3
+    sphere0 = Sphere(center0, radius0)
+    sphere0.bc("Outer")
+    sphere0.mat("Material")
+    sphere1 = Sphere(center1, radius1)
+    sphere1.bc("Inner")
+    shape = sphere0 - sphere1
+    geo = CSGeometry()
+    geo.Add(shape)
+
+    geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
+
+    gm = dolfinx.mesh.GhostMode.shared_facet
+    partitioner = dolfinx.mesh.create_cell_partitioner(ghost_mode=gm)
+
+    mesh, (ct, ft), region_map = geoModel.model_to_mesh(
+        hmax=0.25, partitioner=partitioner, gdim=3
+    )
+    # NOTE: IF I call this first, netgen segfaults at second refine
+    #mesh = geoModel.curveField(2)
+    with dolfinx.io.XDMFFile(mesh.comm, "XDMF/mesh.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        xdmf.write_meshtags(ct, mesh.geometry)
+        mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
+        xdmf.write_meshtags(ft, mesh.geometry)
+
+    def locate_facets(x):
+        return np.isclose(x[0]**2 + x[1]**2 + x[2]**2, radius0)
+
+    facets = dolfinx.mesh.locate_entities_boundary(mesh, mesh.topology.dim-1, locate_facets)
+
+    refined_mesh, (ct_refined, ft_refined) = geoModel.refineMarkedElements(
+        mesh.topology.dim-1, facets)
+    refined_mesh = geoModel.curveField(2)
+
+    with dolfinx.io.XDMFFile(mesh.comm, "XDMF/refinedmesh.xdmf", "w") as xdmf:
+        xdmf.write_mesh(refined_mesh)
+        xdmf.write_meshtags(ct_refined, refined_mesh.geometry)
+        refined_mesh.topology.create_connectivity(refined_mesh.topology.dim - 1, refined_mesh.topology.dim)
+        xdmf.write_meshtags(ft_refined, refined_mesh.geometry)
+
+    ref_volume = 4/3*np.pi*radius0**3 - 4/3*np.pi*radius1**3
+
+    local_vol = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1*ufl.dx(domain=refined_mesh)))
+    vol = refined_mesh.comm.allreduce(local_vol, op=MPI.SUM)
+    print(vol-ref_volume)
+    assert np.isclose(vol, ref_volume)
+
+    print(region_map)
+
+
+    # # Integrate over interior marked interface
+    # dS = ufl.Measure("dS", domain=curved_domain, subdomain_data=ft)
+    # crack_integer_marker = region_map[(1, "circle")]
+    # local_interface = dolfinx.fem.assemble_scalar(
+    #     dolfinx.fem.form(1 * dS(crack_integer_marker))
+    # )
+    # interface = curved_domain.comm.allreduce(local_interface, op=MPI.SUM)
+
+    # # Integrate over marked subdomain
+    # dx = ufl.Measure("dx", domain=curved_domain, subdomain_data=ct)
+    # steel_circle = region_map[(2, "circle")]
+    # local_area = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1 * dx(steel_circle)))
+    # area = curved_domain.comm.allreduce(local_area, op=MPI.SUM)
+
+    # if order == 1:
+    #     tol = 5e-4
+    # else:
+    #     tol = 1e-6
+    # assert np.isclose(interface, 2 * np.pi * 0.1, atol=tol, rtol=tol)
+    # assert np.isclose(area, np.pi * 0.1**2, atol=tol, rtol=tol)
+
+
+
 
 if __name__ == "__main__":
-    test_square_netgen()
-    test_poisson_netgen()
+    # test_square_netgen()
+    # test_poisson_netgen()
     test_markers(2)
+    #test_refine()
