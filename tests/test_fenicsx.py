@@ -125,21 +125,21 @@ def test_markers(order):
     refined_mesh, (ct_refined, ft_refined) = geoModel.refineMarkedElements(
         ct.dim, ct.indices[np.isin(ct.values, steel_circle)]
     )
+    curved_domain = geoModel.curveField(order)
 
-    with dolfinx.io.XDMFFile(mesh.comm, "XDMF/mesh.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(ct, mesh.geometry)
-        mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
-        xdmf.write_meshtags(ft, mesh.geometry)
+    # with dolfinx.io.XDMFFile(mesh.comm, "XDMF/mesh.xdmf", "w") as xdmf:
+    #     xdmf.write_mesh(mesh)
+    #     xdmf.write_meshtags(ct, mesh.geometry)
+    #     mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
+    #     xdmf.write_meshtags(ft, mesh.geometry)
 
-    with dolfinx.io.XDMFFile(refined_mesh.comm, "XDMF/refined_mesh.xdmf", "w") as xdmf:
-        xdmf.write_mesh(refined_mesh)
-        xdmf.write_meshtags(ct_refined, refined_mesh.geometry)
-        refined_mesh.topology.create_connectivity(
-            refined_mesh.topology.dim - 1, refined_mesh.topology.dim
-        )
-        xdmf.write_meshtags(ft_refined, refined_mesh.geometry)
-    exit()
+    # with dolfinx.io.XDMFFile(curved_domain.comm, "XDMF/refined_mesh.xdmf", "w") as xdmf:
+    #     xdmf.write_mesh(curved_domain)
+    #     xdmf.write_meshtags(ct_refined, curved_domain.geometry)
+    #     curved_domain.topology.create_connectivity(
+    #         curved_domain.topology.dim - 1, curved_domain.topology.dim
+    #     )
+    #     xdmf.write_meshtags(ft_refined, curved_domain.geometry)
     curved_domain = geoModel.curveField(order)
 
     # Integrate over interior marked interface
