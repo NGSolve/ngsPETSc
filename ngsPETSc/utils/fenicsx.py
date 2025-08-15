@@ -1,18 +1,31 @@
-'''
+"""
 This module contains all the functions related to wrapping NGSolve meshes to FEniCSx
 We adopt the same docstring conventiona as the FEniCSx project, since this part of
 the package will only be used in combination with FEniCSx.
-'''
+"""
+
 import typing
+import basix.ufl
 import dolfinx
 import numpy as np
+import numpy.typing as npt
+import ufl
 from packaging.version import Version
 from mpi4py import MPI as _MPI
-
+from ngsPETSc.utils.utils import find_permutation
 from ngsPETSc import MeshMapping
 
 # Map from Netgen cell type (integer tuple) to GMSH cell type
-_ngs_to_cells = {(2,3): 2, (2,4):3, (3,4): 4}
+_ngs_to_cells = {(2, 3): 2, (2, 4): 3, (3, 4): 4}
+
+
+def _dim_to_element_wrapper(ngmesh: typing.Any) -> dict[int, typing.Any]:
+    """Convenience wrapper to extract elements from a NetGen mesh based on topological dimension"""
+    return {
+        1: ngmesh.Elements1D,
+        2: ngmesh.Elements2D,
+        3: ngmesh.Elements3D,
+    }
 
 
 class GeometricModel:
@@ -22,23 +35,29 @@ class GeometricModel:
             geo: The Netgen model
             comm: The MPI communicator to use for mesh creation
     """
-    def __init__(self,geo, comm: _MPI.Comm, comm_rank:int = 0):
+
+    def __init__(self, geo, comm: _MPI.Comm, comm_rank: int = 0):
         self.geo = geo
         self.comm = comm
         self.comm_rank = comm_rank
 
-    def model_to_mesh(self, hmax: float, gdim: int = 2,
+    def model_to_mesh(
+        self,
+        hmax: float,
+        gdim: int = 2,
         partitioner: typing.Callable[
-        [_MPI.Comm, int, int, dolfinx.cpp.graph.AdjacencyList_int32],
-        dolfinx.cpp.graph.AdjacencyList_int32] =
-        dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.shared_facet),
-        transform: typing.Any = None, routine: typing.Any = None
-        ) -> tuple[dolfinx.mesh.Mesh, tuple[dolfinx.mesh.MeshTags,dolfinx.mesh.MeshTags],
-                   dict[tuple[int, str], tuple[int, ...]]]:
+            [_MPI.Comm, int, int, dolfinx.cpp.graph.AdjacencyList_int32],
+            dolfinx.cpp.graph.AdjacencyList_int32,
+        ] = dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.shared_facet),
+        transform: typing.Any = None,
+        routine: typing.Any = None,
+    ) -> tuple[
+        dolfinx.mesh.Mesh,
+        tuple[dolfinx.mesh.MeshTags, dolfinx.mesh.MeshTags],
+        dict[tuple[int, str], tuple[int, ...]],
+    ]:
         """Given a NetGen model, take all physical entities of the highest
-        topological dimension and create the corresponding DOLFINx mesh.
-
-        This function only works in serial, at the moment.
+        topological dimension and create the corresponding linear DOLFINx mesh.
 
         Args:
             hmax: The maximum diameter of the elements in the triangulation
@@ -73,18 +92,43 @@ class GeometricModel:
             ngmesh = meshMap.ngmesh
 
         assert ngmesh.dim in (2, 3), "Only 2D and 3D meshes are supported."
-        _dim_to_element_wrapper = {
-            1: ngmesh.Elements1D,
-            2: ngmesh.Elements2D,
-            3: ngmesh.Elements3D}
+        regions = self.extract_regions()
+        mesh, ct, ft = self.extract_linear_mesh(gdim=gdim, partitioner=partitioner)
+        return mesh, (ct, ft), regions
 
+    def extract_regions(self):
+        """Extract regions from the Netgen mesh."""
+        ngmesh = self.ngmesh
+        # Create lookup from cells/facets materials to integer tags
+        regions: dict[tuple[int, str], list[int]] = {}
+        # Append facet material
+        for dim in (ngmesh.dim, ngmesh.dim - 1):
+            for name in ngmesh.GetRegionNames(dim=dim):
+                regions[(dim, name)] = []
+            for i, name in enumerate(ngmesh.GetRegionNames(dim=dim)):
+                regions[(dim, name)].append(i + 1)
+
+        for key, value in regions.items():
+            regions[key] = tuple(value)
+        return regions
+
+    def extract_linear_mesh(
+        self,
+        gdim: int,
+        partitioner=dolfinx.mesh.create_cell_partitioner(
+            dolfinx.mesh.GhostMode.shared_facet
+        ),
+    ) -> tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags, dolfinx.mesh.MeshTags]:
+        """
+        Extract a DOLFINx mesh (and correpsonding cell and facet tags) from the Netgen mesh.
+        """
         V, T = None, None
+        ngmesh = self.ngmesh
         if self.comm.rank == self.comm_rank:
-
             # Applying any PETSc Transform
             # We extract topology and geometry
             V = ngmesh.Coordinates()
-            T = _dim_to_element_wrapper[ngmesh.dim]().NumPy()["nodes"]
+            T = _dim_to_element_wrapper(ngmesh)[ngmesh.dim]().NumPy()["nodes"]
             if Version(np.__version__) >= Version("2.2"):
                 T = np.trim_zeros(T, "b", axis=1).astype(np.int64) - 1
             else:
@@ -96,80 +140,272 @@ class GeometricModel:
                     - 1
                 )
         else:
-            # NOTE: For mixed meshes, this must change
+            # NOTE: For mixed meshes and or non-simplex meshes, this must change
             V = np.zeros((0, ngmesh.dim), dtype=np.float64)
-            T = np.zeros((0, ngmesh.dim+1), dtype=np.int64)
+            T = np.zeros((0, ngmesh.dim + 1), dtype=np.int64)
 
-        # NOTE: Here we should curve meshes
         ufl_domain = dolfinx.io.gmshio.ufl_mesh(
-            _ngs_to_cells[(gdim,T.shape[1])], gdim, dolfinx.default_real_type)
-        cell_perm = dolfinx.cpp.io.perm_gmsh(dolfinx.cpp.mesh.to_type(str(ufl_domain.ufl_cell())),
-                                             T.shape[1])
-        T = np.ascontiguousarray(T[:, cell_perm])
-        mesh = dolfinx.mesh.create_mesh(self.comm, cells=T, x=V, e=ufl_domain,
-                                        partitioner=partitioner)
-
-        if self.comm.rank == self.comm_rank:
-            cell_values = _dim_to_element_wrapper[ngmesh.dim]().NumPy()["index"].astype(np.int32)
-        else:
-            cell_values = np.zeros((0,), dtype=np.int32)
-
-        local_entities, local_values = dolfinx.io.gmshio.distribute_entity_data(
-            mesh, mesh.topology.dim, T, cell_values)
-        adj_cells = dolfinx.graph.adjacencylist(local_entities)
-        ct = dolfinx.mesh.meshtags_from_entities(
-            mesh,
-            mesh.topology.dim,
-            adj_cells,
-            local_values,
+            _ngs_to_cells[(gdim, T.shape[1])], gdim, dolfinx.default_real_type
         )
+        mesh = dolfinx.mesh.create_mesh(
+            self.comm, cells=T, x=V, e=ufl_domain, partitioner=partitioner
+        )
+        self._mesh = mesh
+
+        ct = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim)
         ct.name = "Cell tags"
-
-        # Create lookup from cells/facets materials to integer tags
-        regions: dict[tuple[int, str], list[int]] = {}
-        # Append facet material
-        for dim in (ngmesh.dim, ngmesh.dim - 1):
-            for name in ngmesh.GetRegionNames(dim=dim):
-                regions[(dim, name)] = []
-            for i, name in enumerate(ngmesh.GetRegionNames(dim=dim)):
-                regions[(dim, name)].append(i + 1)
-
-
-        if self.comm.rank == self.comm_rank:
-
-            ng_facets = _dim_to_element_wrapper[ngmesh.dim-1]()
-            facet_indices = ng_facets.NumPy()["nodes"].astype(np.int64)
-            if Version(np.__version__) >= Version("2.2"):
-                facets = np.trim_zeros(facet_indices, "b", axis=1).astype(np.int64) - 1
-            else:
-                facets = (
-                    np.array(
-                        [list(np.trim_zeros(a, "b")) for a in list(facet_indices)],
-                        dtype=np.int64,
-                    )
-                    - 1
-                )
-            # Can't use the vectorized version, due to a bug in ngsolve:
-            # https://forum.ngsolve.org/t/extract-facet-markers-from-netgen-mesh/3256
-            facet_values = np.array([facet.index for facet in ng_facets], dtype=np.int32)
-        else:
-            # NOTE: Mixed meshes on non-simplex geometries requires changes
-            facets = np.zeros((0, ngmesh.dim), dtype=np.int64)
-            facet_values = np.zeros((0,), dtype=np.int32)
-
-        local_entities, local_values = dolfinx.io.gmshio.distribute_entity_data(
-            mesh, mesh.topology.dim - 1, facets, facet_values
-        )
-        mesh.topology.create_connectivity(mesh.topology.dim - 1, 0)
-        adj = dolfinx.graph.adjacencylist(local_entities)
-        ft = dolfinx.mesh.meshtags_from_entities(
-            mesh,
-            mesh.topology.dim - 1,
-            adj,
-            local_values,
-        )
+        ft = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim - 1)
         ft.name = "Facet tags"
 
-        for key, value in regions.items():
-            regions[key] = tuple(value)
-        return mesh, (ct, ft), regions
+        return mesh, ct, ft
+
+    def curveField(
+        self, order: int, permutation_tol: float = 1e-8, location_tol: float = 1e-10
+    ):
+        """
+        This method returns a curved mesh as a Firedrake function.
+
+        :arg order: the order of the curved mesh.
+        :arg permutation_tol: tolerance used to construct the permutation of the reference element.
+        :arg location_tol: tolerance used to locate the cell a point belongs to.
+        """
+        if self._mesh.geometry.cmap.degree == order:
+            return self._mesh
+
+        dim_to_element_getter = _dim_to_element_wrapper(self.ngmesh)
+        ng_element = dim_to_element_getter[self.ngmesh.dim]
+        ng_dimension = len(ng_element())  # Number of cells in NGS grid (on any rank)
+        geom_dim = self.ngmesh.dim
+
+        el = basix.ufl.element(
+            "Lagrange", self._mesh.basix_cell(), order, shape=(geom_dim,)
+        )
+
+        rsp = el.basix_element.x  # NOTE: FIX empty points in basix nanobind wrapper
+        reference_space_points = []
+        for lin in rsp:
+            if len(lin) != 0:
+                reference_space_points.append(np.vstack(lin))
+        reference_space_points = np.vstack(reference_space_points)
+
+        # Curve the mesh on rank 0 only
+        if self.comm.rank == self.comm_rank:
+            # Construct numpy arrays for physical domain data
+            physical_space_points = np.zeros(
+                (ng_dimension, reference_space_points.shape[0], geom_dim)
+            )
+            curved_space_points = np.zeros(
+                (ng_dimension, reference_space_points.shape[0], geom_dim)
+            )
+            self.ngmesh.CalcElementMapping(
+                reference_space_points, physical_space_points
+            )
+            self.ngmesh.Curve(order)
+            self.ngmesh.CalcElementMapping(reference_space_points, curved_space_points)
+            curved = ng_element().NumPy()["curved"]
+            # Broadcast a boolean array identifying curved cells
+            curved = self.comm.bcast(curved, root=self.comm_rank)
+            physical_space_points = physical_space_points[curved]
+            curved_space_points = curved_space_points[curved]
+        else:
+            curved = self.comm.bcast(None, root=self.comm_rank)
+            # Construct numpy arrays as buffers to receive physical domain data
+            ncurved = np.sum(curved)
+            physical_space_points = np.zeros(
+                (ncurved, reference_space_points.shape[0], geom_dim)
+            )
+            curved_space_points = np.zeros(
+                (ncurved, reference_space_points.shape[0], geom_dim)
+            )
+
+        # Broadcast curved cell point data
+        self.comm.Bcast(physical_space_points, root=self.comm_rank)
+        self.comm.Bcast(curved_space_points, root=self.comm_rank)
+
+        # Get coordinates of higher order space on linarized geometry
+        X_space = dolfinx.fem.functionspace(self._mesh, el)
+        x = X_space.tabulate_dof_coordinates()  # Shape (num_nodes, 3)
+        cell_map = self._mesh.topology.index_map(self._mesh.topology.dim)
+        num_cells_owned = cell_map.size_local + cell_map.num_ghosts
+        cell_node_map = X_space.dofmap.list[:num_cells_owned]
+        new_coordinates = x[cell_node_map]
+
+        # Collision detection of barycenter of cell
+        psp_shape = physical_space_points.shape
+        padded_physical_space_points = np.zeros(
+            (psp_shape[0], psp_shape[1], 3), dtype=physical_space_points.dtype
+        )
+        padded_physical_space_points[:, :, :geom_dim] = physical_space_points
+
+        # Barycenters of curved cells (exists on all processes)
+        barycentres = np.average(padded_physical_space_points, axis=1)
+
+        # Create bounding box for function evaluation
+        bb_tree = dolfinx.geometry.bb_tree(
+            self._mesh,
+            self._mesh.topology.dim,
+            np.arange(num_cells_owned, dtype=np.int32),
+            padding=location_tol,
+        )
+
+        # Check against standard table value
+        cell_candidates = dolfinx.geometry.compute_collisions_points(
+            bb_tree, barycentres
+        )
+        owned = dolfinx.geometry.compute_colliding_cells(
+            self._mesh, cell_candidates, barycentres
+        )
+        owned_pos = np.flatnonzero(owned.offsets[1:] - owned.offsets[:-1])
+        owned_cells = owned.array
+        assert len(owned_cells) == len(owned_pos)
+
+        # NOTE: There should be an algorithm for this
+        # Find the correct coordinate permutation for each cell
+        if len(owned_pos) > 0:
+            owned_psp = padded_physical_space_points[owned_pos]
+            permutation = find_permutation(
+                owned_psp,
+                new_coordinates[owned_cells]
+                .reshape(owned_psp.shape)
+                .astype(self._mesh.geometry.x.dtype, copy=False),
+                tol=permutation_tol,
+            )
+        else:
+            permutation = np.zeros(
+                (0, padded_physical_space_points.shape[1]), dtype=np.int64
+            )
+
+        # Apply the permutation to each cell in turn
+        if len(owned_cells) > 0:
+            for ii, p in enumerate(curved_space_points[owned_pos]):
+                curved_space_points[owned_pos[ii]] = p[permutation[ii]]
+            # Assign the curved coordinates to the dat
+            x[cell_node_map[owned_cells].flatten(), :geom_dim] = curved_space_points[
+                owned_pos
+            ].reshape(-1, geom_dim)
+
+        # Use topology from original mesh
+        topology = self._mesh.topology
+        # Use geometry from function_space
+        c_el = dolfinx.fem.coordinate_element(el.basix_element)  #  pylint: disable=E1120
+        geom_imap = X_space.dofmap.index_map
+        local_node_indices = np.arange(
+            geom_imap.size_local + geom_imap.num_ghosts, dtype=np.int32
+        )
+        igi = geom_imap.local_to_global(local_node_indices)
+        geometry = dolfinx.mesh.create_geometry(
+            geom_imap, cell_node_map, c_el._cpp_object, x[:, :geom_dim].copy(), igi
+        )
+
+        # Create DOLFINx mesh
+        if x.dtype == np.float64:
+            cpp_mesh = dolfinx.cpp.mesh.Mesh_float64(
+                self._mesh.comm, topology._cpp_object, geometry._cpp_object
+            )
+        else:
+            raise RuntimeError(f"Unsupported dtype for mesh {x.dtype}")
+        # Wrap as Python object
+        return dolfinx.mesh.Mesh(cpp_mesh, domain=ufl.Mesh(el))
+
+    def refineMarkedElements(
+        self,
+        dim: int,
+        elements: npt.NDArray[np.int32],
+        netgen_flags: dict | None = None,
+    ):
+        """Refine mesh based on marked elements."""
+        netgen_flags = netgen_flags or {}
+        refine_faces = netgen_flags.get("refine_faces", False)
+        gdim = self._mesh.geometry.dim
+        if gdim not in (2, 3):
+            raise RuntimeError("Refinement of 2D and 3D meshes is supported only.")
+        # Gather all the element indices for refinement on rank 0.
+        # Map elements to incidient cells.
+        self._mesh.topology.create_connectivity(dim, self._mesh.topology.dim)
+        local_cells = dolfinx.mesh.compute_incident_entities(
+            self._mesh.topology, elements, dim, self._mesh.topology.dim
+        )
+        igi = self._mesh.topology.original_cell_index[local_cells]
+        gathered_igi = self._mesh.comm.gather(igi, root=self.comm_rank)
+
+        if self._mesh.comm.rank == self.comm_rank:
+            ng_elements = _dim_to_element_wrapper(self.ngmesh)[
+                self._mesh.topology.dim
+            ]()
+            ng_dimension = len(ng_elements)
+            marker = np.zeros(ng_dimension, dtype=np.int8)
+            marker[np.hstack(gathered_igi)] = 1
+            for refine, el in zip(marker, ng_elements, strict=True):
+                if refine:
+                    el.refine = True
+                else:
+                    el.refine = False
+            if not refine_faces and dim == 3:
+                _dim_to_element_wrapper(self.ngmesh)[2]().Numpy()["refine"] = 0
+            self.ngmesh.Refine(adaptive=True)
+        self.ngmesh.Curve(1)  # Reset mesh to be linear
+
+        self._mesh.comm.Barrier()
+        mesh, ct, ft = self.extract_linear_mesh(gdim=gdim)
+        return mesh, (ct, ft)
+
+
+def extract_element_tags(
+    comm_rank: int, ngmesh, dolfinx_mesh: dolfinx.mesh.Mesh, dim: int
+) -> dolfinx.mesh.MeshTags:
+    """
+    Extract element tags from a Netgen mesh (on a given MPI rank) and distribute them onto
+    the corresponding DOLFINx mesh.
+
+    Args:
+        comm_rank: The MPI rank to extract the element from.
+        ngmesh: The Netgen mesh object.
+        dolfinx_mesh: The DOLFINx mesh to which the facet tags will be distributed to.
+        dim: The topological dimension of the entities to extract.
+    """
+    tdim = dolfinx_mesh.topology.dim
+    assert ngmesh.dim == tdim, f"Mismatch: ({ngmesh.dim=}!={tdim=})"
+    assert dolfinx_mesh.geometry.cmap.degree == 1, "Can only extract element tags from linear grids"
+    comm = dolfinx_mesh.comm
+    sub_entities = basix.cell.subentity_types(dolfinx_mesh.basix_cell())[dim]
+    assert len(np.unique(sub_entities)) == 1, "Only one subentity type is supported"
+    entity_type = dolfinx.mesh.to_type(sub_entities[0].name)
+    num_vertices_per_cell = dolfinx.cpp.mesh.cell_num_vertices(entity_type)
+    if comm.rank == comm_rank:
+        ng_entities = _dim_to_element_wrapper(ngmesh)[dim]()
+        element_indices = ng_entities.NumPy()["nodes"].astype(np.int64)
+        if Version(np.__version__) >= Version("2.2"):
+            entitites = np.trim_zeros(element_indices, "b", axis=1).astype(np.int64) - 1
+        else:
+            entitites = (
+                np.array(
+                    [list(np.trim_zeros(a, "b")) for a in list(element_indices)],
+                    dtype=np.int64,
+                )
+                - 1
+            )
+        if dim == dolfinx_mesh.topology.dim:
+            entity_markers = ng_entities.NumPy()["index"].astype(np.int32)
+        else:
+            # Can't use the vectorized version, due to a bug in ngsolve:
+            # https://forum.ngsolve.org/t/extract-facet-markers-from-netgen-mesh/3256
+            entity_markers = np.array(
+                [entity.index for entity in ng_entities], dtype=np.int32
+            )
+    else:
+        # NOTE: Mixed meshes on non-simplex geometries requires changes
+        entitites = np.zeros((0, num_vertices_per_cell), dtype=np.int64)
+        entity_markers = np.zeros((0,), dtype=np.int32)
+
+    local_entities, local_values = dolfinx.io.gmshio.distribute_entity_data(
+        dolfinx_mesh, dim, entitites, entity_markers
+    )
+    dolfinx_mesh.topology.create_connectivity(dim, 0)
+    adj = dolfinx.graph.adjacencylist(local_entities)
+    meshtag = dolfinx.mesh.meshtags_from_entities(
+        dolfinx_mesh,
+        dim,
+        adj,
+        local_values,
+    )
+    return meshtag
