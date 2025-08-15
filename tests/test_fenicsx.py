@@ -141,7 +141,8 @@ def test_markers(order):
     assert np.isclose(interface, 2 * np.pi * 0.1, atol=tol, rtol=tol)
     assert np.isclose(area, np.pi * 0.1**2, atol=tol, rtol=tol)
 
-def test_refine():
+@pytest.mark.parametrize("order", [1, 2, 3])
+def test_refine(order):
     """Test mesh refinement (with curving)."""
     try:
         from mpi4py import MPI
@@ -170,11 +171,15 @@ def test_refine():
 
     gm = dolfinx.mesh.GhostMode.shared_facet
     partitioner = dolfinx.mesh.create_cell_partitioner(gm)
+    if order == 1:
+        hmax = 0.03
+    else:
+        hmax = 0.1
     mesh, (_, _), region_map = geoModel.model_to_mesh(
-        hmax=0.1, partitioner=partitioner, gdim=3
+        hmax=hmax, partitioner=partitioner, gdim=3
     )
-    # NOTE: IF the following is called, netgen segfaults at curve after refine
-    #mesh = geoModel.curveField(2)
+    mesh = geoModel.curveField(order)
+
     def locate_facets(x):
         return np.isclose(x[0]**2 + x[1]**2 + x[2]**2, radius0)
 
@@ -182,8 +187,7 @@ def test_refine():
 
     refined_mesh, (_, ft_refined) = geoModel.refineMarkedElements(
         mesh.topology.dim-1, facets)
-    refined_mesh = geoModel.curveField(2)
-
+    refined_mesh = geoModel.curveField(order)
     local_vol = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1*ufl.dx(domain=refined_mesh)))
     vol = refined_mesh.comm.allreduce(local_vol, op=MPI.SUM)
 
@@ -194,8 +198,11 @@ def test_refine():
     local_outer = dolfinx.fem.assemble_scalar(outer_area)
     inner = refined_mesh.comm.allreduce(local_inner, op=MPI.SUM)
     outer = refined_mesh.comm.allreduce(local_outer, op=MPI.SUM)
-    tol = 5e-5
-    assert np.isclose(vol, 4/3*np.pi*radius0**3 - 4/3*np.pi*radius1**3)
+    if order == 1:
+        tol = 1e-3
+    else:
+        tol = 5e-5
+    assert np.isclose(vol, 4/3*np.pi*radius0**3 - 4/3*np.pi*radius1**3, rtol=tol)
     assert np.isclose(inner, 4*np.pi*radius1**2, rtol=tol)
     assert np.isclose(outer, 4*np.pi*radius0**2, rtol=tol)
 
@@ -204,4 +211,4 @@ if __name__ == "__main__":
     test_square_netgen()
     test_poisson_netgen()
     test_markers(2)
-    test_refine()
+    test_refine(3)

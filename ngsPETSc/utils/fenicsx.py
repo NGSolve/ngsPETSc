@@ -169,8 +169,7 @@ class GeometricModel:
         :arg permutation_tol: tolerance used to construct the permutation of the reference element.
         :arg location_tol: tolerance used to locate the cell a point belongs to.
         """
-        # Check if the mesh is a surface mesh or two dimensional mesh
-        if order == 1:
+        if self._mesh.geometry.cmap.degree == order:
             return self._mesh
 
         dim_to_element_getter = _dim_to_element_wrapper(self.ngmesh)
@@ -344,6 +343,8 @@ class GeometricModel:
             if not refine_faces and dim == 3:
                 _dim_to_element_wrapper(self.ngmesh)[2]().Numpy()["refine"] = 0
             self.ngmesh.Refine(adaptive=True)
+        self.ngmesh.Curve(1)  # Reset mesh to be linear
+
         self._mesh.comm.Barrier()
         mesh, ct, ft = self.extract_linear_mesh(gdim=gdim)
         return mesh, (ct, ft)
