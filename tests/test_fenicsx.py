@@ -183,12 +183,6 @@ def test_refine():
     )
     # NOTE: IF the following is called, netgen segfaults at curve after refine
     #mesh = geoModel.curveField(2)
-    with dolfinx.io.XDMFFile(mesh.comm, "XDMF/mesh.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(ct, mesh.geometry)
-        mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
-        xdmf.write_meshtags(ft, mesh.geometry)
-
     def locate_facets(x):
         return np.isclose(x[0]**2 + x[1]**2 + x[2]**2, radius0)
 
@@ -197,14 +191,6 @@ def test_refine():
     refined_mesh, (ct_refined, ft_refined) = geoModel.refineMarkedElements(
         mesh.topology.dim-1, facets)
     refined_mesh = geoModel.curveField(2)
-
-    with dolfinx.io.XDMFFile(mesh.comm, "XDMF/refinedmesh.xdmf", "w") as xdmf:
-        xdmf.write_mesh(refined_mesh)
-        xdmf.write_meshtags(ct_refined, refined_mesh.geometry)
-        refined_mesh.topology.create_connectivity(refined_mesh.topology.dim - 1,
-                                                  refined_mesh.topology.dim)
-        xdmf.write_meshtags(ft_refined, refined_mesh.geometry)
-
 
     local_vol = dolfinx.fem.assemble_scalar(dolfinx.fem.form(1*ufl.dx(domain=refined_mesh)))
     vol = refined_mesh.comm.allreduce(local_vol, op=MPI.SUM)
