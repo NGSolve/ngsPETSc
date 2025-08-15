@@ -51,6 +51,7 @@ class GeometricModel:
         ] = dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.shared_facet),
         transform: typing.Any = None,
         routine: typing.Any = None,
+        meshing_options: dict[str, typing.Any] | None = None,
     ) -> tuple[
         dolfinx.mesh.Mesh,
         tuple[dolfinx.mesh.MeshTags, dolfinx.mesh.MeshTags],
@@ -74,11 +75,13 @@ class GeometricModel:
             A DOLFINx mesh for the given NetGen model. It also extracts cell tags,
             facet tags and a mapping from the NetGen label to the corresponding integer marker(s).
         """
+        meshing_options = {} if meshing_options is None else meshing_options
+
         # To be parallel safe, we generate on all processes
         # NOTE: This might change in the future.
 
         # First we generate a mesh
-        ngmesh = self.geo.GenerateMesh(maxh=hmax)
+        ngmesh = self.geo.GenerateMesh(maxh=hmax, **meshing_options)
         self.ngmesh = ngmesh
         # Apply any ngs routine post meshing
         if routine is not None:
@@ -90,6 +93,7 @@ class GeometricModel:
             newplex = transform.apply(meshMap.plex)
             meshMap = MeshMapping(newplex)
             ngmesh = meshMap.ngmesh
+
 
         assert ngmesh.dim in (2, 3), "Only 2D and 3D meshes are supported."
         regions = self.extract_regions()
@@ -124,14 +128,27 @@ class GeometricModel:
         """
         V, T = None, None
         ngmesh = self.ngmesh
+        elements_as_numpy = _dim_to_element_wrapper(ngmesh)[ngmesh.dim]().NumPy()
+        T = elements_as_numpy["nodes"]
+
+        number_of_vertices = elements_as_numpy["np"]
+        sorted_index = np.argsort(number_of_vertices)
+        offset = number_of_vertices[sorted_index[1:]]-number_of_vertices[sorted_index[:-1]]
+        cell_boundaries = np.flatnonzero(offset)+1
+        breakpoint()
+        assert len(cell_boundaries) == 1, "Only two different cell types are expected in a 2D grid."
+
+
+        
         if self.comm.rank == self.comm_rank:
             # Applying any PETSc Transform
             # We extract topology and geometry
             V = ngmesh.Coordinates()
-            T = _dim_to_element_wrapper(ngmesh)[ngmesh.dim]().NumPy()["nodes"]
             if Version(np.__version__) >= Version("2.2"):
                 T = np.trim_zeros(T, "b", axis=1).astype(np.int64) - 1
             else:
+
+
                 T = (
                     np.array(
                         [list(np.trim_zeros(a, "b")) for a in list(T)],
@@ -147,6 +164,10 @@ class GeometricModel:
         ufl_domain = dolfinx.io.gmshio.ufl_mesh(
             _ngs_to_cells[(gdim, T.shape[1])], gdim, dolfinx.default_real_type
         )
+
+        cell_str = ufl_domain.ufl_coordinate_element().cell_type.name
+        T = T[:, dolfinx.cpp.io.perm_vtk(dolfinx.mesh.to_type(cell_str), T.shape[1])]
+
         mesh = dolfinx.mesh.create_mesh(
             self.comm, cells=T, x=V, e=ufl_domain, partitioner=partitioner
         )

@@ -13,7 +13,6 @@ def test_square_netgen():
     try:
         from mpi4py import MPI
         import ngsPETSc.utils.fenicsx as ngfx
-        from dolfinx.io import XDMFFile
     except ImportError:
         pytest.skip("DOLFINx unavailable, skipping FENICSx test")
 
@@ -22,9 +21,7 @@ def test_square_netgen():
     geo = SplineGeometry()
     geo.AddRectangle((0, 0), (1, 1))
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
-    domain, _, _ = geoModel.model_to_mesh(hmax=0.1)
-    with XDMFFile(domain.comm, "XDMF/mesh.xdmf", "w") as xdmf:
-        xdmf.write_mesh(domain)
+    geoModel.model_to_mesh(hmax=0.1)
 
 
 def test_poisson_netgen():
@@ -207,8 +204,30 @@ def test_refine(order):
     assert np.isclose(outer, 4*np.pi*radius0**2, rtol=tol)
 
 
+def test_mixed():
+    """
+    Testing FEniCSx interface with Netgen generating a square mesh
+    """
+    try:
+        from mpi4py import MPI
+        import ngsPETSc.utils.fenicsx as ngfx
+    except ImportError:
+        pytest.skip("DOLFINx unavailable, skipping FENICSx test")
+
+    from netgen.geom2d import SplineGeometry
+
+    geo = SplineGeometry()
+    geo.AddCircle((0, 0), 1)
+    geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
+    domain, _, _ = geoModel.model_to_mesh(hmax=0.1, meshing_options={"quad_dominated": True})
+    import dolfinx
+    with dolfinx.io.XDMFFile(domain.comm, "XDMF/mesh.xdmf", "w") as xdmf:
+        xdmf.write_mesh(domain)
+
+
 if __name__ == "__main__":
-    test_square_netgen()
-    test_poisson_netgen()
-    test_markers(2)
-    test_refine(3)
+    # test_square_netgen()
+    # test_poisson_netgen()
+    # test_markers(2)
+    # test_refine(3)
+    test_mixed()
