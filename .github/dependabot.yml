@@ -10,10 +10,10 @@ updates:
     schedule:
       interval: "weekly"
   - package-ecosystem: "pip" # See documentation for possible values
-    directory: "python/"
+    directory: "/"
     schedule:
       interval: "weekly"
   - package-ecosystem: "docker"
-    directory: "docker/"
+    directory: "/"
     schedule:
       interval: "weekly"
