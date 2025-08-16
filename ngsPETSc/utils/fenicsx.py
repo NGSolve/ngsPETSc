@@ -332,6 +332,17 @@ class GeometricModel:
                 return self._mesh
             function_spaces = [dolfinx.fem.functionspace(self._mesh, elements[0])]
 
+        # Prepare array that will host the coordinates of the curved mesh
+        if is_mixed_mesh:
+            # All function spaces (per cell type) shares the same index map.
+            # We use the first one
+            space_dm = function_spaces[0]._cpp_object.dofmaps(0)
+            x = np.zeros((space_dm.index_map.size_local+ space_dm.index_map.num_ghosts, 3), dtype=np.float64)
+        else:
+            x = X_space.tabulate_dof_coordinates()  # Shape (num_nodes, 3)
+
+
+
         dim_to_element_getter = _dim_to_element_wrapper(self.ngmesh)
 
         ng_element = dim_to_element_getter[self.ngmesh.dim]
@@ -403,9 +414,10 @@ class GeometricModel:
                 coords = self._mesh.geometry.x[dofmap]
                 space_dm = X_space._cpp_object.dofmaps(i)
                 cell_node_map = space_dm.map()
+                num_cells_local = imap.size_local + imap.num_ghosts
                 new_coordinates = np.zeros(
                     (
-                        num_cells,
+                        num_cells_local,
                         cell_node_map.shape[1],
                         3,
                     ),
@@ -413,8 +425,6 @@ class GeometricModel:
                 )
                 assert element.basix_element.interpolation_is_identity
                 assert not X_space._cpp_object.elements(i).needs_dof_transformations
-                # FIXME: This has to bee outside the loop
-                x = np.zeros((space_dm.index_map.size_local, 3), dtype=np.float64)
                 for c, cell_coords in enumerate(coords):
                     dd = cmap.push_forward(reference_space_points, cell_coords)
                     new_coordinates[c, :, :] = dd[:, :].copy()
@@ -422,8 +432,7 @@ class GeometricModel:
 
 
             else:
-                x = X_space.tabulate_dof_coordinates()  # Shape (num_nodes, 3)
-                cell_node_map = X_space.dofmap.list[offset : offset + num_cells]
+                cell_node_map = X_space.dofmap.list[offset : offset + num_cells_local]
                 new_coordinates = x[cell_node_map]
             
             # Collision detection of barycenter of cell
@@ -445,27 +454,29 @@ class GeometricModel:
                 igi_to_dolfinx[o_cell_index] = np.arange(
                     len(o_cell_index), dtype=np.int64
                 )
-                local_cells_with_curving =  igi_to_dolfinx[np.flatnonzero(curved)]
+                cells_with_curving =  igi_to_dolfinx[np.flatnonzero(curved)]
+                local_cells_with_curving = np.flatnonzero(cells_with_curving >= 0)
+
                 if len(local_cells_with_curving) > 0:
+                    padded_psp_local = padded_physical_space_points[local_cells_with_curving]
+
                     permutation = find_permutation(
-                        padded_physical_space_points,
-                        new_coordinates[local_cells_with_curving]
-                        .reshape(padded_physical_space_points.shape)
+                        padded_psp_local,
+                        new_coordinates[cells_with_curving][local_cells_with_curving]
+                        .reshape(padded_psp_local.shape)
                         .astype(self._mesh.geometry.x.dtype, copy=False),
                         tol=permutation_tol,
                     )
                 else:
                     permutation = np.zeros(
                         (0, padded_physical_space_points.shape[1]), dtype=np.int64)
-
                 # Apply the permutation to each cell in turn
                 if len(local_cells_with_curving) > 0:
-                    for ii, p in enumerate(curved_space_points):
-                        curved_space_points[ii] = p[permutation[ii]]
+                    for ii, jj in enumerate(local_cells_with_curving):
+                        curved_space_points[jj] = curved_space_points[jj][permutation[ii]]
                     # Assign the curved coordinates to the dat
-
-                    x[cell_node_map[local_cells_with_curving].flatten(), :geom_dim] = (
-                        curved_space_points[:].reshape(-1, geom_dim)
+                    x[cell_node_map[cells_with_curving][local_cells_with_curving].flatten(), :geom_dim] = (
+                        curved_space_points[local_cells_with_curving].reshape(-1, geom_dim)
                     )
             else:
                 # Barycenters of curved cells (exists on all processes)
@@ -511,7 +522,6 @@ class GeometricModel:
                         curved_space_points[owned_pos].reshape(-1, geom_dim)
                     )
             offset += num_cells
-
         if is_mixed_mesh:
             # Use topology from original mesh
             topology = self._mesh.topology
