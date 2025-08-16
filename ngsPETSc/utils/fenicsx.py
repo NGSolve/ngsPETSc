@@ -281,7 +281,8 @@ class GeometricModel:
         :arg location_tol: tolerance used to locate the cell a point belongs to.
         """
         num_index_maps = len(self._mesh.topology.index_maps(self._mesh.topology.dim))
-        is_mixed_mesh = num_index_maps > 1
+        #is_mixed_mesh = num_index_maps > 1
+        is_mixed_mesh = False
         geom_dim = self.ngmesh.dim
         cells = self._mesh.topology._cpp_object.cell_types
         elements = [
@@ -339,8 +340,7 @@ class GeometricModel:
             space_dm = function_spaces[0]._cpp_object.dofmaps(0)
             x = np.zeros((space_dm.index_map.size_local+ space_dm.index_map.num_ghosts, 3), dtype=np.float64)
         else:
-            x = X_space.tabulate_dof_coordinates()  # Shape (num_nodes, 3)
-
+            x = function_spaces[0].tabulate_dof_coordinates()  # Shape (num_nodes, 3)
 
 
         dim_to_element_getter = _dim_to_element_wrapper(self.ngmesh)
@@ -411,30 +411,24 @@ class GeometricModel:
                 # Use reference space points here to push forward in FEniCSx
                 cmap = self._mesh.geometry._cpp_object.cmaps(i)
                 dofmap = self._mesh.geometry._cpp_object.dofmaps(i)
-                coords = self._mesh.geometry.x[dofmap]
+                coords = self._mesh.geometry.x[dofmap][:,:,:geom_dim].copy()
                 space_dm = X_space._cpp_object.dofmaps(i)
                 cell_node_map = space_dm.map()
                 num_cells_local = imap.size_local + imap.num_ghosts
-                new_coordinates = np.zeros(
-                    (
-                        num_cells_local,
-                        cell_node_map.shape[1],
-                        3,
-                    ),
-                    dtype=np.float64,
-                )
+                assert num_cells_local == coords.shape[0]
                 assert element.basix_element.interpolation_is_identity
                 assert not X_space._cpp_object.elements(i).needs_dof_transformations
+                # FIXME : Some issue in assignment here
                 for c, cell_coords in enumerate(coords):
                     dd = cmap.push_forward(reference_space_points, cell_coords)
-                    new_coordinates[c, :, :] = dd[:, :].copy()
-                    x[cell_node_map[c]] = new_coordinates[c] 
-
-
+                    x[cell_node_map[c], :geom_dim] = dd
             else:
+                num_cells_local = imap.size_local + imap.num_ghosts
                 cell_node_map = X_space.dofmap.list[offset : offset + num_cells_local]
-                new_coordinates = x[cell_node_map]
-            
+            new_coordinates = x[cell_node_map]
+
+            # print(x)
+            # exit(1)
             # Collision detection of barycenter of cell
             psp_shape = physical_space_points.shape
             padded_physical_space_points = np.zeros(
@@ -456,28 +450,27 @@ class GeometricModel:
                 )
                 cells_with_curving =  igi_to_dolfinx[np.flatnonzero(curved)]
                 local_cells_with_curving = np.flatnonzero(cells_with_curving >= 0)
+                # if len(local_cells_with_curving) > 0:
+                #     padded_psp_local = padded_physical_space_points[local_cells_with_curving]
 
-                if len(local_cells_with_curving) > 0:
-                    padded_psp_local = padded_physical_space_points[local_cells_with_curving]
-
-                    permutation = find_permutation(
-                        padded_psp_local,
-                        new_coordinates[cells_with_curving][local_cells_with_curving]
-                        .reshape(padded_psp_local.shape)
-                        .astype(self._mesh.geometry.x.dtype, copy=False),
-                        tol=permutation_tol,
-                    )
-                else:
-                    permutation = np.zeros(
-                        (0, padded_physical_space_points.shape[1]), dtype=np.int64)
-                # Apply the permutation to each cell in turn
-                if len(local_cells_with_curving) > 0:
-                    for ii, jj in enumerate(local_cells_with_curving):
-                        curved_space_points[jj] = curved_space_points[jj][permutation[ii]]
+                #     permutation = find_permutation(
+                #         padded_psp_local,
+                #         new_coordinates[cells_with_curving][local_cells_with_curving]
+                #         .reshape(padded_psp_local.shape)
+                #         .astype(self._mesh.geometry.x.dtype, copy=False),
+                #         tol=permutation_tol,
+                #     )
+                # else:
+                #     permutation = np.zeros(
+                #         (0, padded_physical_space_points.shape[1]), dtype=np.int64)
+                # # Apply the permutation to each cell in turn
+                # if len(local_cells_with_curving) > 0:
+                #     for ii, jj in enumerate(local_cells_with_curving):
+                #         curved_space_points[jj] = curved_space_points[jj][permutation[ii]]
                     # Assign the curved coordinates to the dat
-                    x[cell_node_map[cells_with_curving][local_cells_with_curving].flatten(), :geom_dim] = (
-                        curved_space_points[local_cells_with_curving].reshape(-1, geom_dim)
-                    )
+                    #x[cell_node_map[cells_with_curving][local_cells_with_curving].flatten(), :geom_dim] = (
+                    #    curved_space_points[local_cells_with_curving].reshape(-1, geom_dim)
+                    #)
             else:
                 # Barycenters of curved cells (exists on all processes)
                 barycentres = np.average(padded_physical_space_points, axis=1)
@@ -559,7 +552,7 @@ class GeometricModel:
             # Use topology from original mesh
             topology = self._mesh.topology
             # Use geometry from function_space
-            c_el = dolfinx.fem.coordinate_element(el.basix_element)  #  pylint: disable=E1120
+            c_el = dolfinx.fem.coordinate_element(elements[0].basix_element)  #  pylint: disable=E1120
             geom_imap = X_space.dofmap.index_map
             local_node_indices = np.arange(
                 geom_imap.size_local + geom_imap.num_ghosts, dtype=np.int32
@@ -578,8 +571,8 @@ class GeometricModel:
 
 
 
-        # Wrap as Python object
-        return dolfinx.mesh.Mesh(cpp_mesh, domain=ufl.Mesh(el))
+            # Wrap as Python object
+            return dolfinx.mesh.Mesh(cpp_mesh, domain=ufl.Mesh(elements[0]))
 
     def refineMarkedElements(
         self,
