@@ -132,6 +132,9 @@ class GeometricModel:
 
         number_of_vertices = elements_as_numpy["np"]
         sorted_index = np.argsort(number_of_vertices)
+        self._sorted_mapping = (
+            sorted_index  # Store the mapping from ngsolve to DOLFINx ordering
+        )
         offset = (
             number_of_vertices[sorted_index[1:]] - number_of_vertices[sorted_index[:-1]]
         )
@@ -278,141 +281,290 @@ class GeometricModel:
         :arg permutation_tol: tolerance used to construct the permutation of the reference element.
         :arg location_tol: tolerance used to locate the cell a point belongs to.
         """
-        if self._mesh.geometry.cmap.degree == order:
-            return self._mesh
+        num_index_maps = len(self._mesh.topology.index_maps(self._mesh.topology.dim))
+        is_mixed_mesh = num_index_maps > 1
+        geom_dim = self.ngmesh.dim
+        cells = self._mesh.topology._cpp_object.cell_types
+        elements = [
+            basix.ufl.element(
+                "Lagrange", dolfinx.mesh.to_string(cell), order, shape=(geom_dim,)
+            )
+            for cell in cells
+        ]
+        function_spaces = []
+        if is_mixed_mesh:
+            orders = [
+                self._mesh.geometry._cpp_object.cmaps(i).degree
+                for i in range(num_index_maps)
+            ]
+            assert len(np.unique(orders)) == 1
+            if orders[0] == order:
+                return self._mesh
+            elements_cpp = [
+                dolfinx.cpp.fem.FiniteElement_float64(e.basix_element._e, None, True)
+                for e in elements
+            ]
+            # NOTE: Both dofmaps have the same IndexMap, but different cell_dofs
+            dofmaps = dolfinx.cpp.fem.create_dofmaps(
+                self._mesh.comm, self._mesh.topology._cpp_object, elements_cpp
+            )
+
+            # Create C++ function space
+            V_cpp = dolfinx.cpp.fem.FunctionSpace_float64(
+                self._mesh._cpp_object, elements_cpp, dofmaps
+            )
+            domains = [
+                ufl.Mesh(
+                    basix.ufl.element(
+                        "Lagrange", dolfinx.mesh.to_string(cell), 1, shape=(geom_dim,)
+                    )
+                )
+                for cell in cells
+            ]
+
+            function_spaces = [
+                dolfinx.fem.FunctionSpace(
+                    dolfinx.mesh.Mesh(self._mesh._cpp_object, domain), element, V_cpp
+                )
+                for element, domain in zip(elements, domains)
+            ]
+        else:
+            if self._mesh.geometry.cmap.degree == order:
+                return self._mesh
+            function_spaces = [dolfinx.fem.functionspace(self._mesh, elements[0])]
 
         dim_to_element_getter = _dim_to_element_wrapper(self.ngmesh)
+
         ng_element = dim_to_element_getter[self.ngmesh.dim]
         ng_dimension = len(ng_element())  # Number of cells in NGS grid (on any rank)
-        geom_dim = self.ngmesh.dim
 
-        el = basix.ufl.element(
-            "Lagrange", self._mesh.basix_cell(), order, shape=(geom_dim,)
-        )
+        cell_maps = self._mesh.topology.index_maps(2)
+        offset = 0
+        for i, (imap, X_space, element) in enumerate(
+            zip(cell_maps, function_spaces, elements)
+        ):
+            rsp = (
+                element.basix_element.x
+            )  # NOTE: FIX empty points in basix nanobind wrapper
+            _reference_space_points = []
+            for lin in rsp:
+                if len(lin) != 0:
+                    _reference_space_points.append(np.vstack(lin))
+            reference_space_points = np.vstack(_reference_space_points)
+            num_cells = imap.size_global
+            # Curve the mesh on rank 0 only
+            if self.comm.rank == self.comm_rank:
+                # Construct numpy arrays for physical domain data
+                physical_space_points = np.zeros(
+                    (ng_dimension, reference_space_points.shape[0], geom_dim)
+                )
+                curved_space_points = np.zeros(
+                    (ng_dimension, reference_space_points.shape[0], geom_dim)
+                )
+                self.ngmesh.Curve(1)  # Reset mesh to be linear
+                self.ngmesh.CalcElementMapping(
+                    reference_space_points, physical_space_points
+                )
+                # Cells in NGSolve that correspond to given mixed type
+                local_cells = self._sorted_mapping[
+                    offset : offset + num_cells
+                ]
+                physical_space_points = physical_space_points[local_cells]
+                self.ngmesh.Curve(order)
+                self.ngmesh.CalcElementMapping(
+                    reference_space_points, curved_space_points
+                )
+                curved_space_points = curved_space_points[local_cells]
+                curved = ng_element().NumPy()["curved"][local_cells]
 
-        rsp = el.basix_element.x  # NOTE: FIX empty points in basix nanobind wrapper
-        reference_space_points = []
-        for lin in rsp:
-            if len(lin) != 0:
-                reference_space_points.append(np.vstack(lin))
-        reference_space_points = np.vstack(reference_space_points)
+                # Broadcast a boolean array identifying curved cells
+                curved = self.comm.bcast(curved, root=self.comm_rank)
+                physical_space_points = physical_space_points[curved]
+                curved_space_points = curved_space_points[curved]
+            else:
+                curved = self.comm.bcast(None, root=self.comm_rank)
+                # Construct numpy arrays as buffers to receive physical domain data
+                ncurved = np.sum(curved)
+                physical_space_points = np.zeros(
+                    (ncurved, reference_space_points.shape[0], geom_dim)
+                )
+                curved_space_points = np.zeros(
+                    (ncurved, reference_space_points.shape[0], geom_dim)
+                )
 
-        # Curve the mesh on rank 0 only
-        if self.comm.rank == self.comm_rank:
-            # Construct numpy arrays for physical domain data
-            physical_space_points = np.zeros(
-                (ng_dimension, reference_space_points.shape[0], geom_dim)
+            # Broadcast curved cell point data
+            self.comm.Bcast(physical_space_points, root=self.comm_rank)
+            self.comm.Bcast(curved_space_points, root=self.comm_rank)
+
+            # Get coordinates of higher order space on linarized geometry
+            if is_mixed_mesh:
+                # Use reference space points here to push forward in FEniCSx
+                cmap = self._mesh.geometry._cpp_object.cmaps(i)
+                dofmap = self._mesh.geometry._cpp_object.dofmaps(i)
+                coords = self._mesh.geometry.x[dofmap]
+                space_dm = X_space._cpp_object.dofmaps(i)
+                cell_node_map = space_dm.map()
+                new_coordinates = np.zeros(
+                    (
+                        num_cells,
+                        cell_node_map.shape[1],
+                        3,
+                    ),
+                    dtype=np.float64,
+                )
+                assert element.basix_element.interpolation_is_identity
+                assert not X_space._cpp_object.elements(i).needs_dof_transformations
+                x = np.zeros((space_dm.index_map.size_local, 3), dtype=np.float64)
+                for c, cell_coords in enumerate(coords):
+                    dd = cmap.push_forward(reference_space_points, cell_coords)
+                    new_coordinates[c, :, :] = dd[:, :].copy()
+                    x[cell_node_map[c]] = new_coordinates[c] 
+
+            else:
+                x = X_space.tabulate_dof_coordinates()  # Shape (num_nodes, 3)
+                cell_node_map = X_space.dofmap.list[offset : offset + num_cells]
+                new_coordinates = x[cell_node_map]
+            
+            # Collision detection of barycenter of cell
+            psp_shape = physical_space_points.shape
+            padded_physical_space_points = np.zeros(
+                (psp_shape[0], psp_shape[1], 3), dtype=physical_space_points.dtype
             )
-            curved_space_points = np.zeros(
-                (ng_dimension, reference_space_points.shape[0], geom_dim)
+            padded_physical_space_points[:, :, :geom_dim] = physical_space_points
+
+            # Barycenters of curved cells (exists on all processes)
+            barycentres = np.average(padded_physical_space_points, axis=1)
+
+            # Create bounding box for function evaluation
+            if is_mixed_mesh:
+                # This is what cell in the input to create mesh we have on this process
+                # Local cell i is sorted input cell o_cell_index[i]
+                o_cell_index = self._mesh.topology._cpp_object.original_cell_indices[i]
+                
+                # list index [i] corresponds 
+                igi_to_dolfinx = np.full(len(ng_element()), -1, dtype=np.int64)
+                igi_to_dolfinx[o_cell_index] = np.arange(
+                    len(o_cell_index), dtype=np.int64
+                )
+                local_cells_with_curving =  igi_to_dolfinx[np.flatnonzero(curved)]
+                if len(local_cells_with_curving) > 0:
+                    permutation = find_permutation(
+                        padded_physical_space_points,
+                        new_coordinates[local_cells_with_curving]
+                        .reshape(padded_physical_space_points.shape)
+                        .astype(self._mesh.geometry.x.dtype, copy=False),
+                        tol=permutation_tol,
+                    )
+                else:
+                    permutation = np.zeros(
+                        (0, padded_physical_space_points.shape[1]), dtype=np.int64)
+
+                # Apply the permutation to each cell in turn
+                if len(local_cells_with_curving) > 0:
+                    for ii, p in enumerate(curved_space_points):
+                        curved_space_points[ii] = p[permutation[ii]]
+                    # Assign the curved coordinates to the dat
+
+                    x[cell_node_map[local_cells_with_curving].flatten(), :geom_dim] = (
+                        curved_space_points[:].reshape(-1, geom_dim)
+                    )
+            else:
+                bb_tree = dolfinx.geometry.bb_tree(
+                    self._mesh,
+                    self._mesh.topology.dim,
+                    np.arange(offset, offset + num_cells, dtype=np.int32),
+                    padding=location_tol,
+                )
+                cell_candidates = dolfinx.geometry.compute_collisions_points(
+                bb_tree, barycentres
             )
-            self.ngmesh.CalcElementMapping(
-                reference_space_points, physical_space_points
+                owned = dolfinx.geometry.compute_colliding_cells(
+                    self._mesh, cell_candidates, barycentres
+                )
+                owned_pos = np.flatnonzero(owned.offsets[1:] - owned.offsets[:-1])
+                owned_cells = owned.array
+                assert len(owned_cells) == len(owned_pos)
+
+                # NOTE: There should be an algorithm for this
+                # Find the correct coordinate permutation for each cell
+                if len(owned_pos) > 0:
+                    owned_psp = padded_physical_space_points[owned_pos]
+                    permutation = find_permutation(
+                        owned_psp,
+                        new_coordinates[owned_cells]
+                        .reshape(owned_psp.shape)
+                        .astype(self._mesh.geometry.x.dtype, copy=False),
+                        tol=permutation_tol,
+                    )
+                else:
+                    permutation = np.zeros(
+                        (0, padded_physical_space_points.shape[1]), dtype=np.int64
+                    )
+
+                # Apply the permutation to each cell in turn
+                if len(owned_cells) > 0:
+                    for ii, p in enumerate(curved_space_points[owned_pos]):
+                        curved_space_points[owned_pos[ii]] = p[permutation[ii]]
+                    # Assign the curved coordinates to the dat
+                    x[cell_node_map[owned_cells].flatten(), :geom_dim] = (
+                        curved_space_points[owned_pos].reshape(-1, geom_dim)
+                    )
+            offset += num_cells
+
+        if is_mixed_mesh:
+            # Use topology from original mesh
+            topology = self._mesh.topology
+            c_els = [dolfinx.fem.coordinate_element(c, order)._cpp_object for c in cells]
+            geom_imap = X_space._cpp_object.dofmaps(0).index_map
+            local_node_indices = np.arange(
+                geom_imap.size_local + geom_imap.num_ghosts, dtype=np.int32
             )
-            self.ngmesh.Curve(order)
-            self.ngmesh.CalcElementMapping(reference_space_points, curved_space_points)
-            curved = ng_element().NumPy()["curved"]
-            # Broadcast a boolean array identifying curved cells
-            curved = self.comm.bcast(curved, root=self.comm_rank)
-            physical_space_points = physical_space_points[curved]
-            curved_space_points = curved_space_points[curved]
+            igi = geom_imap.local_to_global(local_node_indices)
+            nodes = np.sort(igi)
+
+            xdofs = []
+            for i in range(len(cells)):
+                space_dm = X_space._cpp_object.dofmaps(i)
+                xdofs.append(space_dm.map().flatten())
+            xdofs = np.concatenate(xdofs)
+
+            xdofs = geom_imap.local_to_global(xdofs)
+            geometry = dolfinx.cpp.mesh.create_geometry(
+                    topology._cpp_object, c_els, nodes, xdofs, x[:, :geom_dim].flatten(), geom_dim
+                )
+            # Create DOLFINx mesh
+            if x.dtype == np.float64:
+                cpp_mesh = dolfinx.cpp.mesh.Mesh_float64(
+                    self._mesh.comm, topology._cpp_object, geometry
+                )
+            else:
+                raise RuntimeError(f"Unsupported dtype for mesh {x.dtype}")
+            # Wrap as Python object
+            return dolfinx.mesh.Mesh(cpp_mesh, domain=None)
         else:
-            curved = self.comm.bcast(None, root=self.comm_rank)
-            # Construct numpy arrays as buffers to receive physical domain data
-            ncurved = np.sum(curved)
-            physical_space_points = np.zeros(
-                (ncurved, reference_space_points.shape[0], geom_dim)
+            # Use topology from original mesh
+            topology = self._mesh.topology
+            # Use geometry from function_space
+            c_el = dolfinx.fem.coordinate_element(el.basix_element)  #  pylint: disable=E1120
+            geom_imap = X_space.dofmap.index_map
+            local_node_indices = np.arange(
+                geom_imap.size_local + geom_imap.num_ghosts, dtype=np.int32
             )
-            curved_space_points = np.zeros(
-                (ncurved, reference_space_points.shape[0], geom_dim)
-            )
-
-        # Broadcast curved cell point data
-        self.comm.Bcast(physical_space_points, root=self.comm_rank)
-        self.comm.Bcast(curved_space_points, root=self.comm_rank)
-
-        # Get coordinates of higher order space on linarized geometry
-        X_space = dolfinx.fem.functionspace(self._mesh, el)
-        x = X_space.tabulate_dof_coordinates()  # Shape (num_nodes, 3)
-        cell_map = self._mesh.topology.index_map(self._mesh.topology.dim)
-        num_cells_owned = cell_map.size_local + cell_map.num_ghosts
-        cell_node_map = X_space.dofmap.list[:num_cells_owned]
-        new_coordinates = x[cell_node_map]
-
-        # Collision detection of barycenter of cell
-        psp_shape = physical_space_points.shape
-        padded_physical_space_points = np.zeros(
-            (psp_shape[0], psp_shape[1], 3), dtype=physical_space_points.dtype
-        )
-        padded_physical_space_points[:, :, :geom_dim] = physical_space_points
-
-        # Barycenters of curved cells (exists on all processes)
-        barycentres = np.average(padded_physical_space_points, axis=1)
-
-        # Create bounding box for function evaluation
-        bb_tree = dolfinx.geometry.bb_tree(
-            self._mesh,
-            self._mesh.topology.dim,
-            np.arange(num_cells_owned, dtype=np.int32),
-            padding=location_tol,
-        )
-
-        # Check against standard table value
-        cell_candidates = dolfinx.geometry.compute_collisions_points(
-            bb_tree, barycentres
-        )
-        owned = dolfinx.geometry.compute_colliding_cells(
-            self._mesh, cell_candidates, barycentres
-        )
-        owned_pos = np.flatnonzero(owned.offsets[1:] - owned.offsets[:-1])
-        owned_cells = owned.array
-        assert len(owned_cells) == len(owned_pos)
-
-        # NOTE: There should be an algorithm for this
-        # Find the correct coordinate permutation for each cell
-        if len(owned_pos) > 0:
-            owned_psp = padded_physical_space_points[owned_pos]
-            permutation = find_permutation(
-                owned_psp,
-                new_coordinates[owned_cells]
-                .reshape(owned_psp.shape)
-                .astype(self._mesh.geometry.x.dtype, copy=False),
-                tol=permutation_tol,
-            )
-        else:
-            permutation = np.zeros(
-                (0, padded_physical_space_points.shape[1]), dtype=np.int64
+            igi = geom_imap.local_to_global(local_node_indices)
+            geometry = dolfinx.mesh.create_geometry(
+                geom_imap, cell_node_map, c_el._cpp_object, x[:, :geom_dim].copy(), igi
             )
 
-        # Apply the permutation to each cell in turn
-        if len(owned_cells) > 0:
-            for ii, p in enumerate(curved_space_points[owned_pos]):
-                curved_space_points[owned_pos[ii]] = p[permutation[ii]]
-            # Assign the curved coordinates to the dat
-            x[cell_node_map[owned_cells].flatten(), :geom_dim] = curved_space_points[
-                owned_pos
-            ].reshape(-1, geom_dim)
+            # Create DOLFINx mesh
+            if x.dtype == np.float64:
+                cpp_mesh = dolfinx.cpp.mesh.Mesh_float64(
+                    self._mesh.comm, topology._cpp_object, geometry._cpp_object
+                )
+            else:
+                raise RuntimeError(f"Unsupported dtype for mesh {x.dtype}")
 
-        # Use topology from original mesh
-        topology = self._mesh.topology
-        # Use geometry from function_space
-        c_el = dolfinx.fem.coordinate_element(el.basix_element)  #  pylint: disable=E1120
-        geom_imap = X_space.dofmap.index_map
-        local_node_indices = np.arange(
-            geom_imap.size_local + geom_imap.num_ghosts, dtype=np.int32
-        )
-        igi = geom_imap.local_to_global(local_node_indices)
-        geometry = dolfinx.mesh.create_geometry(
-            geom_imap, cell_node_map, c_el._cpp_object, x[:, :geom_dim].copy(), igi
-        )
 
-        # Create DOLFINx mesh
-        if x.dtype == np.float64:
-            cpp_mesh = dolfinx.cpp.mesh.Mesh_float64(
-                self._mesh.comm, topology._cpp_object, geometry._cpp_object
-            )
-        else:
-            raise RuntimeError(f"Unsupported dtype for mesh {x.dtype}")
+
         # Wrap as Python object
         return dolfinx.mesh.Mesh(cpp_mesh, domain=ufl.Mesh(el))
 
