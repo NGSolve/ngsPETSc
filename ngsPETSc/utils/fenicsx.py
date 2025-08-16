@@ -414,11 +414,13 @@ class GeometricModel:
                 )
                 assert element.basix_element.interpolation_is_identity
                 assert not X_space._cpp_object.elements(i).needs_dof_transformations
+                # FIXME: This has to bee outside the loop
                 x = np.zeros((space_dm.index_map.size_local, 3), dtype=np.float64)
                 for c, cell_coords in enumerate(coords):
                     dd = cmap.push_forward(reference_space_points, cell_coords)
                     new_coordinates[c, :, :] = dd[:, :].copy()
                     x[cell_node_map[c]] = new_coordinates[c] 
+
 
             else:
                 x = X_space.tabulate_dof_coordinates()  # Shape (num_nodes, 3)
@@ -432,8 +434,6 @@ class GeometricModel:
             )
             padded_physical_space_points[:, :, :geom_dim] = physical_space_points
 
-            # Barycenters of curved cells (exists on all processes)
-            barycentres = np.average(padded_physical_space_points, axis=1)
 
             # Create bounding box for function evaluation
             if is_mixed_mesh:
@@ -469,6 +469,8 @@ class GeometricModel:
                         curved_space_points[:].reshape(-1, geom_dim)
                     )
             else:
+                # Barycenters of curved cells (exists on all processes)
+                barycentres = np.average(padded_physical_space_points, axis=1)
                 bb_tree = dolfinx.geometry.bb_tree(
                     self._mesh,
                     self._mesh.topology.dim,
@@ -514,7 +516,7 @@ class GeometricModel:
         if is_mixed_mesh:
             # Use topology from original mesh
             topology = self._mesh.topology
-            c_els = [dolfinx.fem.coordinate_element(c, order)._cpp_object for c in cells]
+            c_els = [dolfinx.fem.coordinate_element(c, order, basix.LagrangeVariant.equispaced)._cpp_object for c in cells]
             geom_imap = X_space._cpp_object.dofmaps(0).index_map
             local_node_indices = np.arange(
                 geom_imap.size_local + geom_imap.num_ghosts, dtype=np.int32
@@ -529,8 +531,11 @@ class GeometricModel:
             xdofs = np.concatenate(xdofs)
 
             xdofs = geom_imap.local_to_global(xdofs)
+
+            coords = x[:, :geom_dim].flatten().copy()
+
             geometry = dolfinx.cpp.mesh.create_geometry(
-                    topology._cpp_object, c_els, nodes, xdofs, x[:, :geom_dim].flatten(), geom_dim
+                    topology._cpp_object, c_els, nodes, xdofs, coords, geom_dim
                 )
             # Create DOLFINx mesh
             if x.dtype == np.float64:
@@ -554,7 +559,6 @@ class GeometricModel:
             geometry = dolfinx.mesh.create_geometry(
                 geom_imap, cell_node_map, c_el._cpp_object, x[:, :geom_dim].copy(), igi
             )
-
             # Create DOLFINx mesh
             if x.dtype == np.float64:
                 cpp_mesh = dolfinx.cpp.mesh.Mesh_float64(
