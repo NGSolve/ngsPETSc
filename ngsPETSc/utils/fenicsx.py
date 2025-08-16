@@ -148,8 +148,7 @@ class GeometricModel:
             dtype=np.int64,
         )
 
-        num_points_per_cell = number_of_vertices[type_offset[:-1]]
-
+        num_points_per_cell = number_of_vertices[sorted_index][type_offset[:-1]]
         if len(type_offset) == 2:
             mixed_mesh = False
         else:
