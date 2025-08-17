@@ -279,12 +279,19 @@ class GeometricModel:
         :arg order: the order of the curved mesh.
         :arg permutation_tol: tolerance used to construct the permutation of the reference element.
         """
-        num_index_maps = len(self._mesh.topology.index_maps(self._mesh.topology.dim))
-        is_mixed_mesh = num_index_maps > 1
+        try:
+            num_index_maps = len(self._mesh.topology.index_maps(self._mesh.topology.dim))
+            is_mixed_mesh = num_index_maps > 1
+            cells = self._mesh.topology._cpp_object.cell_types
+            cell_maps = self._mesh.topology.index_maps(2)
+        except AttributeError:
+            is_mixed_mesh = False
+            cells = [self._mesh.topology.cell_type]
+            cell_maps = [self._mesh.topology.index_map(2)]
+
         if is_mixed_mesh and order > 2:
             raise NotImplementedError("Curved mixed meshes of order > 2 are not supported.")
         geom_dim = self.ngmesh.dim
-        cells = self._mesh.topology._cpp_object.cell_types
         elements = [
             basix.ufl.element(
                 "Lagrange", dolfinx.mesh.to_string(cell), order, shape=(geom_dim,)
@@ -350,7 +357,6 @@ class GeometricModel:
         ng_element = dim_to_element_getter[self.ngmesh.dim]
         ng_dimension = len(ng_element())  # Number of cells in NGS grid (on any rank)
 
-        cell_maps = self._mesh.topology.index_maps(2)
         offset = 0
         for i, (imap, X_space, element) in enumerate(
             zip(cell_maps, function_spaces, elements)
