@@ -200,6 +200,7 @@ class GeometricModel:
                         )
                         - 1
                     )
+                T = T[sorted_index]
         else:
             V = np.zeros((0, gdim), dtype=np.float64)
             if mixed_mesh:
@@ -281,8 +282,7 @@ class GeometricModel:
         :arg location_tol: tolerance used to locate the cell a point belongs to.
         """
         num_index_maps = len(self._mesh.topology.index_maps(self._mesh.topology.dim))
-        #is_mixed_mesh = num_index_maps > 1
-        is_mixed_mesh = False
+        is_mixed_mesh = num_index_maps > 1
         geom_dim = self.ngmesh.dim
         cells = self._mesh.topology._cpp_object.cell_types
         elements = [
@@ -427,8 +427,6 @@ class GeometricModel:
                 cell_node_map = X_space.dofmap.list[offset : offset + num_cells_local]
             new_coordinates = x[cell_node_map]
 
-            # print(x)
-            # exit(1)
             # Collision detection of barycenter of cell
             psp_shape = physical_space_points.shape
             padded_physical_space_points = np.zeros(
@@ -436,48 +434,44 @@ class GeometricModel:
             )
             padded_physical_space_points[:, :, :geom_dim] = physical_space_points
 
-
             # Create bounding box for function evaluation
             if is_mixed_mesh:
                 # This is what cell in the input to create mesh we have on this process
                 # Local cell i is sorted input cell o_cell_index[i]
                 o_cell_index = self._mesh.topology._cpp_object.original_cell_indices[i]
-                
-                # list index [i] corresponds 
                 igi_to_dolfinx = np.full(len(ng_element()), -1, dtype=np.int64)
                 igi_to_dolfinx[o_cell_index] = np.arange(
                     len(o_cell_index), dtype=np.int64
                 )
                 cells_with_curving =  igi_to_dolfinx[np.flatnonzero(curved)]
                 local_cells_with_curving = np.flatnonzero(cells_with_curving >= 0)
-                # if len(local_cells_with_curving) > 0:
-                #     padded_psp_local = padded_physical_space_points[local_cells_with_curving]
-
-                #     permutation = find_permutation(
-                #         padded_psp_local,
-                #         new_coordinates[cells_with_curving][local_cells_with_curving]
-                #         .reshape(padded_psp_local.shape)
-                #         .astype(self._mesh.geometry.x.dtype, copy=False),
-                #         tol=permutation_tol,
-                #     )
-                # else:
-                #     permutation = np.zeros(
-                #         (0, padded_physical_space_points.shape[1]), dtype=np.int64)
-                # # Apply the permutation to each cell in turn
-                # if len(local_cells_with_curving) > 0:
-                #     for ii, jj in enumerate(local_cells_with_curving):
-                #         curved_space_points[jj] = curved_space_points[jj][permutation[ii]]
+                if len(local_cells_with_curving) > 0:
+                    padded_psp_local = padded_physical_space_points[local_cells_with_curving]
+                    permutation = find_permutation(
+                        padded_psp_local,
+                        new_coordinates[cells_with_curving][local_cells_with_curving]
+                        .reshape(padded_psp_local.shape)
+                        .astype(self._mesh.geometry.x.dtype, copy=False),
+                        tol=permutation_tol,
+                    )
+                else:
+                    permutation = np.zeros(
+                        (0, padded_physical_space_points.shape[1]), dtype=np.int64)
+                # Apply the permutation to each cell in turn
+                if len(local_cells_with_curving) > 0:
+                    for ii, jj in enumerate(local_cells_with_curving):
+                        curved_space_points[jj] = curved_space_points[jj][permutation[ii]]
                     # Assign the curved coordinates to the dat
-                    #x[cell_node_map[cells_with_curving][local_cells_with_curving].flatten(), :geom_dim] = (
-                    #    curved_space_points[local_cells_with_curving].reshape(-1, geom_dim)
-                    #)
+                    x[cell_node_map[cells_with_curving][local_cells_with_curving].flatten(), :geom_dim] = (
+                       curved_space_points[local_cells_with_curving].reshape(-1, geom_dim)
+                    )
             else:
                 # Barycenters of curved cells (exists on all processes)
                 barycentres = np.average(padded_physical_space_points, axis=1)
                 bb_tree = dolfinx.geometry.bb_tree(
                     self._mesh,
                     self._mesh.topology.dim,
-                    np.arange(offset, offset + num_cells, dtype=np.int32),
+                    np.arange(offset, offset + num_cells_local, dtype=np.int32),
                     padding=location_tol,
                 )
                 cell_candidates = dolfinx.geometry.compute_collisions_points(
@@ -524,20 +518,18 @@ class GeometricModel:
                 geom_imap.size_local + geom_imap.num_ghosts, dtype=np.int32
             )
             igi = geom_imap.local_to_global(local_node_indices)
-            nodes = np.sort(igi)
+            node_order = np.argsort(igi)
 
             xdofs = []
             for i in range(len(cells)):
                 space_dm = X_space._cpp_object.dofmaps(i)
                 xdofs.append(space_dm.map().flatten())
-            xdofs = np.concatenate(xdofs)
+            xdofs = np.hstack(xdofs).astype(np.int32)
 
             xdofs = geom_imap.local_to_global(xdofs)
-
-            coords = x[:, :geom_dim].flatten().copy()
-
+            coords = x[node_order, :geom_dim].flatten().copy()
             geometry = dolfinx.cpp.mesh.create_geometry(
-                    topology._cpp_object, c_els, nodes, xdofs, coords, geom_dim
+                    topology._cpp_object, c_els, igi[node_order].copy(), xdofs, coords, geom_dim
                 )
             # Create DOLFINx mesh
             if x.dtype == np.float64:
@@ -561,6 +553,7 @@ class GeometricModel:
             geometry = dolfinx.mesh.create_geometry(
                 geom_imap, cell_node_map, c_el._cpp_object, x[:, :geom_dim].copy(), igi
             )
+
             # Create DOLFINx mesh
             if x.dtype == np.float64:
                 cpp_mesh = dolfinx.cpp.mesh.Mesh_float64(
