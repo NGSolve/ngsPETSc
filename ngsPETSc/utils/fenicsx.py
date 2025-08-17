@@ -28,6 +28,30 @@ def _dim_to_element_wrapper(ngmesh: typing.Any) -> dict[int, typing.Any]:
     }
 
 
+def _numpy_trim(array: npt.ArrayLike, dtype: npt.DTypeLike) -> np.ndarray:
+    """Trim zeros from a two dimensional numpy array along axis 1
+    and return it as a specified dtype.
+
+    Args:
+        array: The input array to trim.
+        dtype: The desired output dtype.
+    Returns:
+        The trimmed array.
+    """
+    if Version(np.__version__) >= Version("2.2"):
+        trimmed = np.trim_zeros(
+            array,
+            "b",
+            axis=1,
+        ).astype(dtype)
+    else:
+        trimmed = np.array(
+            [list(np.trim_zeros(a, "b")) for a in list(array)],
+            dtype=dtype,
+        )
+    return trimmed
+
+
 class GeometricModel:
     """
     This class is used to wrap a Netgen geometric model to a DOLFINx mesh.
@@ -96,8 +120,8 @@ class GeometricModel:
 
         assert ngmesh.dim in (2, 3), "Only 2D and 3D meshes are supported."
         regions = self.extract_regions()
-        mesh, ct, ft = self.extract_linear_mesh(gdim=gdim, partitioner=partitioner)
-        return mesh, (ct, ft), regions
+        ct, ft = self.extract_linear_mesh(gdim=gdim, partitioner=partitioner)
+        return self._mesh, (ct, ft), regions
 
     def extract_regions(self):
         """Extract regions from the Netgen mesh."""
@@ -121,15 +145,27 @@ class GeometricModel:
         partitioner=dolfinx.mesh.create_cell_partitioner(
             dolfinx.mesh.GhostMode.shared_facet
         ),
-    ) -> tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags, dolfinx.mesh.MeshTags]:
+    ) -> tuple[dolfinx.mesh.MeshTags, dolfinx.mesh.MeshTags]:
         """
         Extract a DOLFINx mesh (and correpsonding cell and facet tags) from the Netgen mesh.
+
+        Args:
+            gdim: Geometric dimension of the mesh
+            partitioner: Function that computes the parallel distribution of cells across MPI ranks
+
+        Note:
+            This function updates the `self._mesh` to be in sync with the NetGen model.
+
+        Returns:
+            The cell and facet tags of the DOLFINx mesh.
         """
-        V, T = None, None
+        # Extract the elements from the NetGen mesh
+
         ngmesh = self.ngmesh
         elements_as_numpy = _dim_to_element_wrapper(ngmesh)[ngmesh.dim]().NumPy()
         T = elements_as_numpy["nodes"]
 
+        # Sort elements by number of vertices, i.e. group them by cell type
         number_of_vertices = elements_as_numpy["np"]
         sorted_index = np.argsort(number_of_vertices)
         self._sorted_mapping = (
@@ -147,6 +183,7 @@ class GeometricModel:
             ],
         ).astype(np.int64)
 
+        # Defcide if we have a mixed mesh
         num_points_per_cell = number_of_vertices[sorted_index][type_offset[:-1]]
         if len(type_offset) == 2:
             mixed_mesh = False
@@ -156,49 +193,20 @@ class GeometricModel:
                 "Only two different cell types are expected in a 2D grid."
             )
 
+        # We extract topology/connectivity (T) and geometry/nodes (V) from the NetGen mesh
         if self.comm.rank == self.comm_rank:
-            # Applying any PETSc Transform
-            # We extract topology and geometry
             V = ngmesh.Coordinates()
             if mixed_mesh:
                 T_sorted = T[sorted_index]
                 del T
                 T = []
                 for i in range(len(num_points_per_cell)):
-                    if Version(np.__version__) >= Version("2.2"):
-                        T.append(
-                            np.trim_zeros(
-                                T_sorted[type_offset[i] : type_offset[i + 1]],
-                                "b",
-                                axis=1,
-                            ).astype(np.int64)
-                            - 1
-                        )
-                    else:
-                        T.append(
-                            np.array(
-                                [
-                                    list(np.trim_zeros(a, "b"))
-                                    for a in list(
-                                        T_sorted[type_offset[i] : type_offset[i + 1]]
-                                    )
-                                ],
-                                dtype=np.int64,
-                            )
-                            - 1
-                        )
+                    T_by_type = T_sorted[type_offset[i] : type_offset[i + 1]]
+                    T.append(_numpy_trim(T_by_type, dtype=np.int64) - 1)
             else:
-                if Version(np.__version__) >= Version("2.2"):
-                    T = np.trim_zeros(T, "b", axis=1).astype(np.int64) - 1
-                else:
-                    T = (
-                        np.array(
-                            [list(np.trim_zeros(a, "b")) for a in list(T)],
-                            dtype=np.int64,
-                        )
-                        - 1
-                    )
-                T = T[sorted_index]
+                T_by_type = T[sorted_index]
+                del T
+                T = _numpy_trim(T_by_type, dtype=np.int64) - 1
         else:
             V = np.zeros((0, gdim), dtype=np.float64)
             if mixed_mesh:
@@ -206,6 +214,8 @@ class GeometricModel:
             else:
                 T = np.zeros((0, number_of_vertices[0]), dtype=np.int64)
 
+        # Permute the vertices of the NetGen mesh to match the DOLFINx ordering
+        # and create the DOLFINx mesh
         if mixed_mesh:
             ufl_domain = [
                 dolfinx.io.gmshio.ufl_mesh(
@@ -258,8 +268,7 @@ class GeometricModel:
                 x=V,
                 e=ufl_domain,
             )
-        self._mesh = mesh
-
+        # Extract cell and facet tags (for non-mixed meshes)
         if mixed_mesh:
             ct = None
             ft = None
@@ -268,19 +277,24 @@ class GeometricModel:
             ct.name = "Cell tags"
             ft = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim - 1)
             ft.name = "Facet tags"
-        return mesh, ct, ft
 
-    def curveField(
-        self, order: int, permutation_tol: float = 1e-8
-    ):
+        # Attach DOLFINx mesh to the GeometricModel
+        self._mesh = mesh
+        return ct, ft
+
+    def curveField(self, order: int, permutation_tol: float = 1e-8):
         """
         This method returns a curved mesh as a Firedrake function.
 
         :arg order: the order of the curved mesh.
         :arg permutation_tol: tolerance used to construct the permutation of the reference element.
         """
+        # Extract cell map(s) from the DOLFINx mesh, to be able to generate
+        # the relevant basix elements for the higher order mesh.
         try:
-            num_index_maps = len(self._mesh.topology.index_maps(self._mesh.topology.dim))
+            num_index_maps = len(
+                self._mesh.topology.index_maps(self._mesh.topology.dim)
+            )
             is_mixed_mesh = num_index_maps > 1
             cells = self._mesh.topology._cpp_object.cell_types
             cell_maps = self._mesh.topology.index_maps(2)
@@ -290,15 +304,22 @@ class GeometricModel:
             cell_maps = [self._mesh.topology.index_map(2)]
 
         if is_mixed_mesh and order > 2:
-            raise NotImplementedError("Curved mixed meshes of order > 2 are not supported.")
+            raise NotImplementedError(
+                "Curved mixed meshes of order > 2 are not supported."
+            )
+
         geom_dim = self.ngmesh.dim
+        assert geom_dim == self._mesh.geometry.dim, (
+            "Geometrical dimension of DOLFINx mesh does not match Netgen mesh."
+        )
+
+        # Create higher order function spaces to create the coordinate element dofmap from
         elements = [
             basix.ufl.element(
                 "Lagrange", dolfinx.mesh.to_string(cell), order, shape=(geom_dim,)
             )
             for cell in cells
         ]
-        function_spaces = []
         if is_mixed_mesh:
             orders = [
                 self._mesh.geometry._cpp_object.cmaps(i).degree
@@ -347,16 +368,17 @@ class GeometricModel:
             space_dm = function_spaces[0]._cpp_object.dofmaps(0)
             space_im = space_dm.index_map
             x = np.zeros(
-                (space_im.size_local + space_im.num_ghosts, 3), dtype=np.float64
+                (space_im.size_local + space_im.num_ghosts, geom_dim), dtype=np.float64
             )
         else:
-            x = function_spaces[0].tabulate_dof_coordinates()  # Shape (num_nodes, 3)
+            x = function_spaces[0].tabulate_dof_coordinates()[:, :geom_dim]
 
+        # Extract global number of cells in the NetGen mesh
         dim_to_element_getter = _dim_to_element_wrapper(self.ngmesh)
-
         ng_element = dim_to_element_getter[self.ngmesh.dim]
         ng_dimension = len(ng_element())  # Number of cells in NGS grid (on any rank)
 
+        # For each cell type we compute the curved coordinates by curving the netgen mesh
         offset = 0
         for i, (imap, X_space, element) in enumerate(
             zip(cell_maps, function_spaces, elements)
@@ -369,8 +391,8 @@ class GeometricModel:
                 if len(lin) != 0:
                     _reference_space_points.append(np.vstack(lin))
             reference_space_points = np.vstack(_reference_space_points)
-            num_cells = imap.size_global
             # Curve the mesh on rank 0 only
+            num_cells = imap.size_global
             if self.comm.rank == self.comm_rank:
                 # Construct numpy arrays for physical domain data
                 physical_space_points = np.zeros(
@@ -426,23 +448,14 @@ class GeometricModel:
                 assert not X_space._cpp_object.elements(i).needs_dof_transformations
                 for c, cell_coords in enumerate(coords):
                     dd = cmap.push_forward(reference_space_points, cell_coords)
-                    x[cell_node_map[c], :geom_dim] = dd
+                    x[cell_node_map[c], :] = dd
             else:
                 num_cells_local = imap.size_local + imap.num_ghosts
                 cell_node_map = X_space.dofmap.list[offset : offset + num_cells_local]
-            new_coordinates = x[cell_node_map]
 
-            # Collision detection of barycenter of cell
-            psp_shape = physical_space_points.shape
-            padded_physical_space_points = np.zeros(
-                (psp_shape[0], psp_shape[1], 3), dtype=physical_space_points.dtype
-            )
-            padded_physical_space_points[:, :, :geom_dim] = physical_space_points
-
-            # Create bounding box for function evaluation
+            # Determine what cells that is on this rank that should be curved
+            new_coordinates = x[:, :][cell_node_map]
             if is_mixed_mesh:
-                # This is what cell in the input to create mesh we have on this process
-                # Local cell i is sorted input cell o_cell_index[i]
                 if not hasattr(
                     self._mesh.topology._cpp_object, "original_cell_indices"
                 ):
@@ -467,40 +480,38 @@ class GeometricModel:
                 cells_with_curving = igi_to_dolfinx[np.flatnonzero(curved)]
                 local_cells_with_curving = np.flatnonzero(cells_with_curving >= 0)
 
+            # Compute permutation between NetGen higher order nodes and DOLFINx
             if len(local_cells_with_curving) > 0:
-                padded_psp_local = padded_physical_space_points[
-                    local_cells_with_curving
-                ]
+                psp_local = physical_space_points[local_cells_with_curving]
                 permutation = find_permutation(
-                    padded_psp_local,
+                    psp_local,
                     new_coordinates[cells_with_curving][local_cells_with_curving]
-                    .reshape(padded_psp_local.shape)
+                    .reshape(psp_local.shape)
                     .astype(self._mesh.geometry.x.dtype, copy=False),
                     tol=permutation_tol,
                 )
             else:
                 permutation = np.zeros(
-                    (0, padded_physical_space_points.shape[1]), dtype=np.int64
+                    (0, physical_space_points.shape[1]), dtype=np.int64
                 )
+
             # Apply the permutation to each cell in turn
             if len(local_cells_with_curving) > 0:
                 for ii, jj in enumerate(local_cells_with_curving):
-                    curved_space_points[jj] = curved_space_points[jj][
-                        permutation[ii]
-                    ]
+                    curved_space_points[jj] = curved_space_points[jj][permutation[ii]]
                 # Assign the curved coordinates to the dat
                 x[
                     cell_node_map[cells_with_curving][
                         local_cells_with_curving
                     ].flatten(),
                     :geom_dim,
-                ] = curved_space_points[local_cells_with_curving].reshape(
-                    -1, geom_dim
-                )
+                ] = curved_space_points[local_cells_with_curving].reshape(-1, geom_dim)
             offset += num_cells
+
+        # Create a DOLFINx mesh which shares topology with the linearized mesh
+        # but has a new curved geometry.
         if is_mixed_mesh:
-            # Use topology from original mesh
-            topology = self._mesh.topology
+            topology = self._mesh.topology  # Use topology from original mesh
             c_els = [
                 dolfinx.fem.coordinate_element(
                     c, order, basix.LagrangeVariant.equispaced
@@ -515,14 +526,15 @@ class GeometricModel:
             igi = geom_imap.local_to_global(local_node_indices)
             node_order = np.argsort(igi)
 
-            xdofs = []
+            _xdofs = []
             for i in range(len(cells)):
                 space_dm = X_space._cpp_object.dofmaps(i)
-                xdofs.append(space_dm.map().flatten())
-            xdofs = np.hstack(xdofs).astype(np.int32)
+                _xdofs.append(space_dm.map().flatten())
+            xdofs = geom_imap.local_to_global(np.hstack(_xdofs).astype(np.int32))
 
-            xdofs = geom_imap.local_to_global(xdofs)
+            # Sort geometry in the same order as the sorted global dof indices
             coords = x[node_order, :geom_dim].flatten().copy()
+            # Create C++ geometry
             geometry = dolfinx.cpp.mesh.create_geometry(
                 topology._cpp_object,
                 c_els,
@@ -531,7 +543,7 @@ class GeometricModel:
                 coords,
                 geom_dim,
             )
-            # Create DOLFINx mesh
+            # Create DOLFINx C++ mesh
             if x.dtype == np.float64:
                 cpp_mesh = dolfinx.cpp.mesh.Mesh_float64(
                     self._mesh.comm, topology._cpp_object, geometry
@@ -554,7 +566,7 @@ class GeometricModel:
                 geom_imap, cell_node_map, c_el._cpp_object, x[:, :geom_dim].copy(), igi
             )
 
-            # Create DOLFINx mesh
+            # Create DOLFINx C++ mesh
             if x.dtype == np.float64:
                 cpp_mesh = dolfinx.cpp.mesh.Mesh_float64(
                     self._mesh.comm, topology._cpp_object, geometry._cpp_object
@@ -587,9 +599,7 @@ class GeometricModel:
         igi = self._mesh.topology.original_cell_index[local_cells]
         gathered_igi = self._mesh.comm.allgather(igi)
 
-        ng_elements = _dim_to_element_wrapper(self.ngmesh)[
-            self._mesh.topology.dim
-        ]()
+        ng_elements = _dim_to_element_wrapper(self.ngmesh)[self._mesh.topology.dim]()
         ng_dimension = len(ng_elements)
         marker = np.zeros(ng_dimension, dtype=np.int8)
         marker[self._sorted_mapping[np.hstack(gathered_igi)]] = 1
@@ -604,9 +614,8 @@ class GeometricModel:
         self.ngmesh.Curve(1)  # Reset mesh to be linear
 
         self._mesh.comm.Barrier()
-        mesh, ct, ft = self.extract_linear_mesh(gdim=gdim)
-        self._mesh = mesh  # Mesh referencehere should be in sync with the NetGen model
-        return mesh, (ct, ft)
+        ct, ft = self.extract_linear_mesh(gdim=gdim)
+        return self._mesh, (ct, ft)
 
 
 def extract_element_tags(
@@ -635,16 +644,7 @@ def extract_element_tags(
     if comm.rank == comm_rank:
         ng_entities = _dim_to_element_wrapper(ngmesh)[dim]()
         element_indices = ng_entities.NumPy()["nodes"].astype(np.int64)
-        if Version(np.__version__) >= Version("2.2"):
-            entitites = np.trim_zeros(element_indices, "b", axis=1).astype(np.int64) - 1
-        else:
-            entitites = (
-                np.array(
-                    [list(np.trim_zeros(a, "b")) for a in list(element_indices)],
-                    dtype=np.int64,
-                )
-                - 1
-            )
+        entities = _numpy_trim(element_indices, dtype=np.int64) - 1
         if dim == dolfinx_mesh.topology.dim:
             entity_markers = ng_entities.NumPy()["index"].astype(np.int32)
         else:
@@ -655,11 +655,11 @@ def extract_element_tags(
             )
     else:
         # NOTE: Mixed meshes on non-simplex geometries requires changes
-        entitites = np.zeros((0, num_vertices_per_cell), dtype=np.int64)
+        entities = np.zeros((0, num_vertices_per_cell), dtype=np.int64)
         entity_markers = np.zeros((0,), dtype=np.int32)
 
     local_entities, local_values = dolfinx.io.gmshio.distribute_entity_data(
-        dolfinx_mesh, dim, entitites, entity_markers
+        dolfinx_mesh, dim, entities, entity_markers
     )
     dolfinx_mesh.topology.create_connectivity(dim, 0)
     adj = dolfinx.graph.adjacencylist(local_entities)
