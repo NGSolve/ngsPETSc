@@ -145,8 +145,7 @@ class GeometricModel:
                 np.flatnonzero(offset) + 1,
                 np.array([elements_as_numpy.shape[0]], dtype=np.int64),
             ],
-            dtype=np.int64,
-        )
+        ).astype(np.int64)
 
         num_points_per_cell = number_of_vertices[sorted_index][type_offset[:-1]]
         if len(type_offset) == 2:
@@ -188,7 +187,6 @@ class GeometricModel:
                             )
                             - 1
                         )
-                pass
             else:
                 if Version(np.__version__) >= Version("2.2"):
                     T = np.trim_zeros(T, "b", axis=1).astype(np.int64) - 1
@@ -263,13 +261,14 @@ class GeometricModel:
         self._mesh = mesh
 
         if mixed_mesh:
-            return mesh, None, None
+            ct = None
+            ft = None
         else:
             ct = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim)
             ct.name = "Cell tags"
             ft = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim - 1)
             ft.name = "Facet tags"
-            return mesh, ct, ft
+        return mesh, ct, ft
 
     def curveField(
         self, order: int, permutation_tol: float = 1e-8, location_tol: float = 1e-10
@@ -283,6 +282,8 @@ class GeometricModel:
         """
         num_index_maps = len(self._mesh.topology.index_maps(self._mesh.topology.dim))
         is_mixed_mesh = num_index_maps > 1
+        if is_mixed_mesh and order > 2:
+            raise NotImplementedError("Curved mixed meshes of order > 2 are not supported.")
         geom_dim = self.ngmesh.dim
         cells = self._mesh.topology._cpp_object.cell_types
         elements = [
@@ -338,10 +339,12 @@ class GeometricModel:
             # All function spaces (per cell type) shares the same index map.
             # We use the first one
             space_dm = function_spaces[0]._cpp_object.dofmaps(0)
-            x = np.zeros((space_dm.index_map.size_local+ space_dm.index_map.num_ghosts, 3), dtype=np.float64)
+            space_im = space_dm.index_map
+            x = np.zeros(
+                (space_im.size_local + space_im.num_ghosts, 3), dtype=np.float64
+            )
         else:
             x = function_spaces[0].tabulate_dof_coordinates()  # Shape (num_nodes, 3)
-
 
         dim_to_element_getter = _dim_to_element_wrapper(self.ngmesh)
 
@@ -376,9 +379,7 @@ class GeometricModel:
                     reference_space_points, physical_space_points
                 )
                 # Cells in NGSolve that correspond to given mixed type
-                local_cells = self._sorted_mapping[
-                    offset : offset + num_cells
-                ]
+                local_cells = self._sorted_mapping[offset : offset + num_cells]
                 physical_space_points = physical_space_points[local_cells]
                 self.ngmesh.Curve(order)
                 self.ngmesh.CalcElementMapping(
@@ -411,14 +412,13 @@ class GeometricModel:
                 # Use reference space points here to push forward in FEniCSx
                 cmap = self._mesh.geometry._cpp_object.cmaps(i)
                 dofmap = self._mesh.geometry._cpp_object.dofmaps(i)
-                coords = self._mesh.geometry.x[dofmap][:,:,:geom_dim].copy()
+                coords = self._mesh.geometry.x[dofmap][:, :, :geom_dim].copy()
                 space_dm = X_space._cpp_object.dofmaps(i)
                 cell_node_map = space_dm.map()
                 num_cells_local = imap.size_local + imap.num_ghosts
                 assert num_cells_local == coords.shape[0]
                 assert element.basix_element.interpolation_is_identity
                 assert not X_space._cpp_object.elements(i).needs_dof_transformations
-                # FIXME : Some issue in assignment here
                 for c, cell_coords in enumerate(coords):
                     dd = cmap.push_forward(reference_space_points, cell_coords)
                     x[cell_node_map[c], :geom_dim] = dd
@@ -438,15 +438,25 @@ class GeometricModel:
             if is_mixed_mesh:
                 # This is what cell in the input to create mesh we have on this process
                 # Local cell i is sorted input cell o_cell_index[i]
+                if not hasattr(
+                    self._mesh.topology._cpp_object, "original_cell_indices"
+                ):
+                    raise RuntimeError(
+                        "MixedTopology not supported with this DOLFINx",
+                        f" version {dolfinx.__version__}, please update DOLFINx.",
+                    )
+
                 o_cell_index = self._mesh.topology._cpp_object.original_cell_indices[i]
                 igi_to_dolfinx = np.full(len(ng_element()), -1, dtype=np.int64)
                 igi_to_dolfinx[o_cell_index] = np.arange(
                     len(o_cell_index), dtype=np.int64
                 )
-                cells_with_curving =  igi_to_dolfinx[np.flatnonzero(curved)]
+                cells_with_curving = igi_to_dolfinx[np.flatnonzero(curved)]
                 local_cells_with_curving = np.flatnonzero(cells_with_curving >= 0)
                 if len(local_cells_with_curving) > 0:
-                    padded_psp_local = padded_physical_space_points[local_cells_with_curving]
+                    padded_psp_local = padded_physical_space_points[
+                        local_cells_with_curving
+                    ]
                     permutation = find_permutation(
                         padded_psp_local,
                         new_coordinates[cells_with_curving][local_cells_with_curving]
@@ -456,14 +466,22 @@ class GeometricModel:
                     )
                 else:
                     permutation = np.zeros(
-                        (0, padded_physical_space_points.shape[1]), dtype=np.int64)
+                        (0, padded_physical_space_points.shape[1]), dtype=np.int64
+                    )
                 # Apply the permutation to each cell in turn
                 if len(local_cells_with_curving) > 0:
                     for ii, jj in enumerate(local_cells_with_curving):
-                        curved_space_points[jj] = curved_space_points[jj][permutation[ii]]
+                        curved_space_points[jj] = curved_space_points[jj][
+                            permutation[ii]
+                        ]
                     # Assign the curved coordinates to the dat
-                    x[cell_node_map[cells_with_curving][local_cells_with_curving].flatten(), :geom_dim] = (
-                       curved_space_points[local_cells_with_curving].reshape(-1, geom_dim)
+                    x[
+                        cell_node_map[cells_with_curving][
+                            local_cells_with_curving
+                        ].flatten(),
+                        :geom_dim,
+                    ] = curved_space_points[local_cells_with_curving].reshape(
+                        -1, geom_dim
                     )
             else:
                 # Barycenters of curved cells (exists on all processes)
@@ -475,8 +493,8 @@ class GeometricModel:
                     padding=location_tol,
                 )
                 cell_candidates = dolfinx.geometry.compute_collisions_points(
-                bb_tree, barycentres
-            )
+                    bb_tree, barycentres
+                )
                 owned = dolfinx.geometry.compute_colliding_cells(
                     self._mesh, cell_candidates, barycentres
                 )
@@ -512,7 +530,13 @@ class GeometricModel:
         if is_mixed_mesh:
             # Use topology from original mesh
             topology = self._mesh.topology
-            c_els = [dolfinx.fem.coordinate_element(c, order, basix.LagrangeVariant.equispaced)._cpp_object for c in cells]
+            c_els = [
+                dolfinx.fem.coordinate_element(
+                    c, order, basix.LagrangeVariant.equispaced
+                )._cpp_object
+                for c in cells
+            ]
+            X_space = function_spaces[0]
             geom_imap = X_space._cpp_object.dofmaps(0).index_map
             local_node_indices = np.arange(
                 geom_imap.size_local + geom_imap.num_ghosts, dtype=np.int32
@@ -529,8 +553,13 @@ class GeometricModel:
             xdofs = geom_imap.local_to_global(xdofs)
             coords = x[node_order, :geom_dim].flatten().copy()
             geometry = dolfinx.cpp.mesh.create_geometry(
-                    topology._cpp_object, c_els, igi[node_order].copy(), xdofs, coords, geom_dim
-                )
+                topology._cpp_object,
+                c_els,
+                igi[node_order].copy(),
+                xdofs,
+                coords,
+                geom_dim,
+            )
             # Create DOLFINx mesh
             if x.dtype == np.float64:
                 cpp_mesh = dolfinx.cpp.mesh.Mesh_float64(
@@ -538,9 +567,9 @@ class GeometricModel:
                 )
             else:
                 raise RuntimeError(f"Unsupported dtype for mesh {x.dtype}")
-            # Wrap as Python object
-            return dolfinx.mesh.Mesh(cpp_mesh, domain=None)
+            ufl_domain = None
         else:
+            X_space = function_spaces[0]
             # Use topology from original mesh
             topology = self._mesh.topology
             # Use geometry from function_space
@@ -561,11 +590,10 @@ class GeometricModel:
                 )
             else:
                 raise RuntimeError(f"Unsupported dtype for mesh {x.dtype}")
+            ufl_domain = ufl.Mesh(elements[0])  # Use first element as domain
 
-
-
-            # Wrap as Python object
-            return dolfinx.mesh.Mesh(cpp_mesh, domain=ufl.Mesh(elements[0]))
+        # Wrap as Python object
+        return dolfinx.mesh.Mesh(cpp_mesh, domain=ufl_domain)
 
     def refineMarkedElements(
         self,
@@ -594,7 +622,7 @@ class GeometricModel:
             ]()
             ng_dimension = len(ng_elements)
             marker = np.zeros(ng_dimension, dtype=np.int8)
-            marker[np.hstack(gathered_igi)] = 1
+            marker[self._sorted_mapping[np.hstack(gathered_igi)]] = 1
             for refine, el in zip(marker, ng_elements, strict=True):
                 if refine:
                     el.refine = True

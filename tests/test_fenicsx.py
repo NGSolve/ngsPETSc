@@ -1,9 +1,6 @@
 """
 This module test the utils.fenicsx class
 """
-
-import basix
-import numpy as np
 import pytest
 from packaging.version import Version
 
@@ -226,28 +223,24 @@ def test_mixed():
     from netgen.geom2d import SplineGeometry
 
     geo = SplineGeometry()
-    geo.AddCircle((0, 0), 1)
+    geo.AddCircle((1, 1.2), 1)
     # geo.AddRectangle((0,0),(1,1))
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
     part = dolfinx.mesh.create_cell_partitioner(
         dolfinx.graph.partitioner_kahip(), dolfinx.mesh.GhostMode.none
     )
     domain, _, _ = geoModel.model_to_mesh(
-        hmax=0.3, meshing_options={"quad_dominated": True}, partitioner=part, gdim=2
+        hmax=0.4, meshing_options={"quad_dominated": True}, partitioner=part, gdim=2
     )
     domain = geoModel.curveField(2)
     from dolfinx.io.vtkhdf import write_mesh
 
     write_mesh("mixed_mesh.vtkhdf", domain)
 
-    # print(domain.comm.rank, domain.comm.size, domain.topology.index_map(2).size_global,  flush=True)
-    # with dolfinx.io.XDMFFile(domain.comm, "mesh.xdmf", "w") as xdmf:
-    #     xdmf.write_mesh(domain)
-
 
 if __name__ == "__main__":
-    # test_square_netgen()
-    # test_poisson_netgen()
-    # test_markers(2)
-    # test_refine(3)
+    test_square_netgen()
+    test_poisson_netgen()
+    test_markers(2)
+    test_refine(3)
     test_mixed()
