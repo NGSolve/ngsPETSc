@@ -220,11 +220,13 @@ def test_mixed():
     except ImportError:
         pytest.skip("DOLFINx unavailable, skipping FENICSx test")
 
+    if not hasattr(dolfinx.cpp.mesh.Topology, "original_cell_indices"):
+        pytest.skip("DOLFINx version does not support mixed meshes")
+
     from netgen.geom2d import SplineGeometry
 
     geo = SplineGeometry()
     geo.AddCircle((1, 1.2), 1)
-    # geo.AddRectangle((0,0),(1,1))
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
     part = dolfinx.mesh.create_cell_partitioner(
         dolfinx.graph.partitioner_kahip(), dolfinx.mesh.GhostMode.none
@@ -232,6 +234,7 @@ def test_mixed():
     domain, _, _ = geoModel.model_to_mesh(
         hmax=0.4, meshing_options={"quad_dominated": True}, partitioner=part, gdim=2
     )
+    assert len(domain.topology._cpp_object.cell_types) == 2  # pylint: disable=W0212
     domain = geoModel.curveField(2)
     from dolfinx.io.vtkhdf import write_mesh
 

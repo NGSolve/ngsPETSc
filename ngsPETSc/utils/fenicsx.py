@@ -271,14 +271,13 @@ class GeometricModel:
         return mesh, ct, ft
 
     def curveField(
-        self, order: int, permutation_tol: float = 1e-8, location_tol: float = 1e-10
+        self, order: int, permutation_tol: float = 1e-8
     ):
         """
         This method returns a curved mesh as a Firedrake function.
 
         :arg order: the order of the curved mesh.
         :arg permutation_tol: tolerance used to construct the permutation of the reference element.
-        :arg location_tol: tolerance used to locate the cell a point belongs to.
         """
         num_index_maps = len(self._mesh.topology.index_maps(self._mesh.topology.dim))
         is_mixed_mesh = num_index_maps > 1
@@ -453,79 +452,45 @@ class GeometricModel:
                 )
                 cells_with_curving = igi_to_dolfinx[np.flatnonzero(curved)]
                 local_cells_with_curving = np.flatnonzero(cells_with_curving >= 0)
-                if len(local_cells_with_curving) > 0:
-                    padded_psp_local = padded_physical_space_points[
-                        local_cells_with_curving
-                    ]
-                    permutation = find_permutation(
-                        padded_psp_local,
-                        new_coordinates[cells_with_curving][local_cells_with_curving]
-                        .reshape(padded_psp_local.shape)
-                        .astype(self._mesh.geometry.x.dtype, copy=False),
-                        tol=permutation_tol,
-                    )
-                else:
-                    permutation = np.zeros(
-                        (0, padded_physical_space_points.shape[1]), dtype=np.int64
-                    )
-                # Apply the permutation to each cell in turn
-                if len(local_cells_with_curving) > 0:
-                    for ii, jj in enumerate(local_cells_with_curving):
-                        curved_space_points[jj] = curved_space_points[jj][
-                            permutation[ii]
-                        ]
-                    # Assign the curved coordinates to the dat
-                    x[
-                        cell_node_map[cells_with_curving][
-                            local_cells_with_curving
-                        ].flatten(),
-                        :geom_dim,
-                    ] = curved_space_points[local_cells_with_curving].reshape(
-                        -1, geom_dim
-                    )
             else:
-                # Barycenters of curved cells (exists on all processes)
-                barycentres = np.average(padded_physical_space_points, axis=1)
-                bb_tree = dolfinx.geometry.bb_tree(
-                    self._mesh,
-                    self._mesh.topology.dim,
-                    np.arange(offset, offset + num_cells_local, dtype=np.int32),
-                    padding=location_tol,
+                o_cell_index = self._mesh.topology.original_cell_index
+                igi_to_dolfinx = np.full(len(self._sorted_mapping), -1, dtype=np.int64)
+                igi_to_dolfinx[o_cell_index] = np.arange(
+                    len(o_cell_index), dtype=np.int64
                 )
-                cell_candidates = dolfinx.geometry.compute_collisions_points(
-                    bb_tree, barycentres
-                )
-                owned = dolfinx.geometry.compute_colliding_cells(
-                    self._mesh, cell_candidates, barycentres
-                )
-                owned_pos = np.flatnonzero(owned.offsets[1:] - owned.offsets[:-1])
-                owned_cells = owned.array
-                assert len(owned_cells) == len(owned_pos)
+                cells_with_curving = igi_to_dolfinx[np.flatnonzero(curved)]
+                local_cells_with_curving = np.flatnonzero(cells_with_curving >= 0)
 
-                # NOTE: There should be an algorithm for this
-                # Find the correct coordinate permutation for each cell
-                if len(owned_pos) > 0:
-                    owned_psp = padded_physical_space_points[owned_pos]
-                    permutation = find_permutation(
-                        owned_psp,
-                        new_coordinates[owned_cells]
-                        .reshape(owned_psp.shape)
-                        .astype(self._mesh.geometry.x.dtype, copy=False),
-                        tol=permutation_tol,
-                    )
-                else:
-                    permutation = np.zeros(
-                        (0, padded_physical_space_points.shape[1]), dtype=np.int64
-                    )
-
-                # Apply the permutation to each cell in turn
-                if len(owned_cells) > 0:
-                    for ii, p in enumerate(curved_space_points[owned_pos]):
-                        curved_space_points[owned_pos[ii]] = p[permutation[ii]]
-                    # Assign the curved coordinates to the dat
-                    x[cell_node_map[owned_cells].flatten(), :geom_dim] = (
-                        curved_space_points[owned_pos].reshape(-1, geom_dim)
-                    )
+            if len(local_cells_with_curving) > 0:
+                padded_psp_local = padded_physical_space_points[
+                    local_cells_with_curving
+                ]
+                permutation = find_permutation(
+                    padded_psp_local,
+                    new_coordinates[cells_with_curving][local_cells_with_curving]
+                    .reshape(padded_psp_local.shape)
+                    .astype(self._mesh.geometry.x.dtype, copy=False),
+                    tol=permutation_tol,
+                )
+            else:
+                permutation = np.zeros(
+                    (0, padded_physical_space_points.shape[1]), dtype=np.int64
+                )
+            # Apply the permutation to each cell in turn
+            if len(local_cells_with_curving) > 0:
+                for ii, jj in enumerate(local_cells_with_curving):
+                    curved_space_points[jj] = curved_space_points[jj][
+                        permutation[ii]
+                    ]
+                # Assign the curved coordinates to the dat
+                x[
+                    cell_node_map[cells_with_curving][
+                        local_cells_with_curving
+                    ].flatten(),
+                    :geom_dim,
+                ] = curved_space_points[local_cells_with_curving].reshape(
+                    -1, geom_dim
+                )
             offset += num_cells
         if is_mixed_mesh:
             # Use topology from original mesh
@@ -614,27 +579,27 @@ class GeometricModel:
             self._mesh.topology, elements, dim, self._mesh.topology.dim
         )
         igi = self._mesh.topology.original_cell_index[local_cells]
-        gathered_igi = self._mesh.comm.gather(igi, root=self.comm_rank)
+        gathered_igi = self._mesh.comm.allgather(igi)
 
-        if self._mesh.comm.rank == self.comm_rank:
-            ng_elements = _dim_to_element_wrapper(self.ngmesh)[
-                self._mesh.topology.dim
-            ]()
-            ng_dimension = len(ng_elements)
-            marker = np.zeros(ng_dimension, dtype=np.int8)
-            marker[self._sorted_mapping[np.hstack(gathered_igi)]] = 1
-            for refine, el in zip(marker, ng_elements, strict=True):
-                if refine:
-                    el.refine = True
-                else:
-                    el.refine = False
-            if not refine_faces and dim == 3:
-                _dim_to_element_wrapper(self.ngmesh)[2]().Numpy()["refine"] = 0
-            self.ngmesh.Refine(adaptive=True)
+        ng_elements = _dim_to_element_wrapper(self.ngmesh)[
+            self._mesh.topology.dim
+        ]()
+        ng_dimension = len(ng_elements)
+        marker = np.zeros(ng_dimension, dtype=np.int8)
+        marker[self._sorted_mapping[np.hstack(gathered_igi)]] = 1
+        for refine, el in zip(marker, ng_elements, strict=True):
+            if refine:
+                el.refine = True
+            else:
+                el.refine = False
+        if not refine_faces and dim == 3:
+            _dim_to_element_wrapper(self.ngmesh)[2]().Numpy()["refine"] = 0
+        self.ngmesh.Refine(adaptive=True)
         self.ngmesh.Curve(1)  # Reset mesh to be linear
 
         self._mesh.comm.Barrier()
         mesh, ct, ft = self.extract_linear_mesh(gdim=gdim)
+        self._mesh = mesh  # Mesh referencehere should be in sync with the NetGen model
         return mesh, (ct, ft)
 
 
