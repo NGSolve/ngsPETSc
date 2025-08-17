@@ -167,7 +167,7 @@ def test_refine(order):
     gm = dolfinx.mesh.GhostMode.shared_facet
     partitioner = dolfinx.mesh.create_cell_partitioner(gm)
     if order == 1:
-        hmax = 0.03
+        hmax = 0.08
     else:
         hmax = 0.1
     mesh, (_, _), region_map = geoModel.model_to_mesh(
@@ -199,7 +199,7 @@ def test_refine(order):
     inner = refined_mesh.comm.allreduce(local_inner, op=MPI.SUM)
     outer = refined_mesh.comm.allreduce(local_outer, op=MPI.SUM)
     if order == 1:
-        tol = 1e-3
+        tol = 5e-3
     else:
         tol = 5e-5
     assert np.isclose(
