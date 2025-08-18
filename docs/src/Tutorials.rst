@@ -9,4 +9,7 @@ How to use ngsPETSc
    notebooks/Meshes
    notebooks/Krylov Solver and Preconditioners
    notebooks/Eigenvalue Problems
-   Firedrake-Netgen interface via ngsPETSc <https://www.firedrakeproject.org/demos/netgen_mesh.py.html>
+   utils/firedrake/lomesh.py
+   utils/firedrake/homesh.py
+   utils/firedrake/surfaces.py
+   FEniCSx-Netgen interface via ngsPETSc <https://jsdokken.com/dolfinx-tutorial/chapter2/amr.html>
