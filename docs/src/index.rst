@@ -48,11 +48,12 @@ Welcome to ngsPETSc's documentation!
 
 .. toctree::
    :maxdepth: 1
-   :caption: Firedrake
+   :caption: Firedrake and FEniCSx
 
    utils/firedrake/lomesh.py
    utils/firedrake/homesh.py
    utils/firedrake/surfaces.py
+   FEniCSx-Netgen interface via ngsPETSc <https://jsdokken.com/dolfinx-tutorial/chapter2/amr.html>
    
 Indices and tables
 ==================
