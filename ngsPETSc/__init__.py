@@ -16,7 +16,8 @@ if firedrake:
     from ngsPETSc.utils.firedrake.hierarchies import *
     from ngsPETSc.utils.firedrake.adaptive_hierarchy import *
     from ngsPETSc.utils.firedrake.adaptive_transfer_manager import *
-    __all__ = __all__ + ["FiredrakeMesh", "NetgenHierarchy","AdaptiveMeshHierarchy","AdaptiveTransferManager"]
+    __all__ = __all__ + ["FiredrakeMesh", "NetgenHierarchy",
+                         "AdaptiveMeshHierarchy","AdaptiveTransferManager"]
 
 #FEniCSx
 try:

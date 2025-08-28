@@ -1,11 +1,12 @@
 """
 This module contains the class for the AdaptiveMeshHierarchy and related helper functions
 """
-import numpy as np
 from fractions import Fraction
 from collections import defaultdict
-from firedrake.mg import HierarchyBase
-from firedrake import Function, Cofunction, Mesh, Submesh, RelabeledMesh, HierarchyBase, FunctionSpace, conditional, gt
+import numpy as np
+from firedrake import (Function, Cofunction, Mesh, Submesh, RelabeledMesh, 
+                       HierarchyBase, FunctionSpace, conditional, gt
+)
 from firedrake.mg.utils import set_level, get_level
 
 __all__ = ["AdaptiveMeshHierarchy"]
@@ -87,7 +88,8 @@ class AdaptiveMeshHierarchy(HierarchyBase):
         }
         set_level(mesh, self, level - 1)
 
-        # update c2f and f2c for submeshes by mapping numberings on full mesh to numberings on coarse mesh
+        # update c2f and f2c for submeshes by mapping numberings 
+        # on full mesh to numberings on coarse mesh
         n = [
             len([el for el in c2f if len(el) == j]) for j in range(1, max_children + 1)
         ]
@@ -178,12 +180,9 @@ class AdaptiveMeshHierarchy(HierarchyBase):
 
         ind = 1 if child else 0
         hierarchy_dict = self.submesh_hierarchies[int(level) - ind]
-        u_corr_space = Function(
-            V.reconstruct(
-                hierarchy_dict[[*hierarchy_dict][0]].meshes[ind].submesh_parent
-            ),
-            val=u.dat,
-        )
+        parent_mesh = hierarchy_dict[[*hierarchy_dict][0]].meshes[ind].submesh_parent
+        parent_space = V.reconstruct(parent_mesh)
+        u_corr_space = Function(parent_space, val=u.dat)
         key = (u, child)
         try:
             split_functions = self.split_cache[key]
@@ -249,41 +248,39 @@ def get_c2f_f2c_fd(mesh, coarse_mesh):
     """
     Construct coarse->fine and fine->coarse relations by mapping netgen elements to firedrake ones
     """
-    V = FunctionSpace(mesh, "DG", 0)
-    V2 = FunctionSpace(coarse_mesh, "DG", 0)
+    _ = FunctionSpace(mesh, "DG", 0)
+    _ = FunctionSpace(coarse_mesh, "DG", 0)
     ngmesh = mesh.netgen_mesh
     num_parents = coarse_mesh.num_cells()
 
     if mesh.topology_dm.getDimension() == 2:
         parents = ngmesh.parentsurfaceelements.NumPy()
         elements = ngmesh.Elements2D()
-    if mesh.topology_dm.getDimension() == 3:
+    else:
         parents = ngmesh.parentelements.NumPy()
         elements = ngmesh.Elements3D()
-    fine_mapping = lambda x: mesh._cell_numbering.getOffset(x)
-    coarse_mapping = lambda x: coarse_mesh._cell_numbering.getOffset(x)
 
     c2f = [[] for _ in range(num_parents)]
     f2c = [[] for _ in range(mesh.num_cells())]
 
     if parents.shape[0] == 0:
-        raise Exception("Added mesh has not refined any cells from previous mesh")
+        raise RuntimeError("Added mesh has not refined any cells from previous mesh")
     for l, _ in enumerate(elements):
         if parents[l][0] == -1 or l < num_parents:
-            f2c[fine_mapping(l)].append(coarse_mapping(l))
-            c2f[coarse_mapping(l)].append(fine_mapping(l))
+            f2c[mesh._cell_numbering.getOffset(l)].append(coarse_mesh._cell_numbering.getOffset(l))
+            c2f[coarse_mesh._cell_numbering.getOffset(l)].append(mesh._cell_numbering.getOffset(l))
 
         elif parents[l][0] < num_parents:
-            f2c[fine_mapping(l)].append(coarse_mapping(parents[l][0]))
-            c2f[coarse_mapping(parents[l][0])].append(fine_mapping(l))
+            f2c[mesh._cell_numbering.getOffset(l)].append(coarse_mesh._cell_numbering.getOffset(parents[l][0]))
+            c2f[coarse_mesh._cell_numbering.getOffset(parents[l][0])].append(mesh._cell_numbering.getOffset(l))
 
         else:
             a = parents[parents[l][0]][0]
             while a >= num_parents:
                 a = parents[a][0]
 
-            f2c[fine_mapping(l)].append(coarse_mapping(a))
-            c2f[coarse_mapping(a)].append(fine_mapping(l))
+            f2c[mesh._cell_numbering.getOffset(l)].append(coarse_mesh._cell_numbering.getOffset(a))
+            c2f[coarse_mesh._cell_numbering.getOffset(a)].append(mesh._cell_numbering.getOffset(l))
 
     return c2f, np.array(f2c).astype(int)
 

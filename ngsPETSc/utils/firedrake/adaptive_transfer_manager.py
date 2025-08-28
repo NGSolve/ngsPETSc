@@ -1,5 +1,6 @@
 """
-This module contains the AdaptiveTransferManager used to perform transfer operations on AdaptiveMeshHierarchies
+This module contains the AdaptiveTransferManager used to perform 
+transfer operations on AdaptiveMeshHierarchies
 """
 from firedrake import Function
 from firedrake.mg.embedded import TransferManager
@@ -20,7 +21,8 @@ class AdaptiveTransferManager(TransferManager):
 
     def generic_transfer(self, source, target, transfer_op):
         """
-        Generalized implementation of transfer operations wrapping the operations from TransferManager()
+        Generalized implementation of transfer operations by wrapping 
+        transfer operations from TransferManager()
         """
         amh, source_level = get_level(source.function_space().mesh())
         _, target_level = get_level(target.function_space().mesh())
