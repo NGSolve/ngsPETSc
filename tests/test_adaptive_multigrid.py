@@ -56,7 +56,7 @@ def amh(request):
 
     ngmesh = geo.GenerateMesh(maxh=maxh)
     base = Mesh(ngmesh)
-    amh = AdaptiveMeshHierarchy([base])
+    amh_test = AdaptiveMeshHierarchy([base])
 
     if dim == 2:
         els = ngmesh.Elements2D()
@@ -70,8 +70,8 @@ def amh(request):
                 el.refine = 1
         ngmesh.Refine(adaptive=True)
         mesh = Mesh(ngmesh)
-        amh.add_mesh(mesh)
-    return amh
+        amh_test.add_mesh(mesh)
+    return amh_test
 
 
 @pytest.fixture
@@ -88,7 +88,7 @@ def mh_res():
     base = Mesh(ngmesh)
     mesh2 = Mesh(ngmesh)
     amh_unif = AdaptiveMeshHierarchy([base])
-    for i in range(2):
+    for _ in range(2):
         refs = np.ones(len(ngmesh.Elements2D()))
         amh_unif.refine(refs)
     mh = MeshHierarchy(mesh2, 2)
@@ -109,7 +109,7 @@ def tm():
 
 
 @pytest.mark.parametrize("operator", ["prolong", "inject"])
-def test_DG0(amh, atm, operator):
+def test_DG0(amh, atm, operator): # pylint: disable=W0621
     """
     Prolongation & Injection test for DG0
     """
@@ -137,7 +137,7 @@ def test_DG0(amh, atm, operator):
 
 
 @pytest.mark.parametrize("operator", ["prolong", "inject"])
-def test_CG1(amh, atm, operator):
+def test_CG1(amh, atm, operator): # pylint: disable=W0621
     """
     Prolongation & Injection test for CG1
     """
@@ -162,7 +162,7 @@ def test_CG1(amh, atm, operator):
         assert errornorm(xc, u_coarse) <= 1e-12
 
 
-def test_restrict_consistency(mh_res, atm, tm):
+def test_restrict_consistency(mh_res, atm, tm): # pylint: disable=W0621
     """
     Test restriction consistency of amh with uniform refinement vs mh
     """
@@ -198,16 +198,16 @@ def test_restrict_consistency(mh_res, atm, tm):
     tm.restrict(mhrf, mhrc)
 
     assert (
-        (assemble(action(mhrc, mhuc)) - assemble(action(mhrf, mhuf))) 
+        (assemble(action(mhrc, mhuc)) - assemble(action(mhrf, mhuf)))
         / assemble(action(mhrf, mhuf))
     ) <= 1e-12
     assert (
-        (assemble(action(rc, u_coarse)) - assemble(action(mhrc, mhuc))) 
+        (assemble(action(rc, u_coarse)) - assemble(action(mhrc, mhuc)))
         / assemble(action(mhrc, mhuc))
     ) <= 1e-12
 
 
-def test_restrict_CG1(amh, atm):
+def test_restrict_CG1(amh, atm): # pylint: disable=W0621
     """
     Test restriction with CG1
     """
@@ -231,7 +231,7 @@ def test_restrict_CG1(amh, atm):
     )
 
 
-def test_restrict_DG0(amh, atm):
+def test_restrict_DG0(amh, atm): # pylint: disable=W0621
     """
     Test restriction with DG0
     """
@@ -255,7 +255,7 @@ def test_restrict_DG0(amh, atm):
     )
 
 
-def test_mg_jacobi(amh, atm):
+def test_mg_jacobi(amh, atm): # pylint: disable=W0621
     """
     Test multigrid with jacobi smoothers
     """
@@ -301,7 +301,7 @@ def test_mg_jacobi(amh, atm):
     assert errornorm(u_ex, u) <= 1e-8
 
 
-def test_mg_patch(amh, atm):
+def test_mg_patch(amh, atm): # pylint: disable=W0621
     """
     Test multigrid with patch relaxation
     """
@@ -385,7 +385,7 @@ def test_mg_patch(amh, atm):
         }
     )
 
-    names = {"Jacobi": jacobi_relax, 
+    names = {"Jacobi": jacobi_relax,
              "Patch": patch_relax, 
              "ASM Star": asm_relax}
 
