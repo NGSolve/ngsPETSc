@@ -1,42 +1,17 @@
-from enum import IntEnum
-from firedrake import *
+"""
+This module contains the AdaptiveTransferManager used to perform transfer operations on AdaptiveMeshHierarchies
+"""
+from firedrake import Function
 from firedrake.mg.embedded import TransferManager
 from firedrake.mg.utils import get_level
-
-import time
-
-from mpi4py import MPI
 
 
 __all__ = ("AdaptiveTransferManager",)
 
-
-native_families = frozenset(
-    ["Lagrange", "Discontinuous Lagrange", "Real", "Q", "DQ", "BrokenElement"]
-)
-alfeld_families = frozenset(
-    [
-        "Hsieh-Clough-Tocher",
-        "Reduced-Hsieh-Clough-Tocher",
-        "Johnson-Mercier",
-        "Alfeld-Sorokina",
-        "Arnold-Qin",
-        "Reduced-Arnold-Qin",
-        "Christiansen-Hu",
-        "Guzman-Neilan",
-        "Guzman-Neilan Bubble",
-    ]
-)
-non_native_variants = frozenset(["integral", "fdm", "alfeld"])
-
-
-class Op(IntEnum):
-    PROLONG = 0
-    RESTRICT = 1
-    INJECT = 2
-
-
 class AdaptiveTransferManager(TransferManager):
+    """ 
+    TransferManager for adaptively refined mesh hierarchies
+    """
     def __init__(self, *, native_transfers=None, use_averaging=True):
         super().__init__(native_transfers=native_transfers, use_averaging=use_averaging)
         self.tm = TransferManager()
@@ -44,7 +19,9 @@ class AdaptiveTransferManager(TransferManager):
         self.work_function_cache = {}
 
     def generic_transfer(self, source, target, transfer_op):
-        # determine which meshes to iterate over
+        """
+        Generalized implementation of transfer operations wrapping the operations from TransferManager()
+        """
         amh, source_level = get_level(source.function_space().mesh())
         _, target_level = get_level(target.function_space().mesh())
 
@@ -95,12 +72,18 @@ class AdaptiveTransferManager(TransferManager):
             curr_source = curr_target
 
     def get_work_function(self, func_space):
+        """
+        Cache for function on function space
+        """
         try:
             return self.work_function_cache[func_space]
         except KeyError:
             return self.work_function_cache.setdefault(func_space, Function(func_space))
 
     def get_weight(self, V_source):
+        """
+        Cache for weights from partition of unity used during restriction
+        """
         try:
             return self.weight_cache[V_source]
         except KeyError:
@@ -110,10 +93,19 @@ class AdaptiveTransferManager(TransferManager):
             )
 
     def prolong(self, uc, uf):
+        """
+        Prolongation of AdaptiveMeshHierarchy
+        """
         self.generic_transfer(uc, uf, transfer_op=self.tm.prolong)
 
     def inject(self, uf, uc):
+        """
+        Injection of AdaptiveMeshHierarchy
+        """
         self.generic_transfer(uf, uc, transfer_op=self.tm.inject)
 
     def restrict(self, source, target):
+        """
+        Restriction of AdaptiveMeshHierarchy
+        """
         self.generic_transfer(source, target, transfer_op=self.tm.restrict)

@@ -1,16 +1,20 @@
-from netgen.occ import *
+"""
+This module contains the class for the AdaptiveMeshHierarchy and related helper functions
+"""
 import numpy as np
-
-from firedrake.mg import HierarchyBase
-from firedrake import *
 from fractions import Fraction
-from firedrake.mg.utils import set_level, get_level
 from collections import defaultdict
+from firedrake.mg import HierarchyBase
+from firedrake import Function, Cofunction, Mesh, Submesh, RelabeledMesh, HierarchyBase, FunctionSpace, conditional, gt
+from firedrake.mg.utils import set_level, get_level
 
 __all__ = ["AdaptiveMeshHierarchy"]
 
 
 class AdaptiveMeshHierarchy(HierarchyBase):
+    """
+    HierarchyBase for hierarchies of adaptively refined meshes
+    """
     def __init__(self, mesh, refinements_per_level=1, nested=True):
         self.meshes = tuple(mesh)
         self._meshes = tuple(mesh)
@@ -23,6 +27,11 @@ class AdaptiveMeshHierarchy(HierarchyBase):
         self.split_cache = {}
 
     def add_mesh(self, mesh):
+        """
+        Adds newly refined mesh into hierarchy.
+        Then computes the coarse_to_fine and fine_to_coarse mappings.
+        Constructs intermediate submesh hierarchies with this.
+        """
         if mesh.topological_dimension() <= 2:
             max_children = 4
         else:
@@ -39,7 +48,7 @@ class AdaptiveMeshHierarchy(HierarchyBase):
             self.fine_to_coarse_cells = {}
             self.fine_to_coarse_cells[Fraction(0, 1)] = None
 
-        # extract parent child relationships from netgen meshes,
+        # extract parent child relationships from netgen meshes
         (c2f, f2c) = get_c2f_f2c_fd(mesh, coarse_mesh)
 
         self.coarse_to_fine_cells[Fraction(len(self.meshes) - 2, 1)] = c2f
@@ -128,7 +137,9 @@ class AdaptiveMeshHierarchy(HierarchyBase):
         self.submesh_hierarchies.append(hierarchy_dict)
 
     def refine(self, refinements):
-        # Input a list corresponding to which elements get refined
+        """
+        Refines and adds mesh if input a boolean vector corresponding to cells
+        """
         ngmesh = self.meshes[-1].netgen_mesh
         for l, el in enumerate(ngmesh.Elements2D()):
             el.refine = 0
@@ -140,7 +151,9 @@ class AdaptiveMeshHierarchy(HierarchyBase):
         self.add_mesh(mesh)
 
     def adapt(self, eta, theta):
-        # Implement Dorfler marking, returns new mesh
+        """
+        Implement Dorfler marking, refines mesh from error estimator
+        """
         mesh = self.meshes[-1]
         W = FunctionSpace(mesh, "DG", 0)
         markers = Function(W)
@@ -156,7 +169,9 @@ class AdaptiveMeshHierarchy(HierarchyBase):
         return refined_mesh
 
     def split_function(self, u, child=True):
-        # Split function across submeshes
+        """
+        Split input function across submeshes
+        """
         V = u.function_space()
         full_mesh = V.mesh()
         _, level = get_level(full_mesh)
@@ -190,7 +205,9 @@ class AdaptiveMeshHierarchy(HierarchyBase):
         return split_functions
 
     def use_weight(self, V, child):
-        # counts of DoFs across submeshes, to fix restriction before recombinatoin
+        """
+        Counts DoFs across submeshes, computes partition of unity
+        """
         w = Function(V).assign(1)
         splits = self.split_function(w, child)
 
@@ -200,7 +217,9 @@ class AdaptiveMeshHierarchy(HierarchyBase):
         return w
 
     def recombine(self, split_funcs, f, child=True):
-        # Recombines functions on submeshes to full mesh
+        """
+        Recombines functions on submeshes back full mesh
+        """
         V = f.function_space()
         f.zero()
         parent_mesh = (
@@ -227,7 +246,9 @@ class AdaptiveMeshHierarchy(HierarchyBase):
 
 
 def get_c2f_f2c_fd(mesh, coarse_mesh):
-    # Construct coarse -> fine and fine -> coarse relations by mapping netgen elements to fd
+    """
+    Construct coarse->fine and fine->coarse relations by mapping netgen elements to firedrake ones
+    """
     V = FunctionSpace(mesh, "DG", 0)
     V2 = FunctionSpace(coarse_mesh, "DG", 0)
     ngmesh = mesh.netgen_mesh
@@ -268,7 +289,9 @@ def get_c2f_f2c_fd(mesh, coarse_mesh):
 
 
 def split_to_submesh(mesh, coarse_mesh, c2f, f2c):
-    # Splits mesh into element numberings to generate submeshes
+    """
+    Computes submesh split from full mesh
+    """
     if mesh.topological_dimension() <= 2:
         max_children = 4
     else:
@@ -296,7 +319,9 @@ def split_to_submesh(mesh, coarse_mesh, c2f, f2c):
 
 
 def full_to_sub(mesh, submesh, label):
-    # returns the submesh element number associated with the full mesh numbering
+    """
+    Returns the submesh element id associated with the full mesh element id
+    """
     V1 = FunctionSpace(mesh, "DG", 0)
     V2 = FunctionSpace(submesh, "DG", 0)
     u1 = Function(V1)
