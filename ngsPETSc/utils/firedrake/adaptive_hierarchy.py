@@ -4,7 +4,7 @@ This module contains the class for the AdaptiveMeshHierarchy and related helper 
 from fractions import Fraction
 from collections import defaultdict
 import numpy as np
-from firedrake import (Function, Cofunction, Mesh, Submesh, RelabeledMesh, 
+from firedrake import (Function, Cofunction, Mesh, Submesh, RelabeledMesh,
                        HierarchyBase, FunctionSpace, conditional, gt
 )
 from firedrake.mg.utils import set_level, get_level
@@ -88,7 +88,7 @@ class AdaptiveMeshHierarchy(HierarchyBase):
         }
         set_level(mesh, self, level - 1)
 
-        # update c2f and f2c for submeshes by mapping numberings 
+        # update c2f and f2c for submeshes by mapping numberings
         # on full mesh to numberings on coarse mesh
         n = [
             len([el for el in c2f if len(el) == j]) for j in range(1, max_children + 1)
@@ -111,19 +111,19 @@ class AdaptiveMeshHierarchy(HierarchyBase):
             j: full_to_sub(mesh, f_subm[j], int("10" + str(j))) for j in f_subm
         }
 
-        for i in range(len(c2f)):
-            n = len(c2f[i])
+        for i, children in enumerate(c2f):
+            n = len(children)
             if 1 <= n <= max_children:
                 c2f_adjusted[n][coarse_full_to_sub_map[n](i)] = fine_full_to_sub_map[n](
-                    np.array(c2f[i])
+                    np.array(children)
                 )
 
-        for j in range(len(f2c)):
-            n = int(num_children[f2c[j]].item())
+        for j, parent in enumerate(f2c):
+            n = int(num_children[parent].item())
             if 1 <= n <= max_children:
                 f2c_adjusted[n][fine_full_to_sub_map[n](j), 0] = coarse_full_to_sub_map[
                     n
-                ](f2c[j].item())
+                ](parent.item())
 
         c2f_subm = {
             i: {Fraction(0, 1): c2f_adjusted[i].astype(int)} for i in c2f_adjusted
@@ -271,8 +271,10 @@ def get_c2f_f2c_fd(mesh, coarse_mesh):
             c2f[coarse_mesh._cell_numbering.getOffset(l)].append(mesh._cell_numbering.getOffset(l))
 
         elif parents[l][0] < num_parents:
-            f2c[mesh._cell_numbering.getOffset(l)].append(coarse_mesh._cell_numbering.getOffset(parents[l][0]))
-            c2f[coarse_mesh._cell_numbering.getOffset(parents[l][0])].append(mesh._cell_numbering.getOffset(l))
+            fine_ind = mesh._cell_numbering.getOffset(l)
+            coarse_ind = coarse_mesh._cell_numbering.getOffset(parents[l][0])
+            f2c[fine_ind].append(coarse_ind)
+            c2f[coarse_ind].append(fine_ind)
 
         else:
             a = parents[parents[l][0]][0]
@@ -303,8 +305,8 @@ def split_to_submesh(mesh, coarse_mesh, c2f, f2c):
     }
     num_children = np.zeros((len(c2f)))
 
-    for i in range(len(c2f)):
-        n = len(c2f[i])
+    for i, children in enumerate(c2f):
+        n = len(children)
         if 1 <= n <= max_children:
             coarse_splits[n].dat.data[i] = 1
             num_children[i] = n
