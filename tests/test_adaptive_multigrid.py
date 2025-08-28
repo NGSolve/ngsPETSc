@@ -1,20 +1,42 @@
-import pytest
+"""
+Tests for AdaptiveMeshHierarchy
+and AdaptiveTransferManager
+"""
 import random
+import pytest
 import numpy as np
-from firedrake import (Mesh, MeshHierarchy, TransferManager, FunctionSpace, 
-                       Function, SpatialCoordinate, conditional, ge, errornorm, 
-                       TestFunction, assemble, dx, Cofunction, action, sin, pi,
-                       DirichletBC, inner, grad,
-                       NonlinearVariationalProblem, NonlinearVariationalSolver
-)
-from netgen.occ import WorkPlane, OCCGeometry, Box, Pnt
-from ngsPETSc import AdaptiveMeshHierarchy, AdaptiveTransferManager
 from firedrake.mg.ufl_utils import coarsen
 from firedrake.dmhooks import get_appctx
 from firedrake import dmhooks
 from firedrake.solving_utils import _SNESContext
+from firedrake import (
+    Mesh,
+    MeshHierarchy,
+    TransferManager,
+    FunctionSpace,
+    Function,
+    SpatialCoordinate,
+    conditional,
+    ge,
+    errornorm,
+    TestFunction,
+    assemble,
+    dx,
+    Cofunction,
+    action,
+    sin,
+    pi,
+    DirichletBC,
+    inner,
+    grad,
+    NonlinearVariationalProblem,
+    NonlinearVariationalSolver,
+)
+from netgen.occ import WorkPlane, OCCGeometry, Box, Pnt
+from ngsPETSc import AdaptiveMeshHierarchy, AdaptiveTransferManager
 
-@pytest.fixture(params=[2,3])
+
+@pytest.fixture(params=[2, 3])
 def amh(request):
     """
     Generate AdaptiveMeshHierarchies
@@ -23,13 +45,12 @@ def amh(request):
     random.seed(1234)
     if dim == 2:
         wp = WorkPlane()
-        wp.Rectangle(2,2)   
+        wp.Rectangle(2, 2)
         face = wp.Face()
         geo = OCCGeometry(face, dim=2)
         maxh = 0.5
-    
     else:
-        cube = Box(Pnt(0,0,0), Pnt(2,2,2))
+        cube = Box(Pnt(0, 0, 0), Pnt(2, 2, 2))
         geo = OCCGeometry(cube, dim=3)
         maxh = 1
 
@@ -42,11 +63,11 @@ def amh(request):
     else:
         els = ngmesh.Elements3D()
 
-    for i in range(2):
-        for l, el in enumerate(els):
+    for _ in range(2):
+        for _, el in enumerate(els):
             el.refine = 0
             if random.random() < 0.5:
-                el.refine = 1        
+                el.refine = 1
         ngmesh.Refine(adaptive=True)
         mesh = Mesh(ngmesh)
         amh.add_mesh(mesh)
@@ -59,28 +80,31 @@ def mh_res():
     Generate MeshHierarchy for reference
     """
     wp = WorkPlane()
-    wp.Rectangle(2,2)
+    wp.Rectangle(2, 2)
     face = wp.Face()
     geo = OCCGeometry(face, dim=2)
     maxh = 0.5
     ngmesh = geo.GenerateMesh(maxh=maxh)
     base = Mesh(ngmesh)
     mesh2 = Mesh(ngmesh)
-    amh = AdaptiveMeshHierarchy([base])
+    amh_unif = AdaptiveMeshHierarchy([base])
     for i in range(2):
         refs = np.ones(len(ngmesh.Elements2D()))
-        amh.refine(refs)
-    
+        amh_unif.refine(refs)
     mh = MeshHierarchy(mesh2, 2)
 
-    return amh, mh
+    return amh_unif, mh
+
 
 @pytest.fixture
 def atm():
+    """ atm used in tests"""
     return AdaptiveTransferManager()
+
 
 @pytest.fixture
 def tm():
+    """ tm used for restrict consistency"""
     return TransferManager()
 
 
@@ -104,7 +128,6 @@ def test_DG0(amh, atm, operator):
 
         atm.prolong(u_coarse, u_fine)
         assert errornorm(stepf, u_fine) <= 1e-12
-    
     if operator == "inject":
         u_fine.interpolate(stepf)
         assert errornorm(stepf, u_fine) <= 1e-12
@@ -125,20 +148,19 @@ def test_CG1(amh, atm, operator):
     xc, *_ = SpatialCoordinate(V_coarse.mesh())
     xf, *_ = SpatialCoordinate(V_fine.mesh())
 
-
     if operator == "prolong":
         u_coarse.interpolate(xc)
         assert errornorm(xc, u_coarse) <= 1e-12
 
         atm.prolong(u_coarse, u_fine)
         assert errornorm(xf, u_fine) <= 1e-12
-    
     if operator == "inject":
         u_fine.interpolate(xf)
         assert errornorm(xf, u_fine) <= 1e-12
 
         atm.inject(u_fine, u_coarse)
         assert errornorm(xc, u_coarse) <= 1e-12
+
 
 def test_restrict_consistency(mh_res, atm, tm):
     """
@@ -156,27 +178,34 @@ def test_restrict_consistency(mh_res, atm, tm):
     u_coarse.interpolate(xc)
     atm.prolong(u_coarse, u_fine)
 
-    rf = assemble(TestFunction(V_fine)*dx)
+    rf = assemble(TestFunction(V_fine) * dx)
     rc = Cofunction(V_coarse.dual())
     atm.restrict(rf, rc)
-    
+
     # compare with mesh_hierarchy
     xcoarse, _ = SpatialCoordinate(mh[0])
     Vcoarse = FunctionSpace(mh[0], "DG", 0)
     Vfine = FunctionSpace(mh[-1], "DG", 0)
-    
-    mhuc  = Function(Vcoarse)
+
+    mhuc = Function(Vcoarse)
     mhuc.interpolate(xcoarse)
     mhuf = Function(Vfine)
     tm.prolong(mhuc, mhuf)
 
     mhrf = assemble(TestFunction(Vfine) * dx)
     mhrc = Cofunction(Vcoarse.dual())
-    
+
     tm.restrict(mhrf, mhrc)
 
-    assert (assemble(action(mhrc, mhuc)) - assemble(action(mhrf, mhuf))) / assemble(action(mhrf, mhuf)) <= 1e-12
-    assert (assemble(action(rc, u_coarse)) - assemble(action(mhrc, mhuc))) / assemble(action(mhrc, mhuc)) <= 1e-12
+    assert (
+        (assemble(action(mhrc, mhuc)) - assemble(action(mhrf, mhuf))) 
+        / assemble(action(mhrf, mhuf))
+    ) <= 1e-12
+    assert (
+        (assemble(action(rc, u_coarse)) - assemble(action(mhrc, mhuc))) 
+        / assemble(action(mhrc, mhuc))
+    ) <= 1e-12
+
 
 def test_restrict_CG1(amh, atm):
     """
@@ -191,11 +220,16 @@ def test_restrict_CG1(amh, atm):
     u_coarse.interpolate(xc)
     atm.prolong(u_coarse, u_fine)
 
-    rf = assemble(TestFunction(V_fine)*dx)
-    rc = Cofunction(V_coarse.dual()) 
+    rf = assemble(TestFunction(V_fine) * dx)
+    rc = Cofunction(V_coarse.dual())
     atm.restrict(rf, rc)
-    
-    assert np.allclose(assemble(action(rc, u_coarse)), assemble(action(rf, u_fine)), rtol=1e-12)
+
+    assert np.allclose(
+        assemble(action(rc, u_coarse)),
+        assemble(action(rf, u_fine)),
+        rtol=1e-12
+    )
+
 
 def test_restrict_DG0(amh, atm):
     """
@@ -210,11 +244,16 @@ def test_restrict_DG0(amh, atm):
     u_coarse.interpolate(xc)
     atm.prolong(u_coarse, u_fine)
 
-    rf = assemble(TestFunction(V_fine)*dx)
-    rc = Cofunction(V_coarse.dual()) 
+    rf = assemble(TestFunction(V_fine) * dx)
+    rc = Cofunction(V_coarse.dual())
     atm.restrict(rf, rc)
-    
-    assert np.allclose(assemble(action(rc, u_coarse)), assemble(action(rf, u_fine)), rtol=1e-12)
+
+    assert np.allclose(
+        assemble(action(rc, u_coarse)),
+        assemble(action(rf, u_fine)),
+        rtol=1e-12
+    )
+
 
 def test_mg_jacobi(amh, atm):
     """
@@ -222,29 +261,31 @@ def test_mg_jacobi(amh, atm):
     """
     V_J = FunctionSpace(amh[-1], "CG", 1)
     x = SpatialCoordinate(amh[-1])
-    u_ex = Function(V_J, name="u_fine_real").interpolate(sin(2 * pi * x[0]) * sin(2 * pi * x[1]))
+    u_ex = Function(V_J, name="u_fine_real").interpolate(
+        sin(2 * pi * x[0]) * sin(2 * pi * x[1])
+    )
     u = Function(V_J)
     v = TestFunction(V_J)
     bc = DirichletBC(V_J, u_ex, "on_boundary")
     F = inner(grad(u - u_ex), grad(v)) * dx
 
     params = {
-            "snes_type": "ksponly",
-            "ksp_max_it": 20,
-            "ksp_type": "cg", 
-            "ksp_norm_type": "unpreconditioned",
-            "ksp_rtol": 1e-8,
-            "ksp_atol": 1e-8,
-            "pc_type": "mg",
-            "mg_levels_pc_type": "jacobi",
-            "mg_levels_ksp_type": "chebyshev",
-            "mg_levels_ksp_max_it": 2,
-            "mg_levels_ksp_richardson_scale": 1/3,
-            "mg_coarse_ksp_type": "preonly",
-            "mg_coarse_pc_type": "lu",
-            "mg_coarse_pc_factor_mat_solver_type": "mumps" 
-        }
-    
+        "snes_type": "ksponly",
+        "ksp_max_it": 20,
+        "ksp_type": "cg",
+        "ksp_norm_type": "unpreconditioned",
+        "ksp_rtol": 1e-8,
+        "ksp_atol": 1e-8,
+        "pc_type": "mg",
+        "mg_levels_pc_type": "jacobi",
+        "mg_levels_ksp_type": "chebyshev",
+        "mg_levels_ksp_max_it": 2,
+        "mg_levels_ksp_richardson_scale": 1 / 3,
+        "mg_coarse_ksp_type": "preonly",
+        "mg_coarse_pc_type": "lu",
+        "mg_coarse_pc_factor_mat_solver_type": "mumps",
+    }
+
     problem = NonlinearVariationalProblem(F, u, bc)
     dm = u.function_space().dm
     old_appctx = get_appctx(dm)
@@ -255,18 +296,22 @@ def test_mg_jacobi(amh, atm):
     solver.set_transfer_manager(atm)
     with dmhooks.add_hooks(dm, solver, appctx=appctx, save=False):
         coarsen(problem, coarsen)
-    
+
     solver.solve()
     assert errornorm(u_ex, u) <= 1e-8
 
+
 def test_mg_patch(amh, atm):
     """
-    Test multigrid with patch relaxation 
+    Test multigrid with patch relaxation
     """
+
     def solve_sys(params):
         V_J = FunctionSpace(amh[-1], "CG", 1)
         x = SpatialCoordinate(amh[-1])
-        u_ex = Function(V_J, name="u_fine_real").interpolate(sin(2 * pi * x[0]) * sin(2 * pi * x[1]))
+        u_ex = Function(V_J, name="u_fine_real").interpolate(
+            sin(2 * pi * x[0]) * sin(2 * pi * x[1])
+        )
         u = Function(V_J)
         v = TestFunction(V_J)
         bc = DirichletBC(V_J, u_ex, "on_boundary")
@@ -284,22 +329,18 @@ def test_mg_patch(amh, atm):
         solver.set_transfer_manager(atm)
         with dmhooks.add_hooks(dm, solver, appctx=appctx, save=False):
             coarsen(problem, coarsen)
-    
+
         solver.solve()
         assert errornorm(u_ex, u) <= 1e-8
-        
 
-    lu = {
-        "ksp_type": "preonly",
-        "pc_type": "lu"
-    }
+    lu = {"ksp_type": "preonly", "pc_type": "lu"}
     assembled_lu = {
         "ksp_type": "preonly",
         "pc_type": "python",
         "pc_python_type": "firedrake.AssembledPC",
-        "assembled": lu
+        "assembled": lu,
     }
-    
+
     def mg_params(relax, mat_type="aij"):
         if mat_type == "aij":
             coarse = lu
@@ -310,39 +351,43 @@ def test_mg_patch(amh, atm):
             "mat_type": mat_type,
             "ksp_type": "cg",
             "pc_type": "mg",
-            "mg_levels": {
-                "ksp_type": "chebyshev",
-                "ksp_max_it": 1,
-                **relax
-            },
-            "mg_coarse": coarse
+            "mg_levels": {"ksp_type": "chebyshev", "ksp_max_it": 1, **relax},
+            "mg_coarse": coarse,
         }
+
     jacobi_relax = mg_params({"pc_type": "jacobi"}, mat_type="matfree")
 
-    patch_relax = mg_params({
-    "pc_type": "python",
-    "pc_python_type": "firedrake.PatchPC",
-    "patch": {
-        "pc_patch": {
-            "construct_type": "star",
-            "construct_dim": 0,
-            "sub_mat_type": "seqdense",
-            "dense_inverse": True,
-            "save_operators": True,
-            "precompute_element_tensors": True},
-        "sub_ksp_type": "preonly",
-        "sub_pc_type": "lu"}},
-    mat_type="matfree")
+    patch_relax = mg_params(
+        {
+            "pc_type": "python",
+            "pc_python_type": "firedrake.PatchPC",
+            "patch": {
+                "pc_patch": {
+                    "construct_type": "star",
+                    "construct_dim": 0,
+                    "sub_mat_type": "seqdense",
+                    "dense_inverse": True,
+                    "save_operators": True,
+                    "precompute_element_tensors": True,
+                },
+                "sub_ksp_type": "preonly",
+                "sub_pc_type": "lu",
+            },
+        },
+        mat_type="matfree",
+    )
 
-    asm_relax = mg_params({
-    "pc_type": "python",
-    "pc_python_type": "firedrake.ASMStarPC",
-    "pc_star_backend": "tinyasm"})
+    asm_relax = mg_params(
+        {
+            "pc_type": "python",
+            "pc_python_type": "firedrake.ASMStarPC",
+            "pc_star_backend": "tinyasm",
+        }
+    )
 
-    names = {"Jacobi": jacobi_relax,
-         "Patch": patch_relax,
-         "ASM Star": asm_relax}
-    
+    names = {"Jacobi": jacobi_relax, 
+             "Patch": patch_relax, 
+             "ASM Star": asm_relax}
+
     for _, params in names.items():
         solve_sys(params)
-        
