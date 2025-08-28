@@ -166,11 +166,11 @@ def test_restrict_consistency(mh_res, atm, tm): # pylint: disable=W0621
     """
     Test restriction consistency of amh with uniform refinement vs mh
     """
-    amh = mh_res[0]
+    amh_unif = mh_res[0]
     mh = mh_res[1]
 
-    V_coarse = FunctionSpace(amh[0], "DG", 0)
-    V_fine = FunctionSpace(amh[-1], "DG", 0)
+    V_coarse = FunctionSpace(amh_unif[0], "DG", 0)
+    V_fine = FunctionSpace(amh_unif[-1], "DG", 0)
     u_coarse = Function(V_coarse)
     u_fine = Function(V_fine)
     xc, _ = SpatialCoordinate(V_coarse.mesh())
