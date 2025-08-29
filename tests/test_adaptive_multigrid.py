@@ -324,7 +324,7 @@ def test_mg_patch(amh, atm, params):  # pylint: disable=W0621
                 "assembled": {"ksp_type": "preonly", "pc_type": "lu"},
             },
         }
-    if params == "patch":
+    elif params == "patch":
         solver_params = {
             "mat_type": "matfree",
             "ksp_type": "cg",
@@ -354,7 +354,7 @@ def test_mg_patch(amh, atm, params):  # pylint: disable=W0621
                 "assembled": {"ksp_type": "preonly", "pc_type": "lu"},
             },
         }
-    if params == "asm":
+    else:
         solver_params = {
             "mat_type": "aij",
             "ksp_type": "cg",
