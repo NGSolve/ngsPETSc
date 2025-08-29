@@ -2,6 +2,7 @@
 Tests for AdaptiveMeshHierarchy
 and AdaptiveTransferManager
 """
+
 import random
 import pytest
 import numpy as np
@@ -98,18 +99,18 @@ def mh_res():
 
 @pytest.fixture
 def atm():
-    """ atm used in tests"""
+    """atm used in tests"""
     return AdaptiveTransferManager()
 
 
 @pytest.fixture
 def tm():
-    """ tm used for restrict consistency"""
+    """tm used for restrict consistency"""
     return TransferManager()
 
 
 @pytest.mark.parametrize("operator", ["prolong", "inject"])
-def test_DG0(amh, atm, operator): # pylint: disable=W0621
+def test_DG0(amh, atm, operator):  # pylint: disable=W0621
     """
     Prolongation & Injection test for DG0
     """
@@ -137,7 +138,7 @@ def test_DG0(amh, atm, operator): # pylint: disable=W0621
 
 
 @pytest.mark.parametrize("operator", ["prolong", "inject"])
-def test_CG1(amh, atm, operator): # pylint: disable=W0621
+def test_CG1(amh, atm, operator):  # pylint: disable=W0621
     """
     Prolongation & Injection test for CG1
     """
@@ -162,7 +163,7 @@ def test_CG1(amh, atm, operator): # pylint: disable=W0621
         assert errornorm(xc, u_coarse) <= 1e-12
 
 
-def test_restrict_consistency(mh_res, atm, tm): # pylint: disable=W0621
+def test_restrict_consistency(mh_res, atm, tm):  # pylint: disable=W0621
     """
     Test restriction consistency of amh with uniform refinement vs mh
     """
@@ -207,7 +208,7 @@ def test_restrict_consistency(mh_res, atm, tm): # pylint: disable=W0621
     ) <= 1e-12
 
 
-def test_restrict_CG1(amh, atm): # pylint: disable=W0621
+def test_restrict_CG1(amh, atm):  # pylint: disable=W0621
     """
     Test restriction with CG1
     """
@@ -231,7 +232,7 @@ def test_restrict_CG1(amh, atm): # pylint: disable=W0621
     )
 
 
-def test_restrict_DG0(amh, atm): # pylint: disable=W0621
+def test_restrict_DG0(amh, atm):  # pylint: disable=W0621
     """
     Test restriction with DG0
     """
@@ -255,7 +256,7 @@ def test_restrict_DG0(amh, atm): # pylint: disable=W0621
     )
 
 
-def test_mg_jacobi(amh, atm): # pylint: disable=W0621
+def test_mg_jacobi(amh, atm):  # pylint: disable=W0621
     """
     Test multigrid with jacobi smoothers
     """
@@ -301,93 +302,96 @@ def test_mg_jacobi(amh, atm): # pylint: disable=W0621
     assert errornorm(u_ex, u) <= 1e-8
 
 
-def test_mg_patch(amh, atm): # pylint: disable=W0621
+@pytest.mark.parametrize("params", ["jacobi", "asm", "patch"])
+def test_mg_patch(amh, atm, params):  # pylint: disable=W0621
     """
     Test multigrid with patch relaxation
     """
-
-    def solve_sys(params):
-        V_J = FunctionSpace(amh[-1], "CG", 1)
-        x = SpatialCoordinate(amh[-1])
-        u_ex = Function(V_J, name="u_fine_real").interpolate(
-            sin(2 * pi * x[0]) * sin(2 * pi * x[1])
-        )
-        u = Function(V_J)
-        v = TestFunction(V_J)
-        bc = DirichletBC(V_J, u_ex, "on_boundary")
-        F = inner(grad(u - u_ex), grad(v)) * dx
-
-        problem = NonlinearVariationalProblem(F, u, bc)
-
-        dm = u.function_space().dm
-        old_appctx = get_appctx(dm)
-        mat_type = "aij"
-        appctx = _SNESContext(problem, mat_type, mat_type, old_appctx)
-        appctx.transfer_manager = atm
-
-        solver = NonlinearVariationalSolver(problem, solver_parameters=params)
-        solver.set_transfer_manager(atm)
-        with dmhooks.add_hooks(dm, solver, appctx=appctx, save=False):
-            coarsen(problem, coarsen)
-
-        solver.solve()
-        assert errornorm(u_ex, u) <= 1e-8
-
-    lu = {"ksp_type": "preonly", "pc_type": "lu"}
-    assembled_lu = {
-        "ksp_type": "preonly",
-        "pc_type": "python",
-        "pc_python_type": "firedrake.AssembledPC",
-        "assembled": lu,
-    }
-
-    def mg_params(relax, mat_type="aij"):
-        if mat_type == "aij":
-            coarse = lu
-        else:
-            coarse = assembled_lu
-
-        return {
-            "mat_type": mat_type,
+    if params == "jacobi":
+        solver_params = {
+            "mat_type": "matfree",
             "ksp_type": "cg",
             "pc_type": "mg",
-            "mg_levels": {"ksp_type": "chebyshev", "ksp_max_it": 1, **relax},
-            "mg_coarse": coarse,
-        }
-
-    jacobi_relax = mg_params({"pc_type": "jacobi"}, mat_type="matfree")
-
-    patch_relax = mg_params(
-        {
-            "pc_type": "python",
-            "pc_python_type": "firedrake.PatchPC",
-            "patch": {
-                "pc_patch": {
-                    "construct_type": "star",
-                    "construct_dim": 0,
-                    "sub_mat_type": "seqdense",
-                    "dense_inverse": True,
-                    "save_operators": True,
-                    "precompute_element_tensors": True,
-                },
-                "sub_ksp_type": "preonly",
-                "sub_pc_type": "lu",
+            "mg_levels": {
+                "ksp_type": "chebyshev",
+                "ksp_max_it": 1,
+                "pc_type": "jacobi",
             },
-        },
-        mat_type="matfree",
-    )
-
-    asm_relax = mg_params(
-        {
-            "pc_type": "python",
-            "pc_python_type": "firedrake.ASMStarPC",
-            "pc_star_backend": "tinyasm",
+            "mg_coarse": {
+                "ksp_type": "preonly",
+                "pc_type": "python",
+                "pc_python_type": "firedrake.AssembledPC",
+                "assembled": {"ksp_type": "preonly", "pc_type": "lu"},
+            },
         }
+    if params == "patch":
+        solver_params = {
+            "mat_type": "matfree",
+            "ksp_type": "cg",
+            "pc_type": "mg",
+            "mg_levels": {
+                "ksp_type": "chebyshev",
+                "ksp_max_it": 1,
+                "pc_type": "python",
+                "pc_python_type": "firedrake.PatchPC",
+                "patch": {
+                    "pc_patch": {
+                        "construct_type": "star",
+                        "construct_dim": 0,
+                        "sub_mat_type": "seqdense",
+                        "dense_inverse": True,
+                        "save_operators": True,
+                        "precompute_element_tensors": True,
+                    },
+                    "sub_ksp_type": "preonly",
+                    "sub_pc_type": "lu",
+                },
+            },
+            "mg_coarse": {
+                "ksp_type": "preonly",
+                "pc_type": "python",
+                "pc_python_type": "firedrake.AssembledPC",
+                "assembled": {"ksp_type": "preonly", "pc_type": "lu"},
+            },
+        }
+    if params == "asm":
+        solver_params = {
+            "mat_type": "aij",
+            "ksp_type": "cg",
+            "pc_type": "mg",
+            "mg_levels": {
+                "ksp_type": "chebyshev",
+                "ksp_max_it": 1,
+                "pc_type": "python",
+                "pc_python_type": "firedrake.ASMStarPC",
+                "pc_star_backend": "tinyasm",
+            },
+            "mg_coarse": {"ksp_type": "preonly", "pc_type": "lu"},
+        }
+
+    V_J = FunctionSpace(amh[-1], "CG", 1)
+    x = SpatialCoordinate(amh[-1])
+    u_ex = Function(V_J, name="u_fine_real").interpolate(
+        sin(2 * pi * x[0]) * sin(2 * pi * x[1])
     )
+    u = Function(V_J)
+    v = TestFunction(V_J)
+    bc = DirichletBC(V_J, u_ex, "on_boundary")
+    F = inner(grad(u - u_ex), grad(v)) * dx
 
-    names = {"Jacobi": jacobi_relax,
-             "Patch": patch_relax, 
-             "ASM Star": asm_relax}
+    problem = NonlinearVariationalProblem(F, u, bc)
 
-    for _, params in names.items():
-        solve_sys(params)
+    dm = u.function_space().dm
+    old_appctx = get_appctx(dm)
+    mat_type = "aij"
+    appctx = _SNESContext(problem, mat_type, mat_type, old_appctx)
+    appctx.transfer_manager = atm
+
+    solver = NonlinearVariationalSolver(problem,
+                                        solver_parameters=solver_params)
+    solver.set_transfer_manager(atm)
+    with dmhooks.add_hooks(dm, solver, appctx=appctx, save=False):
+        coarsen(problem, coarsen)
+
+    solver.solve()
+    assert errornorm(u_ex, u) <= 1e-8
