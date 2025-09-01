@@ -134,15 +134,17 @@ class AdaptiveMeshHierarchy(HierarchyBase):
 
         for i, children in enumerate(c2f):
             n = len(children)
-            coarse_id_sub = coarse_full_to_sub_map[n][i]
-            fine_id_sub = fine_full_to_sub_map[n][np.array(children)]
-            c2f_adjusted[n][coarse_id_sub] = fine_id_sub
+            if 1 <= n <= max_children:
+                coarse_id_sub = coarse_full_to_sub_map[n][i]
+                fine_id_sub = fine_full_to_sub_map[n][np.array(children)]
+                c2f_adjusted[n][coarse_id_sub] = fine_id_sub
 
         for j, parent in enumerate(f2c):
             n = num_children[parent].item()
-            fine_id_sub = fine_full_to_sub_map[n][j]
-            coarse_id_sub = coarse_full_to_sub_map[n][parent.item()]
-            f2c_adjusted[n][fine_id_sub, 0] = coarse_id_sub
+            if 1 <= n <= max_children:
+                fine_id_sub = fine_full_to_sub_map[n][j]
+                coarse_id_sub = coarse_full_to_sub_map[n][parent.item()]
+                f2c_adjusted[n][fine_id_sub, 0] = coarse_id_sub
 
         c2f_subm = {
             i: {Fraction(0, 1): c2f_adjusted[i].astype(int)}
