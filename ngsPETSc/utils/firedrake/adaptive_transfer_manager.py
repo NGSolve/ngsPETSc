@@ -108,7 +108,7 @@ class AdaptiveTransferManager(TransferManager):
             return self.weight_cache.setdefault(
                 V_source, amh.use_weight(V_source, child=True)
             )
-        
+
     def get_perm(self, unsplit_source, unsplit_target, transfer_op):
         """
         Cache permutations of DoFs from unsplit source 
@@ -117,7 +117,6 @@ class AdaptiveTransferManager(TransferManager):
         """
         key = (unsplit_source.function_space(),
                unsplit_target.function_space())
-        
         try:
             return self.perm_cache[key]
         except KeyError:
