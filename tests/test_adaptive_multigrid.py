@@ -49,11 +49,11 @@ def amh(request):
     else:
         cube = Box(Pnt(0, 0, 0), Pnt(2, 2, 2))
         geo = OCCGeometry(cube, dim=3)
-        maxh = 1
+        maxh = 0.5
 
     ngmesh = geo.GenerateMesh(maxh=maxh)
     base = Mesh(ngmesh)
-    amh_test = AdaptiveMeshHierarchy([base])
+    amh_test = AdaptiveMeshHierarchy(base)
 
     if dim == 2:
         els = ngmesh.Elements2D()
@@ -371,5 +371,6 @@ def test_mg_patch(amh, atm, params):  # pylint: disable=W0621
     solver = NonlinearVariationalSolver(problem,
                                         solver_parameters=solver_params)
     solver.set_transfer_manager(atm)
+
     solver.solve()
     assert errornorm(u_ex, u) <= 1e-8

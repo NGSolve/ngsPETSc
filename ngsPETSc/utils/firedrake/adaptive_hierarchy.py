@@ -48,7 +48,7 @@ class AdaptiveMeshHierarchy(HierarchyBase):
         if mesh.topological_dimension() <= 2:
             max_children = 4
         else:
-            max_children = 8
+            max_children = 16
         self._meshes += tuple(mesh)
         self.meshes += tuple(mesh)
         coarse_mesh = self.meshes[-2]
@@ -145,6 +145,7 @@ class AdaptiveMeshHierarchy(HierarchyBase):
                 fine_id_sub = fine_full_to_sub_map[n][j]
                 coarse_id_sub = coarse_full_to_sub_map[n][parent.item()]
                 f2c_adjusted[n][fine_id_sub, 0] = coarse_id_sub
+
 
         c2f_subm = {
             i: {Fraction(0, 1): c2f_adjusted[i].astype(int)}
@@ -327,7 +328,7 @@ def split_to_submesh(mesh, coarse_mesh, c2f, f2c):
     if mesh.topological_dimension() <= 2:
         max_children = 4
     else:
-        max_children = 8
+        max_children = 16
     V = FunctionSpace(mesh, "DG", 0)
     V2 = FunctionSpace(coarse_mesh, "DG", 0)
     coarse_splits = {

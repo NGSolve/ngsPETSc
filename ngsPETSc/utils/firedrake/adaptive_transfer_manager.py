@@ -1,13 +1,15 @@
 """
-This module contains the AdaptiveTransferManager used to perform 
+This module contains the AdaptiveTransferManager used to perform
 transfer operations on AdaptiveMeshHierarchies
 """
+import numpy as np
 from firedrake import Function
 from firedrake.mg.embedded import TransferManager
 from firedrake.mg.utils import get_level
 
 
 __all__ = ("AdaptiveTransferManager",)
+
 
 class AdaptiveTransferManager(TransferManager):
     """ 
@@ -18,6 +20,7 @@ class AdaptiveTransferManager(TransferManager):
         self.tm = TransferManager()
         self.weight_cache = {}
         self.work_function_cache = {}
+        self.perm_cache = {}
 
     def generic_transfer(self, source, target, transfer_op):
         """
@@ -65,11 +68,22 @@ class AdaptiveTransferManager(TransferManager):
                 target_function_splits = amh.split_function(curr_target, child=False)
 
             for split_label, _ in source_function_splits.items():
-
-                transfer_op(
-                    source_function_splits[split_label],
-                    target_function_splits[split_label],
-                )
+                if split_label == 1:
+                    # we don't want to transfer across unsplit parts,
+                    # instead we copy dofs
+                    us_func = source_function_splits[1]
+                    ut_func = target_function_splits[1]
+                    permutations = self.get_perm(
+                        us_func,
+                        ut_func,
+                        transfer_op
+                    )
+                    ut_func.dat.data_wo[permutations] = us_func.dat.data_ro
+                else:
+                    transfer_op(
+                        source_function_splits[split_label],
+                        target_function_splits[split_label],
+                    )
 
             amh.recombine(target_function_splits, curr_target, child=order + 1)
             curr_source = curr_target
@@ -94,6 +108,27 @@ class AdaptiveTransferManager(TransferManager):
             return self.weight_cache.setdefault(
                 V_source, amh.use_weight(V_source, child=True)
             )
+        
+    def get_perm(self, unsplit_source, unsplit_target, transfer_op):
+        """
+        Cache permutations of DoFs from unsplit source 
+        to unsplit target. This is used to skip transfer
+        across unsplit mesh hierarchies
+        """
+        key = (unsplit_source.function_space(),
+               unsplit_target.function_space())
+        
+        try:
+            return self.perm_cache[key]
+        except KeyError:
+            source_nodes = Function(key[0])
+            permutation = Function(key[1])
+            source_nodes.dat.data[:] = np.arange(len(source_nodes.dat.data))
+            transfer_op(source_nodes, permutation)
+            return self.perm_cache.setdefault(
+                key, np.rint(permutation.dat.data_ro).astype(int)
+            )
+
 
     def prolong(self, uc, uf):
         """
