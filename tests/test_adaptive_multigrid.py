@@ -6,10 +6,6 @@ and AdaptiveTransferManager
 import random
 import pytest
 import numpy as np
-from firedrake.mg.ufl_utils import coarsen
-from firedrake.dmhooks import get_appctx
-from firedrake import dmhooks
-from firedrake.solving_utils import _SNESContext
 from firedrake import (
     Mesh,
     MeshHierarchy,
@@ -288,16 +284,8 @@ def test_mg_jacobi(amh, atm):  # pylint: disable=W0621
     }
 
     problem = NonlinearVariationalProblem(F, u, bc)
-    dm = u.function_space().dm
-    old_appctx = get_appctx(dm)
-    mat_type = "aij"
-    appctx = _SNESContext(problem, mat_type, mat_type, old_appctx)
-    appctx.transfer_manager = atm
     solver = NonlinearVariationalSolver(problem, solver_parameters=params)
     solver.set_transfer_manager(atm)
-    with dmhooks.add_hooks(dm, solver, appctx=appctx, save=False):
-        coarsen(problem, coarsen)
-
     solver.solve()
     assert errornorm(u_ex, u) <= 1e-8
 
@@ -380,18 +368,8 @@ def test_mg_patch(amh, atm, params):  # pylint: disable=W0621
     F = inner(grad(u - u_ex), grad(v)) * dx
 
     problem = NonlinearVariationalProblem(F, u, bc)
-
-    dm = u.function_space().dm
-    old_appctx = get_appctx(dm)
-    mat_type = "aij"
-    appctx = _SNESContext(problem, mat_type, mat_type, old_appctx)
-    appctx.transfer_manager = atm
-
     solver = NonlinearVariationalSolver(problem,
                                         solver_parameters=solver_params)
     solver.set_transfer_manager(atm)
-    with dmhooks.add_hooks(dm, solver, appctx=appctx, save=False):
-        coarsen(problem, coarsen)
-
     solver.solve()
     assert errornorm(u_ex, u) <= 1e-8

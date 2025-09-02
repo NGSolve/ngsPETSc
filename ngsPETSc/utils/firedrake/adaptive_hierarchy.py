@@ -48,7 +48,7 @@ class AdaptiveMeshHierarchy(HierarchyBase):
         if mesh.topological_dimension() <= 2:
             max_children = 4
         else:
-            max_children = 16
+            max_children = 8
         self._meshes += tuple(mesh)
         self.meshes += tuple(mesh)
         coarse_mesh = self.meshes[-2]
@@ -327,7 +327,7 @@ def split_to_submesh(mesh, coarse_mesh, c2f, f2c):
     if mesh.topological_dimension() <= 2:
         max_children = 4
     else:
-        max_children = 16
+        max_children = 8
     V = FunctionSpace(mesh, "DG", 0)
     V2 = FunctionSpace(coarse_mesh, "DG", 0)
     coarse_splits = {
