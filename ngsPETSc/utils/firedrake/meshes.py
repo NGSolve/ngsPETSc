@@ -269,8 +269,8 @@ class FiredrakeMesh:
         geometric_dim = topology.topology_dm.getCoordinateDim()
         element = fd.VectorElement("Lagrange", cell, 1, dim=geometric_dim)
         # Create mesh object
-        self.firedrakeMesh = fd.MeshGeometry.__new__(fd.MeshGeometry, element, comm)
-        self.firedrakeMesh._init_topology(topology)
+        coords = fd.mesh.coordinates_from_topology(topology, element)
+        self.firedrakeMesh = fd.MeshGeometry(coords)
         self.firedrakeMesh.name = name
         # Adding Netgen mesh and inverse sfBC as attributes
         self.firedrakeMesh.netgen_mesh = self.meshMap.ngMesh
