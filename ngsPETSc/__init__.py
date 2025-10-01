@@ -6,15 +6,8 @@ from ngsPETSc.plex import *
 __all__ = []
 
 #Firedrake
-try:
-    import firedrake
-except ImportError:
-    firedrake = None
-
-if firedrake:
-    from ngsPETSc.utils.firedrake.meshes import *
-    from ngsPETSc.utils.firedrake.hierarchies import *
-    __all__ = __all__ + ["FiredrakeMesh", "NetgenHierarchy"]
+from ngsPETSc.utils.firedrake.meshes import *
+__all__ = __all__ + ["FiredrakeMesh"]
 
 #FEniCSx
 try:
