@@ -254,6 +254,7 @@ class GeometricModel:
                 c_els,
                 V,
                 partitioner,
+                2  # Maximum number of cells connected to any facet
             )
             # Wrap as Python object
             mesh = dolfinx.mesh.Mesh(cpp_mesh, domain=None)
