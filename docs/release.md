@@ -36,6 +36,9 @@ poetry build
 
 ## Create a release
 Follow these steps to create a release:
+
+1. Change the version number in `pyproject.toml`
+
 ```bash
 # For a bug fix:
 poetry version patch
@@ -46,9 +49,7 @@ poetry version minor
 
 git add pyproject.toml
 git commit -m "Release v$(poetry version)"
-
-git tag -a -m "Release v$(poetry version)" v$(poetry version)
-
 git push
-git push origin v$(poetry version)
 ```
+
+2. Manually trigger the [release workflow](https://github.com/NGSolve/ngsPETSc/actions/workflows/release.yml), passing in the new version number

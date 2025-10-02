@@ -1,9 +1,5 @@
 name: Publish release
 
-# To make a release the following steps should be done:
-# 1. Bump the version number in the 'pyproject.toml'
-# 2. Manually trigger this workflow, passing in the new version number
-
 on:
   workflow_dispatch:
     inputs:
