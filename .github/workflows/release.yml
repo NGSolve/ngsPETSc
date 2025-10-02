@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-      description: The version number to release, this should include the 'v' prefix
-      type: string
-      required: true
+        description: The version number to release, this should include the 'v' prefix
+        type: string
+        required: true
 
 jobs:
   build:
