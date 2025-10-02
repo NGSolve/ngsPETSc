@@ -7,6 +7,12 @@ the package will only be used in combination with FEniCSx.
 import typing
 import basix.ufl
 import dolfinx
+
+try:
+    from dolfinx.io import gmshio
+except ImportError:
+    from dolfinx.io import gmsh as gmshio
+
 import numpy as np
 import numpy.typing as npt
 import ufl
@@ -218,7 +224,7 @@ class GeometricModel:
         # and create the DOLFINx mesh
         if mixed_mesh:
             ufl_domain = [
-                dolfinx.io.gmshio.ufl_mesh(
+                gmshio.ufl_mesh(
                     _ngs_to_cells[(gdim, Ti.shape[1])], gdim, dolfinx.default_real_type
                 )
                 for Ti in T
@@ -248,12 +254,13 @@ class GeometricModel:
                 c_els,
                 V,
                 partitioner,
+                2  # Maximum number of cells connected to any facet
             )
             # Wrap as Python object
             mesh = dolfinx.mesh.Mesh(cpp_mesh, domain=None)
 
         else:
-            ufl_domain = dolfinx.io.gmshio.ufl_mesh(
+            ufl_domain = gmshio.ufl_mesh(
                 _ngs_to_cells[(gdim, T.shape[1])], gdim, dolfinx.default_real_type
             )
 
@@ -658,7 +665,7 @@ def extract_element_tags(
         entities = np.zeros((0, num_vertices_per_cell), dtype=np.int64)
         entity_markers = np.zeros((0,), dtype=np.int32)
 
-    local_entities, local_values = dolfinx.io.gmshio.distribute_entity_data(
+    local_entities, local_values = dolfinx.io.distribute_entity_data(
         dolfinx_mesh, dim, entities, entity_markers
     )
     dolfinx_mesh.topology.create_connectivity(dim, 0)
