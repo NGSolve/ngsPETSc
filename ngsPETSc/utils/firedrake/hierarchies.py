@@ -38,7 +38,7 @@ def snapToCoarse(coarse, linear, degree, snap_smoothing, cg):
     '''
     This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
     '''
-    dim = linear.geometric_dimension()
+    dim = linear.geometric_dimension
     if dim == 2:
         space = fd.VectorFunctionSpace(linear, "CG", degree)
         ho = fd.assemble(interpolate(coarse, space))
@@ -46,7 +46,7 @@ def snapToCoarse(coarse, linear, degree, snap_smoothing, cg):
             #Hyperelastic Smoothing
             bcs = [fd.DirichletBC(space, ho, "on_boundary")]
             quad_degree = 2*(degree+1)-1
-            d = linear.topological_dimension()
+            d = linear.topological_dimension
             Q = fd.TensorFunctionSpace(linear, "DG", degree=0)
             Jinv = ufl.JacobianInverse(linear)
             hinv = fd.Function(Q)
@@ -187,7 +187,7 @@ def NetgenHierarchy(mesh, levs, flags):
         -tol, geometric tolerance adopted in snapToNetgenDMPlex.
         -refinement_type, the refinment type to be used: uniform (default), Alfeld
     '''
-    if mesh.geometric_dimension() == 3:
+    if mesh.geometric_dimension == 3:
         raise NotImplementedError("Netgen hierachies are only implemented for 2D meshes.")
     comm = mesh.comm
     #Parsing netgen flags
@@ -241,7 +241,7 @@ def NetgenHierarchy(mesh, levs, flags):
             snapToNetgenDMPlex(ngmesh, rdm)
         #We construct a Firedrake mesh from the DMPlex mesh
         no = impl.create_lgmap(rdm)
-        mesh = fd.Mesh(rdm, dim=meshes[-1].geometric_dimension(), reorder=False,
+        mesh = fd.Mesh(rdm, dim=meshes[-1].geometric_dimension, reorder=False,
                        distribution_parameters=params, comm=comm)
         o = impl.create_lgmap(mesh.topology_dm)
         lgmaps.append((no, o))

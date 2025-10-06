@@ -49,7 +49,7 @@ def refineMarkedElements(self, mark, netgen_flags={}):
     '''
     DistParams = self._distribution_parameters
     els = {2: self.netgen_mesh.Elements2D, 3: self.netgen_mesh.Elements3D}
-    dim = self.geometric_dimension()
+    dim = self.geometric_dimension
     refine_faces = flagsUtils(netgen_flags, "refine_faces", False)
     if dim in [2,3]:
         with mark.dat.vec as marked:
@@ -99,7 +99,7 @@ def curveField(self, order, permutation_tol=1e-8, location_tol=1e-1, cg_field=Fa
     else:
         ng_element = self.netgen_mesh.Elements3D
     ng_dimension = len(ng_element())
-    geom_dim = self.geometric_dimension()
+    geom_dim = self.geometric_dimension
 
     # Construct the mesh as a Firedrake function
     if cg_field:
