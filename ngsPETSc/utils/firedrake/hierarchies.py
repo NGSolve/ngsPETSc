@@ -10,6 +10,20 @@ try:
 except ImportError:
     fd = None
 
+import logging
+logger = logging.getLogger("ngsPETSc")
+logging.basicConfig(filename='ngsPETSc.log',
+                    encoding='utf-8',
+                    level=logging.DEBUG)
+try:
+    from numba import jit
+    numba_logger = logging.getLogger('numba')
+    numba_logger.setLevel(logging.WARNING)
+    use_numba = True
+except ImportError:
+    use_numba = False
+
+import time
 from fractions import Fraction
 import numpy as np
 from petsc4py import PETSc
@@ -17,22 +31,61 @@ from petsc4py import PETSc
 from netgen.meshing import MeshingParameters
 
 from ngsPETSc.utils.firedrake.meshes import flagsUtils
+from ngsPETSc.utils.utils import trim_util
 
-def snapToNetgenDMPlex(ngmesh, petscPlex):
+if use_numba:
+    @jit(nopython=True)
+    def numba_fast_snap(index, ngCoordinates, petscCoordinates):
+        for i in index:
+            pt = petscCoordinates[i]
+            j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
+            petscCoordinates[i] = ngCoordinates[j]
+        return petscCoordinates
+
+def fast_snap(index, ngCoordinates, petscCoordinates):
+    for i in index:
+        pt = petscCoordinates[i]
+        j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
+        petscCoordinates[i] = ngCoordinates[j]
+    return petscCoordinates
+
+def snapToNetgenDMPlex(ngmesh, petscPlex, comm):
     '''
     This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
     '''
+    if len(ngmesh.Elements3D()) == 0:
+        ng_element = ngmesh.Elements2D
+        ng_coelement = ngmesh.Elements1D
+    else:
+        ng_element = ngmesh.Elements3D
+        ng_coelement = ngmesh.Elements2D
+    if comm.rank == 0:
+        ngmesh.Curve(2)
+        nodes_to_correct = ng_element().NumPy()["nodes"]
+        nodes_to_correct = comm.bcast(nodes_to_correct, root=0)
+        ngmesh.Curve(1)
+    else:
+        curved = comm.bcast(None, root=0)
+    nodes_to_correct = trim_util(nodes_to_correct)
+    nodes_to_correct_sorted = np.hstack(nodes_to_correct.reshape((-1,1)))
+    nodes_to_correct_sorted.sort()
+    nodes_to_correct_index = np.unique(nodes_to_correct_sorted)
+    tic = time.time()
+    logger.info(f"\t\t\tSanpping the DMPlex to NETGEN mesh")
     if petscPlex.getDimension() == 2:
-        ngCoordinates = ngmesh.Coordinates()
+        ngCoordinates = ngmesh.Coordinates()[nodes_to_correct_index]
         petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)
-        for i, pt in enumerate(petscCoordinates):
-            j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
-            petscCoordinates[i] = ngCoordinates[j]
+        if use_numba:
+            petscCoordinates = numba_fast_snap(nodes_to_correct_index, ngCoordinates, petscCoordinates)
+        else:
+            petscCoordinates = fast_snap(nodes_to_correct_index, ngCoordinates, petscCoordinates)
         petscPlexCoordinates = petscPlex.getCoordinatesLocal()
-        petscPlexCoordinates.setArray(petscPlexCoordinates)
+        petscPlexCoordinates.setArray(petscCoordinates.reshape((-1,1)))
         petscPlex.setCoordinatesLocal(petscPlexCoordinates)
     else:
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
+    toc = time.time()
+    logger.debug(f"\t\t\tSanp the DMPlex to NETGEN mesh. Time taken: {toc - tic} seconds")
 
 def snapToCoarse(coarse, linear, degree, snap_smoothing, cg):
     '''
@@ -187,6 +240,10 @@ def NetgenHierarchy(mesh, levs, flags):
         -tol, geometric tolerance adopted in snapToNetgenDMPlex.
         -refinement_type, the refinment type to be used: uniform (default), Alfeld
     '''
+    global use_numba
+    
+    logger.info(f"Creating a Netgen hierarchy with {levs} levels.")
+
     if mesh.geometric_dimension() == 3:
         raise NotImplementedError("Netgen hierachies are only implemented for 2D meshes.")
     comm = mesh.comm
@@ -194,13 +251,18 @@ def NetgenHierarchy(mesh, levs, flags):
     if not isinstance(flags, dict):
         flags = {}
     order = flagsUtils(flags, "degree", 1)
+    logger.info(f"\tOrder of the hierarchy: {order}")
     if isinstance(order, int):
         order= [order]*(levs+1)
     permutation_tol = flagsUtils(flags, "tol", 1e-8)
     refType = flagsUtils(flags, "refinement_type", "uniform")
+    logger.info(f"\tRefinement type: {refType}")
+    use_numba = flagsUtils(flags, "numba_jit", use_numba) and use_numba
+    logger.info(f"\tUsing numba jit: {use_numba}")
     optMoves = flagsUtils(flags, "optimisation_moves", False)
     snap = flagsUtils(flags, "snap_to", "geometry")
     snap_smoothing = flagsUtils(flags, "snap_smoothing", "hyperelastic")
+    logger.info(f"\tSnap to {snap} using {snap_smoothing} smoothing (if snapping to coarse)")
     cg = flagsUtils(flags, "cg", False)
     nested = flagsUtils(flags, "nested", snap in ["coarse"])
     #Firedrake quoantities
@@ -238,7 +300,7 @@ def NetgenHierarchy(mesh, levs, flags):
         cdm = rdm
         #We snap the mesh to the Netgen mesh
         if snap == "geometry":
-            snapToNetgenDMPlex(ngmesh, rdm)
+            snapToNetgenDMPlex(ngmesh, rdm, comm)
         #We construct a Firedrake mesh from the DMPlex mesh
         no = impl.create_lgmap(rdm)
         mesh = fd.Mesh(rdm, dim=meshes[-1].geometric_dimension(), reorder=False,
@@ -264,9 +326,10 @@ def NetgenHierarchy(mesh, levs, flags):
                 )
             elif snap == "coarse":
                 mesh = snapToCoarse(ho_field, mesh, order[l+1], snap_smoothing, cg)
+        logger.info(f"\t\t Level {l+1}: with {ngmesh.Coordinates().shape[0]} vertices, with order {order[l+1]}, snapping to {snap} and optimisation moves {optMoves}.")
         mesh.topology_dm.setRefineLevel(1 + l)
         meshes += [mesh]
-    #We populate the coarse to fine map
+    #We populate the coarse to fine ma
     coarse_to_fine_cells, fine_to_coarse_cells = refinementTypes[refType][1](meshes, lgmaps)
     return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
                             1, nested=nested)
