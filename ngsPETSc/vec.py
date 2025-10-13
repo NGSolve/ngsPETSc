@@ -62,18 +62,20 @@ class VectorMapping:
         self.ngsToPETScScat = PETSc.Scatter().create(self.sVec, isetlocfree,
                                                      self.pVec, iset)
 
-    def petscVec(self, ngsVec, petscVec=None):
+    def petscVec(self, ngsVec=None, petscVec=None):
         '''
         This function generate a PETSc vector from a NGSolve vector
 
         :arg ngsVec: the NGSolve vector
         :arg petscVec: the PETSc vector to be loaded with NGSolve
-        vector, if None new PETSc vector is generated, by deafault None.
+        vector, if None new PETSc vector is generated, by default None.
 
         '''
+        if petscVec is None:
+            petscVec = self.pVec.duplicate()
+        if ngsVec is None:
+            return petscVec
         if hasattr(ngsVec, "nblocks"):
-            if petscVec is None:
-                petscVec = self.pVec.duplicate()
             indexSum = 0
             for i in range(ngsVec.nblocks):
                 ngsVec[i].Distribute()
@@ -81,8 +83,6 @@ class VectorMapping:
                 petscVec.setValues(I, ngsVec[i].FV().NumPy())
                 indexSum += ngsVec[i].size
         else:
-            if petscVec is None:
-                petscVec = self.pVec.duplicate()
             ngsVec.Distribute()
             self.sVec.placeArray(ngsVec.FV().NumPy())
             petscVec.set(0)
@@ -91,18 +91,20 @@ class VectorMapping:
             self.sVec.resetArray()
         return petscVec
 
-    def ngsVec(self, petscVec, ngsVec=None):
+    def ngsVec(self, petscVec=None, ngsVec=None):
         '''
         This function generate a NGSolve vector from a PETSc vector
 
         :arg petscVec: the PETSc vector
         :arg ngsVec: the NGSolve vector vector to be loaded with PETSc
-        vector, if None new PETSc vector is generated, by deafault None.
+        vector, if None new PETSc vector is generated, by default None.
 
         '''
         if ngsVec is None:
             ngsVec = la.CreateParallelVector(self.dofs,la.PARALLEL_STATUS.CUMULATED)
         ngsVec[:] = 0
+        if petscVec is None:
+            return ngsVec
         if hasattr(ngsVec, "nblocks"):
             indexSum = 0
             for i in range(ngsVec.nblocks):
