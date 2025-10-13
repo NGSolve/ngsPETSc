@@ -23,7 +23,7 @@ EDGE_SETS_LABEL = "Edge Sets"
 
 class MeshMapping:
     '''
-    This class creates a mapping between Netgen/NGSolve meshes and PETSc DMPlex  
+    This class creates a mapping between Netgen/NGSolve meshes and PETSc DMPlex
 
     :arg mesh: the mesh object, it can be either a Netgen/NGSolve mesh or a PETSc DMPlex
 
@@ -31,9 +31,9 @@ class MeshMapping:
 
     '''
 
-    def __init__(self, mesh=None, comm=PETSc.COMM_WORLD.tompi4py(), name="Default"):
+    def __init__(self, mesh=None, comm=None, name="Default"):
         self.name = name
-        self.comm = comm
+        self.comm = comm if comm is not None else PETSc.COMM_WORLD
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             self.createPETScDMPlex(mesh)
         elif isinstance(mesh,PETSc.DMPlex):
@@ -43,17 +43,24 @@ class MeshMapping:
 
     def createNGSMesh(self, plex):
         '''
-        This function generate an NGSolve mesh from a PETSc DMPlex 
+        This function generates an NGSolve mesh from the local part of a PETSc DMPlex
 
         :arg plex: the PETSc DMPlex to be converted in NGSolve mesh object
 
         '''
+        if plex.getDimension() not in [2,3]:
+            raise NotImplementedError(f"Not implemented for dimension {plex.getDimension()}.")
+        nv = plex.getDepthStratum(0)[1] - plex.getDepthStratum(0)[0]
+        coordinates = plex.getCoordinatesLocal().getArray()
+        if coordinates.shape[0] != nv * plex.getDimension():
+            raise NotImplementedError("High-order mesh conversion is not supported")
+
         self.petscPlex = plex
         ngMesh = ngm.Mesh(dim=plex.getCoordinateDim())
         self.ngMesh = ngMesh
 
+        coordinates = coordinates.reshape(-1,plex.getDimension())
         if plex.getDimension() == 2:
-            coordinates = plex.getCoordinates().getArray().reshape([-1,2])
             self.ngMesh.AddPoints(coordinates)
             cStart,cEnd = plex.getHeightStratum(0)
             vStart, _ = plex.getHeightStratum(2)
@@ -86,8 +93,12 @@ class MeshMapping:
                         k = k+1
                     cells = cells + [cell]
             self.ngMesh.Add(ngm.FaceDescriptor(bc=1))
-            self.ngMesh.AddElements(dim=2, index=1, data=np.asarray(cells, dtype=np.int32), base=0)
+            cells = np.asarray(cells, dtype=np.int32)
+            if cells.ndim == 2:
+                self.ngMesh.AddElements(dim=2, index=1, data=cells, base=0)
             for bcLabel in range(1,plex.getLabelSize(FACE_SETS_LABEL)+1):
+                if plex.getStratumSize("Face Sets",bcLabel) == 0:
+                    continue
                 bcIndices = plex.getStratumIS("Face Sets",bcLabel).indices
                 for j in bcIndices:
                     bcIndex = plex.getCone(j)-vStart
@@ -95,7 +106,6 @@ class MeshMapping:
                         edge = ngm.Element1D([v+1 for v in bcIndex],index=bcLabel)
                         self.ngMesh.Add(edge)
         elif plex.getDimension() == 3:
-            coordinates = plex.getCoordinates().getArray().reshape([-1,3])
             self.ngMesh.AddPoints(coordinates)
             cStart, cEnd = plex.getHeightStratum(0)
             vStart, _ = plex.getHeightStratum(3)
@@ -118,10 +128,14 @@ class MeshMapping:
                         cells = cells + [[cell[0],cell[1],cell[3],cell[2]]]
             #fd = self.ngmesh.Add(ngm.FaceDescriptor(bc=plex.getLabelSize(FACE_SETS_LABEL)+1))
             self.ngMesh.Add(ngm.FaceDescriptor(bc=plex.getLabelSize(FACE_SETS_LABEL)+1))
-            self.ngMesh.AddElements(dim=3, index=plex.getLabelSize(FACE_SETS_LABEL)+1,
-                                    data=np.asarray(cells,dtype=np.int32), base=0)
+            cells = np.asarray(cells, dtype=np.int32)
+            if cells.ndim == 2:
+                self.ngMesh.AddElements(dim=3, index=plex.getLabelSize(FACE_SETS_LABEL)+1,
+                                        data=cells, base=0)
             for bcLabel in range(1,plex.getLabelSize(FACE_SETS_LABEL)+1):
                 faces = []
+                if plex.getStratumSize("Face Sets",bcLabel) == 0:
+                    continue
                 bcIndices = plex.getStratumIS("Face Sets",bcLabel).indices
                 for j in bcIndices:
                     sIndex  = plex.getCone(j)
@@ -148,8 +162,7 @@ class MeshMapping:
         '''
         This function generate an PETSc DMPlex from a Netgen/NGSolve mesh object
 
-        :arg plex: the Netgen/NGSolve mesh object to be converted into a PETSc
-                   DMPlex.
+        :arg mesh: the serial Netgen/NGSolve mesh object to be converted.
 
         '''
         if isinstance(mesh,ngs.comp.Mesh):
