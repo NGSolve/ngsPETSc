@@ -44,7 +44,7 @@ def refineMarkedElements(self, mark, netgen_flags={}):
     :arg mark: the marking function which is a Firedrake DG0 function.
     :arg netgen_flags: the dictionary of flags to be passed to ngsPETSc.
     It includes the option:
-        - refine_faces, which is a boolean specifyiong if you want to refine faces.
+        - refine_faces, which is a boolean specifying if you want to refine faces.
 
     '''
     DistParams = self._distribution_parameters
