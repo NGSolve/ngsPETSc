@@ -1,7 +1,13 @@
 '''
 ngsPETSc is a NGSolve/Netgen interface to PETSc
 '''
-from ngsPETSc.plex import *
+#initialize PETSc first
+import sys
+import petsc4py
+
+petsc4py.init(sys.argv)
+
+from ngsPETSc.plex import * #pylint: disable=C0413
 
 __all__ = []
 
