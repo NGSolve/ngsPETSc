@@ -130,8 +130,6 @@ class Matrix(object):
         else:
             mat = petscLocalMat
             mat.convert(matType)
-            if matType != 'is':
-                mat.convert(matType)
 
             if petscMat is None:
                 self.mat = mat
