@@ -49,6 +49,7 @@ class PETScPreconditioner(BaseMatrix):
         self.petscPreconditioner.setFromOptions()
         self.petscPreconditioner.setUp()
         self.petscVecX, self.petscVecY = petscMat.createVecs()
+
     def Shape(self):
         '''
         Shape of the BaseMatrix

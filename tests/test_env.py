@@ -1,6 +1,6 @@
 '''
-This module test that the environment is correctly been setup.
-In particular it will test for: petsc4py, PETSc, NGSolve, Netgen and ngsPETSc
+This module test that the environment has been setup correctly.
+In particular it will test for: petsc4py, PETSc, NGSolve and Netgen
 '''
 
 import petsc4py
@@ -9,8 +9,6 @@ from petsc4py import PETSc
 import ngsolve as ngs
 from netgen.geom2d import unit_square
 from ngsolve import x,y
-
-import ngsPETSc
 
 def test_petsc4py():
     '''
@@ -33,9 +31,3 @@ def test_ngs():
     mip = mesh(0.2, 0.2)
     coefficientFunction(mip)
     print(mip)
-
-def test_ngsPETSc():
-    '''
-    Testing that ngsPETSc can be imported correctly
-    '''
-    assert ngsPETSc.VERSION == "0.0.5"

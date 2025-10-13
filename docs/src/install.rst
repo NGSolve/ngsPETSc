@@ -2,7 +2,7 @@ Installation
 -----------------
 To install ngsPETSc (if you have a working PETSc and petsc4py installation) you need to clone the GitHub repository, and then you can install it using pip.
 ::
-    git clone https://github.com/UZerbinati/ngsPETSc.git
+    git clone https://github.com/NGSolve/ngsPETSc.git
     cd ngsPETSc
     pip install .
 Or you can use the wheel we publish on PyPi.
@@ -85,7 +85,7 @@ We suggest you add the following lines to your ``.bashrc``:
 
 We are now finally ready to install ngsPETSc:
 :: 
-    git clone https://github.com/UZerbinati/ngsPETSc.git
+    git clone https://github.com/NGSolve/ngsPETSc.git
     cd ngsPETSc
     NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
 

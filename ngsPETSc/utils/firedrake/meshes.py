@@ -27,15 +27,6 @@ except ImportError:
 from ngsPETSc import MeshMapping
 from ngsPETSc.utils.utils import find_permutation
 
-def flagsUtils(flags, option, default):
-    '''
-    utility fuction used to parse Netgen flag options
-    '''
-    try:
-        return flags[option]
-    except KeyError:
-        return default
-
 def refineMarkedElements(self, mark, netgen_flags={}):
     '''
     This method is used to refine a mesh based on a marking function
@@ -44,13 +35,13 @@ def refineMarkedElements(self, mark, netgen_flags={}):
     :arg mark: the marking function which is a Firedrake DG0 function.
     :arg netgen_flags: the dictionary of flags to be passed to ngsPETSc.
     It includes the option:
-        - refine_faces, which is a boolean specifyiong if you want to refine faces.
+        - refine_faces, which is a boolean specifying if you want to refine faces.
 
     '''
     DistParams = self._distribution_parameters
     els = {2: self.netgen_mesh.Elements2D, 3: self.netgen_mesh.Elements3D}
     dim = self.geometric_dimension()
-    refine_faces = flagsUtils(netgen_flags, "refine_faces", False)
+    refine_faces = netgen_flags.get("refine_faces", False)
     if dim in [2,3]:
         with mark.dat.vec as marked:
             marked0 = marked
@@ -226,10 +217,10 @@ class FiredrakeMesh:
         #Parsing netgen flags
         if not isinstance(netgen_flags, dict):
             netgen_flags = {}
-        split2tets = flagsUtils(netgen_flags, "split_to_tets", False)
-        split = flagsUtils(netgen_flags, "split", False)
-        quad = flagsUtils(netgen_flags, "quad", False)
-        optMoves = flagsUtils(netgen_flags, "optimisation_moves", False)
+        split2tets = netgen_flags.get("split_to_tets", False)
+        split = netgen_flags.get("split", False)
+        quad = netgen_flags.get("quad", False)
+        optMoves = netgen_flags.get("optimisation_moves", False)
         #Checking the mesh format
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             if split2tets:

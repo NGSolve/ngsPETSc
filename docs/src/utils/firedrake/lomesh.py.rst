@@ -15,9 +15,8 @@ Using the Constructive Solid Geometry (CSG) features implemented in Netgen, we c
 First, we need to import the Netgen library required in order to construct a `SplineGeometry`::
 
    from netgen.geom2d import SplineGeometry
-   geo = SplineGeometry()
 
-Now using the two of the predefined CSG geometries included in Netgen, a rectangle and a circle, we construct a square with an inscribed disk that we will later flag for refinement, using the `SetMaterial` and `SetDomainMaxH` methods: ::
+Now using two of the predefined CSG geometries included in Netgen, a rectangle and a circle, we construct a square with an inscribed disk that we will later flag for refinement, using the `SetMaterial` and `SetDomainMaxH` methods: ::
 
    geo = SplineGeometry()
    geo.AddRectangle(p1=(-1, -1),

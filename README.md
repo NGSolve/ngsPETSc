@@ -1,5 +1,5 @@
 # ngsPETSc
-[![ngsPETSc](https://github.com/UZerbinati/ngsPETSc/actions/workflows/ngsPETSc.yml/badge.svg)](https://github.com/UZerbinati/ngsPETSc/actions/workflows/ngsPETSc.yml)
+[![ngsPETSc](https://github.com/NGSolve/ngsPETSc/actions/workflows/ngsPETSc.yml/badge.svg)](https://github.com/NGSolve/ngsPETSc/actions/workflows/ngsPETSc.yml)
 [![Documentation Status](https://readthedocs.org/projects/ngspetsc/badge/?version=latest)](https://ngspetsc.readthedocs.io/en/latest/?badge=latest)
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.07359/status.svg)](https://doi.org/10.21105/joss.07359)
 
@@ -19,7 +19,7 @@ To get started with ngsPETSc, check out the [documentation](https://ngspetsc.rea
 ## Development
 If you already have NGSolve (with MPI support) and PETSc installed, you can install ngsPETSc via pip:
 ```bash
-git clone https://github.com/UZerbinati/ngsPETSc.git
+git clone https://github.com/NGSolve/ngsPETSc.git
 pip install ./ngsPETSc
 ```
 Alternatively, you can also build PETSc, SLEPc, and NGSolve from source following the instructions in the [documentation](https://ngspetsc.readthedocs.io/en/latest/install.html).
