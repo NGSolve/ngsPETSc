@@ -15,22 +15,20 @@ import numpy as np
 from petsc4py import PETSc
 
 from netgen.meshing import MeshingParameters
+from ngsPETSc.plex import MeshMapping
 
 def snapToNetgenDMPlex(ngmesh, petscPlex):
     '''
     This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
     '''
-    if petscPlex.getDimension() == 2:
-        ngCoordinates = ngmesh.Coordinates()
-        petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)
-        for i, pt in enumerate(petscCoordinates):
-            j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
-            petscCoordinates[i] = ngCoordinates[j]
-        petscPlexCoordinates = petscPlex.getCoordinatesLocal()
-        petscPlexCoordinates.setArray(petscPlexCoordinates)
-        petscPlex.setCoordinatesLocal(petscPlexCoordinates)
-    else:
-        raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
+    ngCoordinates = ngmesh.Coordinates()
+    petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)
+    for i, pt in enumerate(petscCoordinates):
+        j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
+        petscCoordinates[i] = ngCoordinates[j]
+    petscPlexCoordinates = petscPlex.getCoordinatesLocal()
+    petscPlexCoordinates.setArray(petscPlexCoordinates)
+    petscPlex.setCoordinatesLocal(petscPlexCoordinates)
 
 def snapToCoarse(coarse, linear, degree, snap_smoothing, cg):
     '''
@@ -116,15 +114,14 @@ def uniformRefinementRoutine(ngmesh, cdm):
     '''
     Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
     '''
-    #We refine the netgen mesh uniformly
-    ngmesh.Refine(adaptive=False)
     #We refine the DMPlex mesh uniformly
     cdm.setRefinementUniform(True)
     rdm = cdm.refine()
     rdm.removeLabel("pyop2_core")
     rdm.removeLabel("pyop2_owned")
     rdm.removeLabel("pyop2_ghost")
-    return (rdm, ngmesh)
+    mapping = MeshMapping(rdm, geo=ngmesh.GetGeometry())
+    return (rdm, mapping.ngMesh)
 
 def uniformMapRoutine(meshes, lgmaps):
     '''
@@ -185,8 +182,8 @@ def NetgenHierarchy(mesh, levs, flags):
         -tol, geometric tolerance adopted in snapToNetgenDMPlex.
         -refinement_type, the refinment type to be used: uniform (default), Alfeld
     '''
-    if mesh.geometric_dimension() == 3:
-        raise NotImplementedError("Netgen hierachies are only implemented for 2D meshes.")
+    if mesh.geometric_dimension() > 3:
+        raise NotImplementedError("Netgen hierachies are only implemented for 2D and 3D meshes.")
     comm = mesh.comm
     #Parsing netgen flags
     if not isinstance(flags, dict):
