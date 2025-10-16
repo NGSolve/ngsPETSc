@@ -62,7 +62,6 @@ class MeshMapping:
         if self.geo:
             self.ngMesh.SetGeometry(self.geo)
             self.geoInfo = True
-            print("GEO_INFO: ", self.geoInfo)
 
         coordinates = coordinates.reshape(-1,plex.getDimension())
         if plex.getDimension() == 2:

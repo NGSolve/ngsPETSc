@@ -72,7 +72,7 @@ def snapToNetgenDMPlex(ngmesh, petscPlex, comm):
     tic = time.time()
     logger.info(f"\t\t\tSanpping the DMPlex to NETGEN mesh")
     ngCoordinates = ngmesh.Coordinates()[nodes_to_correct_index]
-    petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)
+    petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)[nodes_to_correct_index]
     if use_numba:
         petscCoordinates = numba_fast_snap(nodes_to_correct_index, ngCoordinates, petscCoordinates)
     else:
