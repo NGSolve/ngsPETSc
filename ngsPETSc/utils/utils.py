@@ -6,6 +6,7 @@ import numpy as np
 from petsc4py import PETSc
 from scipy.spatial.distance import cdist
 import numpy.typing as npt
+from packaging.version import Version
 
 __all__ = ["find_permutation"]
 
@@ -41,3 +42,12 @@ def find_permutation(points_a:npt.NDArray[np.inexact], points_b:npt.NDArray[np.i
         )
 
     return permutation
+
+def trim_util(T):
+    if Version(np.__version__) >= Version("2.2"):
+        T = np.trim_zeros(T, "b", axis=1).astype(np.int32) - 1
+    else:
+        T = (np.array([list(np.trim_zeros(a, "b")) for a in list(T)],
+                dtype=np.int32,
+            )- 1)
+    return T

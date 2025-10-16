@@ -4,10 +4,9 @@ PETSc DMPlex using the petsc4py interface.
 '''
 import itertools
 import numpy as np
-from packaging.version import Version
 from petsc4py import PETSc
-
 import netgen.meshing as ngm
+from ngsPETSc.utils.utils import trim_util
 try:
     import ngsolve as ngs
 except ImportError:
@@ -189,16 +188,7 @@ class MeshMapping:
                     surfMesh, dim = True, 2
                     T = self.ngMesh.Elements2D().NumPy()["nodes"]
 
-                if Version(np.__version__) >= Version("2.2"):
-                    T = np.trim_zeros(T, "b", axis=1).astype(np.int32) - 1
-                else:
-                    T = (
-                        np.array(
-                            [list(np.trim_zeros(a, "b")) for a in list(T)],
-                            dtype=np.int32,
-                        )
-                        - 1
-                    )
+                T  = trim_util(T)
 
                 plex = PETSc.DMPlex().createFromCellList(dim, T, V, comm=comm)
                 plex.setName(self.name)
