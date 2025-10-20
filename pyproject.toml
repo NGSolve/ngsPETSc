@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "ngsPETSc"
-version = "0.1.1"
+version = "0.2.0"
 description = "NGSolve/Netgen interface to PETSc"
 authors = [
   { name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk" },

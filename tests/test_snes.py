@@ -9,8 +9,6 @@ import netgen.meshing as ngm
 
 from mpi4py.MPI import COMM_WORLD
 
-import pytest
-
 from ngsPETSc import NonLinearSolver
 
 def test_snes_toy_newtonls():
@@ -18,20 +16,24 @@ def test_snes_toy_newtonls():
     Testing ngsPETSc SNES wrap for a toy problem, using newtonls
     '''
     if COMM_WORLD.rank == 0:
-        mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
+        mesh = Mesh(unit_square.GenerateMesh(maxh=0.3).Distribute(COMM_WORLD))
     else:
         mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
     fes = H1(mesh, order=1, dirichlet="left|right|top|bottom")
     u,v = fes.TnT()
     a = BilinearForm(fes)
     a += (grad(u) * grad(v) + 1/3*u**3*v- 10 * v)*dx
-    solver = NonLinearSolver(fes, a=a, objective=False,
-                             solverParameters={"snes_type": "newtonls", "snes_monitor": "",
-                                               "pc_type": "none"})
     gfu0 = GridFunction(fes)
     gfu0.Set((x*(1-x))**4*(y*(1-y))**4) # initial guess
+    solver = NonLinearSolver(fes, a=a, optionsPrefix='toy0_0_')
     solver.solve(gfu0)
     assert solver.snes.getConvergedReason() in [4,3,2]
+    for i, mfopt in enumerate(['-snes_mf_operator', '-snes_mf']):
+        solverParameters = {mfopt : True}
+        solver = NonLinearSolver(fes, a=a, optionsPrefix=f'toy0_{i}_',
+                                 solverParameters=solverParameters)
+        solver.solve(gfu0)
+        assert solver.snes.getConvergedReason() in [4,3,2]
 
 def test_snes_toy_lbfgs():
     '''
@@ -41,24 +43,21 @@ def test_snes_toy_lbfgs():
         mesh = Mesh(unit_square.GenerateMesh(maxh=0.1).Distribute(COMM_WORLD))
     else:
         mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
-    fes = H1(mesh, order=3, dirichlet="left|right|top|bottom")
+    fes = H1(mesh, order=1, dirichlet="left|right|top|bottom")
     u,v = fes.TnT()
     a = BilinearForm(fes)
     a += (grad(u) * grad(v) + 1/3*u**3*v- 10 * v)*dx
-    solver = NonLinearSolver(fes, a=a, objective=False,
-                             solverParameters={"snes_type": "qn", "snes_monitor": "",
-                                               "pc_type": "lu"})
+    solver = NonLinearSolver(fes, a=a, optionsPrefix='toy1_',
+                             solverParameters={"snes_type": "qn"})
     gfu0 = GridFunction(fes)
     gfu0.Set((x*(1-x))**4*(y*(1-y))**4) # initial guess
     solver.solve(gfu0)
     assert solver.snes.getConvergedReason() in [4,3,2]
 
-@pytest.mark.mpi_skip()
 def test_snes_elastic_beam_newtonls():
     '''
-    Testing ngsPETSc SNES wrap for NeoHook energy minimisation, using newtonls
-    This test run only in serial becasue variational energy as objective only works
-    in serial, please use objective=False in parallel. 
+    Testing ngsPETSc SNES wrap for NeoHook energy minimisation,
+    using newtonls and an objective function
     '''
     from netgen.geom2d import SplineGeometry
     if COMM_WORLD.rank == 0:
@@ -69,6 +68,7 @@ def test_snes_elastic_beam_newtonls():
         mesh = Mesh(geo.GenerateMesh(maxh=0.05).Distribute(COMM_WORLD))
     else:
         mesh = Mesh(ngm.Mesh.Receive(COMM_WORLD))
+
     # E module and poisson number:
     E, nu = 210, 0.2
     # Lamé constants:
@@ -91,10 +91,10 @@ def test_snes_elastic_beam_newtonls():
     a = BilinearForm(fes, symmetric=True)
     a += Variation(NeoHook (C).Compile() * dx
                     -factor * (InnerProduct(force,u) ).Compile() * dx)
-    solver = NonLinearSolver(fes, a=a,
+    solver = NonLinearSolver(fes, a=a, use_objective=True, optionsPrefix='toy2_',
                              solverParameters={"snes_type": "newtonls",
-                                               "snes_max_it": 10,
-                                               "snes_monitor": "",
+                                               "snes_rtol": 1e-4,
+                                               "snes_monitor": "::ascii_info_detail",
                                                "pc_type": "lu"})
     gfu0 = GridFunction(fes)
     gfu0.Set((0,0)) # initial guess
@@ -105,5 +105,4 @@ def test_snes_elastic_beam_newtonls():
 if __name__ == '__main__':
     test_snes_toy_lbfgs()
     test_snes_toy_newtonls()
-    if COMM_WORLD.size == 1:
-        test_snes_elastic_beam_newtonls()
+    test_snes_elastic_beam_newtonls()
