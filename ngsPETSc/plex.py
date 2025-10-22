@@ -4,10 +4,9 @@ PETSc DMPlex using the petsc4py interface.
 '''
 import itertools
 import numpy as np
-from packaging.version import Version
 from petsc4py import PETSc
-
 import netgen.meshing as ngm
+from ngsPETSc.utils.utils import trim_util
 try:
     import ngsolve as ngs
 except ImportError:
@@ -31,9 +30,10 @@ class MeshMapping:
 
     '''
 
-    def __init__(self, mesh=None, comm=None, name="Default"):
+    def __init__(self, mesh=None, comm=None, geo=None, name="Default"):
         self.name = name
         self.comm = comm if comm is not None else PETSc.COMM_WORLD
+        self.geo = geo
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             self.createPETScDMPlex(mesh)
         elif isinstance(mesh,PETSc.DMPlex):
@@ -58,6 +58,10 @@ class MeshMapping:
         self.petscPlex = plex
         ngMesh = ngm.Mesh(dim=plex.getCoordinateDim())
         self.ngMesh = ngMesh
+        self.geoInfo = False
+        if self.geo:
+            self.ngMesh.SetGeometry(self.geo)
+            self.geoInfo = True
 
         coordinates = coordinates.reshape(-1,plex.getDimension())
         if plex.getDimension() == 2:
@@ -103,8 +107,10 @@ class MeshMapping:
                 for j in bcIndices:
                     bcIndex = plex.getCone(j)-vStart
                     if len(bcIndex) == 2:
-                        edge = ngm.Element1D([v+1 for v in bcIndex],index=bcLabel)
-                        self.ngMesh.Add(edge)
+                        edge = ngm.Element1D([v+1 for v in bcIndex],
+                                             index=bcLabel,
+                                             edgenr=bcLabel-1)
+                        self.ngMesh.Add(edge, project_geominfo=self.geoInfo)
         elif plex.getDimension() == 3:
             self.ngMesh.AddPoints(coordinates)
             cStart, cEnd = plex.getHeightStratum(0)
@@ -151,10 +157,10 @@ class MeshMapping:
                             faces = faces + [face]
                         else:
                             faces = faces + [[face[0],face[2],face[1]]]
-                #fd = self.ngmesh.Add(ngm.FaceDescriptor(bc=bcLabel))
-                self.ngMesh.Add(ngm.FaceDescriptor(bc=bcLabel))
+                self.ngMesh.Add(ngm.FaceDescriptor(bc=bcLabel, surfnr=bcLabel))
                 self.ngMesh.AddElements(dim=2, index=bcLabel,
-                                        data=np.asarray(faces,dtype=np.int32), base=0)
+                                        data=np.asarray(faces,dtype=np.int32), base=0,
+                                        project_geometry = self.geoInfo)
         else:
             raise NotImplementedError("No implementation for dimension greater than 3.")
 
@@ -170,6 +176,7 @@ class MeshMapping:
         else:
             self.ngMesh = mesh
         comm = self.comm
+        self.geo = self.ngMesh.GetGeometry()
         if self.ngMesh.dim == 3:
             if comm.rank == 0:
                 V = self.ngMesh.Coordinates()
@@ -180,16 +187,7 @@ class MeshMapping:
                     surfMesh, dim = True, 2
                     T = self.ngMesh.Elements2D().NumPy()["nodes"]
 
-                if Version(np.__version__) >= Version("2.2"):
-                    T = np.trim_zeros(T, "b", axis=1).astype(np.int32) - 1
-                else:
-                    T = (
-                        np.array(
-                            [list(np.trim_zeros(a, "b")) for a in list(T)],
-                            dtype=np.int32,
-                        )
-                        - 1
-                    )
+                T  = trim_util(T)
 
                 plex = PETSc.DMPlex().createFromCellList(dim, T, V, comm=comm)
                 plex.setName(self.name)
