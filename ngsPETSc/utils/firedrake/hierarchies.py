@@ -10,73 +10,44 @@ try:
 except ImportError:
     fd = None
 
+from fractions import Fraction
 import logging
+import time
+import numpy as np
+from petsc4py import PETSc
+from netgen.meshing import MeshingParameters
+from ngsPETSc.plex import MeshMapping
+from ngsPETSc.utils.utils import trim_util
 logger = logging.getLogger("ngsPETSc")
 logging.basicConfig(filename='ngsPETSc.log',
                     encoding='utf-8',
                     level=logging.DEBUG)
-try:
-    from numba import jit
-    numba_logger = logging.getLogger('numba')
-    numba_logger.setLevel(logging.WARNING)
-    use_numba = True
-except ImportError:
-    use_numba = False
-
-import time
-from fractions import Fraction
-import numpy as np
-from petsc4py import PETSc
-
-from netgen.meshing import MeshingParameters
-from ngsPETSc.plex import MeshMapping
-from ngsPETSc.utils.utils import trim_util
-
-if use_numba:
-    @jit(nopython=True)
-    def numba_fast_snap(index, ngCoordinates, petscCoordinates):
-        for i in index:
-            pt = petscCoordinates[i]
-            j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
-            petscCoordinates[i] = ngCoordinates[j]
-        return petscCoordinates
-
-def fast_snap(index, ngCoordinates, petscCoordinates):
-    for i in index:
-        pt = petscCoordinates[i]
-        j = np.argmin(np.sum((ngCoordinates - pt)**2, axis=1))
-        petscCoordinates[i] = ngCoordinates[j]
-    return petscCoordinates
 
 def snapToNetgenDMPlex(ngmesh, petscPlex, comm):
     '''
     This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
     '''
     if len(ngmesh.Elements3D()) == 0:
-        ng_element = ngmesh.Elements2D
         ng_coelement = ngmesh.Elements1D
     else:
-        ng_element = ngmesh.Elements3D
         ng_coelement = ngmesh.Elements2D
     if comm.rank == 0:
         ngmesh.Curve(2)
-        nodes_to_correct = ng_element().NumPy()["nodes"]
+        nodes_to_correct = ng_coelement().NumPy()["nodes"]
         nodes_to_correct = comm.bcast(nodes_to_correct, root=0)
         ngmesh.Curve(1)
     else:
-        curved = comm.bcast(None, root=0)
+        nodes_to_correct = comm.bcast(None, root=0)
     nodes_to_correct = trim_util(nodes_to_correct)
     nodes_to_correct_sorted = np.hstack(nodes_to_correct.reshape((-1,1)))
     nodes_to_correct_sorted.sort()
     nodes_to_correct_index = np.unique(nodes_to_correct_sorted)
     tic = time.time()
-    logger.info(f"\t\t\tSanpping the DMPlex to NETGEN mesh")
-    ngCoordinates = ngmesh.Coordinates()[nodes_to_correct_index]
-    petscCoordinates = petscPlex.getCoordinatesLocal().getArray().reshape(-1, ngmesh.dim)[nodes_to_correct_index]
-    if use_numba:
-        petscCoordinates = numba_fast_snap(nodes_to_correct_index, ngCoordinates, petscCoordinates)
-    else:
-        petscCoordinates = fast_snap(nodes_to_correct_index, ngCoordinates, petscCoordinates)
+    logger.info("\t\t\tSanpping the DMPlex to NETGEN mesh")
+    ngCoordinates = ngmesh.Coordinates()
+    petscCoordinates = petscPlex.getCoordinatesLocal().getArray()
+    petscCoordinates = petscCoordinates.reshape(-1, ngmesh.dim)
+    petscCoordinates[nodes_to_correct_index] = ngCoordinates[nodes_to_correct_index]
     petscPlexCoordinates = petscPlex.getCoordinatesLocal()
     petscPlexCoordinates.setArray(petscCoordinates.reshape((-1,1)))
     petscPlex.setCoordinatesLocal(petscPlexCoordinates)
@@ -237,7 +208,6 @@ def NetgenHierarchy(mesh, levs, flags):
     '''
     if mesh.geometric_dimension() > 3:
         raise NotImplementedError("Netgen hierachies are only implemented for 2D and 3D meshes.")
-    global use_numba
     logger.info(f"Creating a Netgen hierarchy with {levs} levels.")
     comm = mesh.comm
     #Parsing netgen flags
@@ -251,8 +221,6 @@ def NetgenHierarchy(mesh, levs, flags):
     location_tol = flags.get( "location_tol", 1e-8)
     refType = flags.get( "refinement_type", "uniform")
     logger.info(f"\tRefinement type: {refType}")
-    use_numba = flags.get( "numba_jit", use_numba) and use_numba
-    logger.info(f"\tUsing numba jit: {use_numba}")
     optMoves = flags.get( "optimisation_moves", False)
     snap = flags.get( "snap_to", "geometry")
     snap_smoothing = flags.get( "snap_smoothing", "hyperelastic")
@@ -322,7 +290,9 @@ def NetgenHierarchy(mesh, levs, flags):
                 )
             elif snap == "coarse":
                 mesh = snapToCoarse(ho_field, mesh, order[l+1], snap_smoothing, cg)
-        logger.info(f"\t\t Level {l+1}: with {ngmesh.Coordinates().shape[0]} vertices, with order {order[l+1]}, snapping to {snap} and optimisation moves {optMoves}.")
+        logger.info(f"\t\t Level {l+1}: with {ngmesh.Coordinates().shape[0]} \
+                vertices, with order {order[l+1]}, snapping to {snap} \
+                and optimisation moves {optMoves}.")
         mesh.topology_dm.setRefineLevel(1 + l)
         meshes += [mesh]
     #We populate the coarse to fine ma

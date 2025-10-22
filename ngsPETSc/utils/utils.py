@@ -44,6 +44,9 @@ def find_permutation(points_a:npt.NDArray[np.inexact], points_b:npt.NDArray[np.i
     return permutation
 
 def trim_util(T):
+    """
+    Trim zeros from a connectivity array T.
+    """
     if Version(np.__version__) >= Version("2.2"):
         T = np.trim_zeros(T, "b", axis=1).astype(np.int32) - 1
     else:
