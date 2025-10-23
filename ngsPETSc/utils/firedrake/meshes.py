@@ -9,6 +9,8 @@ try:
 except ImportError:
     fd = None
 
+import importlib.metadata
+
 import numpy as np
 from petsc4py import PETSc
 
@@ -26,6 +28,31 @@ except ImportError:
 
 from ngsPETSc import MeshMapping
 from ngsPETSc.utils.utils import find_permutation
+
+
+def geometric_dimension(mesh):
+    '''Return the geometric dimension of a Firedrake mesh.
+
+    This function is required because of differing APIs between UFL versions.
+
+    '''
+    if importlib.metadata.version("fenics-ufl") > "2025.2":
+        return mesh.geometric_dimension
+    else:
+        return mesh.geometric_dimension()
+
+
+def topological_dimension(mesh):
+    '''Return the topological dimension of a Firedrake mesh.
+
+    This function is required because of differing APIs between UFL versions.
+
+    '''
+    if importlib.metadata.version("fenics-ufl") > "2025.2":
+        return mesh.topological_dimension
+    else:
+        return mesh.topological_dimension()
+
 
 def flagsUtils(flags, option, default):
     '''
@@ -49,7 +76,7 @@ def refineMarkedElements(self, mark, netgen_flags={}):
     '''
     DistParams = self._distribution_parameters
     els = {2: self.netgen_mesh.Elements2D, 3: self.netgen_mesh.Elements3D}
-    dim = self.geometric_dimension
+    dim = geometric_dimension(self)
     refine_faces = flagsUtils(netgen_flags, "refine_faces", False)
     if dim in [2,3]:
         with mark.dat.vec as marked:
@@ -99,7 +126,7 @@ def curveField(self, order, permutation_tol=1e-8, location_tol=1e-1, cg_field=Fa
     else:
         ng_element = self.netgen_mesh.Elements3D
     ng_dimension = len(ng_element())
-    geom_dim = self.geometric_dimension
+    geom_dim = geometric_dimension(self)
 
     # Construct the mesh as a Firedrake function
     if cg_field:
