@@ -36,9 +36,9 @@ def geometric_dimension(mesh):
     This function is required because of differing APIs between UFL versions.
 
     '''
-    if importlib.metadata.version("fenics-ufl") > "2025.2":
-        return mesh.geometric_dimension
-    return mesh.geometric_dimension()
+    if importlib.metadata.version("fenics-ufl") < "2025.3":
+        return mesh.geometric_dimension()
+    return mesh.geometric_dimension
 
 
 def topological_dimension(mesh):
@@ -47,9 +47,9 @@ def topological_dimension(mesh):
     This function is required because of differing APIs between UFL versions.
 
     '''
-    if importlib.metadata.version("fenics-ufl") > "2025.2":
-        return mesh.topological_dimension
-    return mesh.topological_dimension()
+    if importlib.metadata.version("fenics-ufl") < "2025.2":
+        return mesh.topological_dimension()
+    return mesh.topological_dimension
 
 
 def flagsUtils(flags, option, default):
