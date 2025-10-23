@@ -1,7 +1,6 @@
 '''
-This module test that plex class
+This module test the plex class
 '''
-import pytest
 
 from ngsolve import Mesh, VOL
 from netgen.geom2d import unit_square
@@ -11,7 +10,13 @@ from petsc4py import PETSc
 
 from ngsPETSc import MeshMapping
 
-@pytest.mark.mpi_skip()
+def _plex_number_of_points(plex, h=0, local=False):
+    points = plex.getHeightStratum(h)
+    np = points[1] - points[0]
+    if not local:
+        np = plex.getComm().tompi4py().allreduce(np)
+    return np
+
 def test_ngs_plex_2d():
     '''
     Testing the conversion from NGSolve mesh to PETSc DMPlex
@@ -19,9 +24,9 @@ def test_ngs_plex_2d():
     '''
     mesh = Mesh(unit_square.GenerateMesh(maxh=1.))
     meshMap = MeshMapping(mesh)
-    assert meshMap.petscPlex.getHeightStratum(0)[1] == 2
+    plex = meshMap.petscPlex
+    assert _plex_number_of_points(plex) == 2
 
-@pytest.mark.mpi_skip()
 def test_plex_ngs_2d():
     '''
     Testing the conversion from PETSc DMPlex to NGSolve mesh
@@ -35,10 +40,10 @@ def test_plex_ngs_2d():
     plex = PETSc.DMPlex().createFromCellList(2, cells,
                                              cooridinates,
                                              comm=PETSc.COMM_WORLD)
+    nc = _plex_number_of_points(plex, local=True)
     meshMap = MeshMapping(plex)
-    assert Mesh(meshMap.ngMesh).GetNE(VOL) == 8
+    assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
 
-@pytest.mark.mpi_skip()
 def test_ngs_plex_3d():
     '''
     Testing the conversion from NGSolve mesh to PETSc DMPlex
@@ -46,9 +51,9 @@ def test_ngs_plex_3d():
     '''
     mesh = Mesh(unit_cube.GenerateMesh(maxh=1.))
     meshMap = MeshMapping(mesh)
-    assert meshMap.petscPlex.getHeightStratum(0)[1] == 12
+    plex = meshMap.petscPlex
+    assert _plex_number_of_points(plex) == 12
 
-@pytest.mark.mpi_skip()
 def test_plex_ngs_3d():
     '''
     Testing the conversion from PETSc DMPlex to NGSolve mesh
@@ -63,13 +68,13 @@ def test_plex_ngs_3d():
     plex = PETSc.DMPlex().createFromCellList(3, cells,
                                              cooridinates,
                                              comm=PETSc.COMM_WORLD)
+    nc = _plex_number_of_points(plex, local=True)
     meshMap = MeshMapping(plex)
-    assert Mesh(meshMap.ngMesh).GetNE(VOL) == 6
+    assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
 
-@pytest.mark.mpi_skip()
 def test_plex_transform_alfeld_2d():
     '''
-    Testing the use of the PETSc Alfeld transform 
+    Testing the use of the PETSc Alfeld transform
     on a NGSolve mesh.
     '''
     mesh = Mesh(unit_square.GenerateMesh(maxh=1.))
@@ -79,13 +84,13 @@ def test_plex_transform_alfeld_2d():
     tr.setDM(meshMap.petscPlex)
     tr.setUp()
     newplex = tr.apply(meshMap.petscPlex)
+    nc = _plex_number_of_points(newplex, local=True)
     meshMap = MeshMapping(newplex)
-    assert Mesh(meshMap.ngMesh).GetNE(VOL) == 6
+    assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
 
-@pytest.mark.mpi_skip()
 def test_plex_transform_alfeld_3d():
     '''
-    Testing the use of the PETSc Alfeld transform 
+    Testing the use of the PETSc Alfeld transform
     on a NGSolve mesh.
     '''
     mesh = Mesh(unit_cube.GenerateMesh(maxh=1.))
@@ -95,13 +100,13 @@ def test_plex_transform_alfeld_3d():
     tr.setDM(meshMap.petscPlex)
     tr.setUp()
     newplex = tr.apply(meshMap.petscPlex)
+    nc = _plex_number_of_points(newplex, local=True)
     meshMap = MeshMapping(newplex)
-    assert Mesh(meshMap.ngMesh).GetNE(VOL) == 48
+    assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
 
-@pytest.mark.mpi_skip()
 def test_plex_transform_box_2d():
     '''
-    Testing the use of the PETSc Alfeld transform 
+    Testing the use of the PETSc Alfeld transform
     on a NGSolve mesh.
     '''
     mesh = Mesh(unit_square.GenerateMesh(maxh=1.))
@@ -111,5 +116,15 @@ def test_plex_transform_box_2d():
     tr.setDM(meshMap.petscPlex)
     tr.setUp()
     newplex = tr.apply(meshMap.petscPlex)
+    nc = _plex_number_of_points(newplex, local=True)
     meshMap = MeshMapping(newplex)
-    assert Mesh(meshMap.ngMesh).GetNE(VOL) == 6
+    assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
+
+if __name__ == '__main__':
+    test_ngs_plex_2d()
+    test_plex_ngs_2d()
+    test_ngs_plex_3d()
+    test_plex_ngs_3d()
+    test_plex_transform_alfeld_2d()
+    test_plex_transform_alfeld_3d()
+    test_plex_transform_box_2d()

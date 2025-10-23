@@ -16,7 +16,8 @@ from petsc4py import PETSc
 
 from netgen.meshing import MeshingParameters
 
-from ngsPETSc.utils.firedrake.meshes import flagsUtils, geometric_dimension, topological_dimension
+from ngsPETSc.utils.firedrake.meshes import geometric_dimension, topological_dimension
+
 
 def snapToNetgenDMPlex(ngmesh, petscPlex):
     '''
@@ -193,16 +194,16 @@ def NetgenHierarchy(mesh, levs, flags):
     #Parsing netgen flags
     if not isinstance(flags, dict):
         flags = {}
-    order = flagsUtils(flags, "degree", 1)
+    order = flags.get("degree", 1)
     if isinstance(order, int):
         order= [order]*(levs+1)
-    permutation_tol = flagsUtils(flags, "tol", 1e-8)
-    refType = flagsUtils(flags, "refinement_type", "uniform")
-    optMoves = flagsUtils(flags, "optimisation_moves", False)
-    snap = flagsUtils(flags, "snap_to", "geometry")
-    snap_smoothing = flagsUtils(flags, "snap_smoothing", "hyperelastic")
-    cg = flagsUtils(flags, "cg", False)
-    nested = flagsUtils(flags, "nested", snap in ["coarse"])
+    permutation_tol = flags.get("tol", 1e-8)
+    refType = flags.get("refinement_type", "uniform")
+    optMoves = flags.get("optimisation_moves", False)
+    snap = flags.get("snap_to", "geometry")
+    snap_smoothing = flags.get("snap_smoothing", "hyperelastic")
+    cg = flags.get("cg", False)
+    nested = flags.get("nested", snap in ["coarse"])
     #Firedrake quoantities
     meshes = []
     lgmaps = []
