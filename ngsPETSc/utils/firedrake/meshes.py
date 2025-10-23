@@ -47,7 +47,7 @@ def topological_dimension(mesh):
     This function is required because of differing APIs between UFL versions.
 
     '''
-    if importlib.metadata.version("fenics-ufl") < "2025.2":
+    if importlib.metadata.version("fenics-ufl") < "2025.3":
         return mesh.topological_dimension()
     return mesh.topological_dimension
 
