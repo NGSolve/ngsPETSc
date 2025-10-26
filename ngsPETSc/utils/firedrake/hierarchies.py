@@ -21,29 +21,29 @@ from ngsPETSc.utils.utils import trim_util
 logger = logging.getLogger("ngsPETSc")
 logging.basicConfig(filename='ngsPETSc.log',
                     encoding='utf-8',
-                    level=logging.DEBUG)
+                    level=logging.INFO)
 
 def snapToNetgenDMPlex(ngmesh, petscPlex, comm):
     '''
     This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
     '''
+    logger.info(f"\t\t\t[{time.time()}]Sanpping the DMPlex to NETGEN mesh")
     if len(ngmesh.Elements3D()) == 0:
         ng_coelement = ngmesh.Elements1D
     else:
         ng_coelement = ngmesh.Elements2D
     if comm.rank == 0:
-        ngmesh.Curve(2)
         nodes_to_correct = ng_coelement().NumPy()["nodes"]
         nodes_to_correct = comm.bcast(nodes_to_correct, root=0)
-        ngmesh.Curve(1)
     else:
         nodes_to_correct = comm.bcast(None, root=0)
+    logger.info(f"\t\t\t[{time.time()}]Point distributed")
     nodes_to_correct = trim_util(nodes_to_correct)
     nodes_to_correct_sorted = np.hstack(nodes_to_correct.reshape((-1,1)))
     nodes_to_correct_sorted.sort()
     nodes_to_correct_index = np.unique(nodes_to_correct_sorted)
+    logger.info(f"\t\t\t[{time.time()}]Nodes have been corrected")
     tic = time.time()
-    logger.info("\t\t\tSanpping the DMPlex to NETGEN mesh")
     ngCoordinates = ngmesh.Coordinates()
     petscCoordinates = petscPlex.getCoordinatesLocal().getArray()
     petscCoordinates = petscCoordinates.reshape(-1, ngmesh.dim)
@@ -52,7 +52,7 @@ def snapToNetgenDMPlex(ngmesh, petscPlex, comm):
     petscPlexCoordinates.setArray(petscCoordinates.reshape((-1,1)))
     petscPlex.setCoordinatesLocal(petscPlexCoordinates)
     toc = time.time()
-    logger.debug(f"\t\t\tSanp the DMPlex to NETGEN mesh. Time taken: {toc - tic} seconds")
+    logger.info(f"\t\t\tSanp the DMPlex to NETGEN mesh. Time taken: {toc - tic} seconds")
 
 def snapToCoarse(coarse, linear, degree, snap_smoothing, cg):
     '''
@@ -139,12 +139,17 @@ def uniformRefinementRoutine(ngmesh, cdm):
     Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
     '''
     #We refine the DMPlex mesh uniformly
+    logger.info(f"\t\t\t[{time.time()}]Refining the plex")
     cdm.setRefinementUniform(True)
     rdm = cdm.refine()
     rdm.removeLabel("pyop2_core")
     rdm.removeLabel("pyop2_owned")
     rdm.removeLabel("pyop2_ghost")
+    logger.info(f"\t\t\t[{time.time()}]Mapping the mesh to Netgen mesh")
+    tic = time.time()
     mapping = MeshMapping(rdm, geo=ngmesh.GetGeometry())
+    toc = time.time()
+    logger.info(f"\t\t\t[{time.time()}]Mapped the mesh to Netgen. Time taken: {toc-tic}")
     return (rdm, mapping.ngMesh)
 
 def uniformMapRoutine(meshes, lgmaps):
@@ -280,6 +285,8 @@ def NetgenHierarchy(mesh, levs, flags):
         mesh.netgen_mesh = ngmesh
         #We curve the mesh
         if order[l+1] > 1:
+            logger.info("\t\t\tCurving the mesh ...")
+            tic = time.time()
             if snap == "geometry":
                 mesh = fd.Mesh(
                     mesh.curve_field(order=order[l+1],
@@ -290,8 +297,10 @@ def NetgenHierarchy(mesh, levs, flags):
                 )
             elif snap == "coarse":
                 mesh = snapToCoarse(ho_field, mesh, order[l+1], snap_smoothing, cg)
-        logger.info(f"\t\t Level {l+1}: with {ngmesh.Coordinates().shape[0]} \
-                vertices, with order {order[l+1]}, snapping to {snap} \
+            toc = time.time()
+            logger.info(f"\t\t\tMeshed curved. Time taken: {toc-tic}")
+        logger.info(f"\t\tLevel {l+1}: with {ngmesh.Coordinates().shape[0]}\
+                vertices, with order {order[l+1]}, snapping to {snap}\
                 and optimisation moves {optMoves}.")
         mesh.topology_dm.setRefineLevel(1 + l)
         meshes += [mesh]
