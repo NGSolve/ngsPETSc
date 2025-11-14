@@ -26,7 +26,6 @@ classifiers = [
 ]
 dependencies = [
   "netgen-mesher >= 6.2,<7.0",
-  "netgen-occt >=7.8,<8.0",
   "petsc4py >=3.22,<4.0",
   "numpy >=2,<3",
   "scipy >=1,<2",
@@ -36,7 +35,7 @@ dependencies = [
 Documentation = "https://ngspetsc.readthedocs.io/en/latest/"
 Repository = "https://github.com/NGSolve/ngsPETSc"
 
-[project.optional-dependencies]
+[tool.poetry.extras]
 firedrake = ["firedrake"]
 
 [tool.poetry]
