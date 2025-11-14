@@ -35,7 +35,7 @@ dependencies = [
 Documentation = "https://ngspetsc.readthedocs.io/en/latest/"
 Repository = "https://github.com/NGSolve/ngsPETSc"
 
-[project.optional-dependencies]
+[tool.poetry.extras]
 firedrake = ["firedrake"]
 
 [tool.poetry]
