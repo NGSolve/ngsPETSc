@@ -9,6 +9,8 @@ try:
 except ImportError:
     fd = None
 
+import importlib.metadata
+
 import numpy as np
 from petsc4py import PETSc
 
@@ -27,14 +29,28 @@ except ImportError:
 from ngsPETSc import MeshMapping
 from ngsPETSc.utils.utils import find_permutation
 
-def flagsUtils(flags, option, default):
+
+def geometric_dimension(mesh):
+    '''Return the geometric dimension of a Firedrake mesh.
+
+    This function is required because of differing APIs between UFL versions.
+
     '''
-    utility fuction used to parse Netgen flag options
+    if importlib.metadata.version("fenics-ufl") < "2025.3":
+        return mesh.geometric_dimension()
+    return mesh.geometric_dimension
+
+
+def topological_dimension(mesh):
+    '''Return the topological dimension of a Firedrake mesh.
+
+    This function is required because of differing APIs between UFL versions.
+
     '''
-    try:
-        return flags[option]
-    except KeyError:
-        return default
+    if importlib.metadata.version("fenics-ufl") < "2025.3":
+        return mesh.topological_dimension()
+    return mesh.topological_dimension
+
 
 def refineMarkedElements(self, mark, netgen_flags={}):
     '''
@@ -44,13 +60,13 @@ def refineMarkedElements(self, mark, netgen_flags={}):
     :arg mark: the marking function which is a Firedrake DG0 function.
     :arg netgen_flags: the dictionary of flags to be passed to ngsPETSc.
     It includes the option:
-        - refine_faces, which is a boolean specifyiong if you want to refine faces.
+        - refine_faces, which is a boolean specifying if you want to refine faces.
 
     '''
     DistParams = self._distribution_parameters
     els = {2: self.netgen_mesh.Elements2D, 3: self.netgen_mesh.Elements3D}
-    dim = self.geometric_dimension()
-    refine_faces = flagsUtils(netgen_flags, "refine_faces", False)
+    dim = geometric_dimension(self)
+    refine_faces = netgen_flags.get("refine_faces", False)
     if dim in [2,3]:
         with mark.dat.vec as marked:
             marked0 = marked
@@ -99,7 +115,7 @@ def curveField(self, order, permutation_tol=1e-8, location_tol=1e-1, cg_field=Fa
     else:
         ng_element = self.netgen_mesh.Elements3D
     ng_dimension = len(ng_element())
-    geom_dim = self.geometric_dimension()
+    geom_dim = geometric_dimension(self)
 
     # Construct the mesh as a Firedrake function
     if cg_field:
@@ -226,10 +242,10 @@ class FiredrakeMesh:
         #Parsing netgen flags
         if not isinstance(netgen_flags, dict):
             netgen_flags = {}
-        split2tets = flagsUtils(netgen_flags, "split_to_tets", False)
-        split = flagsUtils(netgen_flags, "split", False)
-        quad = flagsUtils(netgen_flags, "quad", False)
-        optMoves = flagsUtils(netgen_flags, "optimisation_moves", False)
+        split2tets = netgen_flags.get("split_to_tets", False)
+        split = netgen_flags.get("split", False)
+        quad = netgen_flags.get("quad", False)
+        optMoves = netgen_flags.get("optimisation_moves", False)
         #Checking the mesh format
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             if split2tets:

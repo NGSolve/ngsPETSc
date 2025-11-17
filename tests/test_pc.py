@@ -48,12 +48,9 @@ def test_pc_gamg():
     exact = 16*x*(1-x)*y*(1-y)
     assert sqrt(Integrate((gfu-exact)**2, mesh))<1e-4
 
-@pytest.mark.mpi_skip()
-def test_pc_hiptmaier_xu_sor():
+def test_pc_hiptmair_xu_sor():
     '''
-    Testing Hiptmaier Xu preconditioner with SOR smoother
-    This test doesn't work in parallel becasue SOR is not implemented has no
-    parallel implementation in PETSc. 
+    Testing Hiptmair Xu preconditioner with SOR smoother
     '''
     from netgen.geom2d import unit_square
     if COMM_WORLD.rank == 0:
@@ -88,7 +85,8 @@ def test_pc_hiptmaier_xu_sor():
     aH1 = BilinearForm(fesH1)
     aH1 += grad(u)*grad(v)*dx
     aH1.Assemble()
-    smoother = Preconditioner(aDG, "PETScPC", pc_type="sor", pc_sor_omega=1., pc_sor_symmetric="")
+    smoother = Preconditioner(aDG, "PETScPC",
+                              pc_type="sor", pc_sor_omega=1., pc_sor_local_symmetric="")
     preH1 = PETScPreconditioner(aH1.mat, fesH1.FreeDofs(), matType="is",
                                 solverParameters={"pc_type":"bddc"})
     transform = fesH1.ConvertL2Operator(fesDG)
@@ -97,9 +95,9 @@ def test_pc_hiptmaier_xu_sor():
     lam = EigenValues_Preconditioner(aDG.mat, pre)
     assert (lam.NumPy()<3.0).all()
 
-def test_pc_hiptmaier_xu_bjacobi():
+def test_pc_hiptmair_xu_bjacobi():
     '''
-    Testing Hiptmaier Xu preconditioner with bloack Jaocobi smoother
+    Testing Hiptmair-Xu preconditioner with block Jacobi smoother
     '''
     from netgen.geom2d import unit_square
     if COMM_WORLD.rank == 0:
@@ -146,7 +144,7 @@ def test_pc_hiptmaier_xu_bjacobi():
 @pytest.mark.skip()
 def test_pc_auxiliary_mcs():
     '''
-    Testing Hiptmaier Xu preconditioner for MCs
+    Testing Hiptmair-Xu preconditioner for MCs
     '''
     from netgen.occ import X, Rectangle, OCCGeometry
     shape = Rectangle(2,0.41).Circle(0.2,0.2,0.05).Reverse().Face()
@@ -213,8 +211,9 @@ def test_pc_auxiliary_mcs():
     embu, embuhat, _, _ = X.embeddings
     conv = embu@convu+embuhat@convuhat
     a.Assemble()
-    #Hiptmaier-Xu Preconditioner
-    localpre = Preconditioner(a, "PETScPC", pc_type="sor", pc_sor_omega=1., pc_sor_symmetric="")
+    #Hiptmair-Xu Preconditioner
+    localpre = Preconditioner(a, "PETScPC",
+                              pc_type="sor", pc_sor_omega=1., pc_sor_local_symmetric="")
     pre = localpre + conv @ preaux @ conv.T
     inv = CGSolver(mat=a.mat, pre=pre, printing=True, maxsteps=100)
     gf.vec.data -= inv@a.mat * gf.vec
@@ -228,9 +227,10 @@ def test_pc_auxiliary_mcs():
     Draw(gf.components[0], mesh, "preu")
     lam = EigenValues_Preconditioner(a.mat, pre)
     print(lam)
+
 if __name__ == '__main__':
     test_pc()
     test_pc_gamg()
-    test_pc_hiptmaier_xu_bjacobi()
-    if COMM_WORLD.size == 1:
-        test_pc_hiptmaier_xu_sor()
+    test_pc_hiptmair_xu_bjacobi()
+    test_pc_hiptmair_xu_sor()
+    test_pc_auxiliary_mcs()
