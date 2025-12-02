@@ -237,7 +237,7 @@ def NetgenHierarchy(mesh, levs, flags, distribution_parameters=None):
     # Make a plex (cdm) without overlap.
     dm_cell_type, = mesh.dm_cell_types
     tdim = mesh.topology_dm.getDimension()
-    cdm = dmcommon.submesh_create(mesh.topology_dm, tdim, "celltype", dm_cell_type, True, None)
+    cdm = dmcommon.submesh_create(mesh.topology_dm, tdim, "celltype", dm_cell_type, True)
     cdm.removeLabel("pyop2_core")
     cdm.removeLabel("pyop2_owned")
     cdm.removeLabel("pyop2_ghost")
