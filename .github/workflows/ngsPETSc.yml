@@ -54,6 +54,7 @@ jobs:
           pytest -v tests/test_pc.py
           pytest -v tests/test_eps.py
           pytest -v tests/test_snes.py
+          pytest -v tests/test_adaptive_multigrid.py
 
       - name: Run test suite in parallel
         run: |
