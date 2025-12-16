@@ -54,11 +54,12 @@ def snapToNetgenDMPlex(ngmesh, petscPlex, comm):
     toc = time.time()
     logger.info(f"\t\t\tSanp the DMPlex to NETGEN mesh. Time taken: {toc - tic} seconds")
 
+
 def snapToCoarse(coarse, linear, degree, snap_smoothing, cg):
     '''
     This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
     '''
-    dim = linear.geometric_dimension()
+    dim = geometric_dimension(linear)
     if dim == 2:
         space = fd.VectorFunctionSpace(linear, "CG", degree)
         ho = fd.assemble(interpolate(coarse, space))
@@ -66,7 +67,7 @@ def snapToCoarse(coarse, linear, degree, snap_smoothing, cg):
             #Hyperelastic Smoothing
             bcs = [fd.DirichletBC(space, ho, "on_boundary")]
             quad_degree = 2*(degree+1)-1
-            d = linear.topological_dimension()
+            d = topological_dimension(linear)
             Q = fd.TensorFunctionSpace(linear, "DG", degree=0)
             Jinv = ufl.JacobianInverse(linear)
             hinv = fd.Function(Q)
@@ -134,6 +135,7 @@ def snapToCoarse(coarse, linear, degree, snap_smoothing, cg):
         raise NotImplementedError("Snapping to Netgen meshes is only implemented for 2D meshes.")
     return fd.Mesh(ho, comm=linear.comm, distribution_parameters=linear._distribution_parameters)
 
+
 def uniformRefinementRoutine(ngmesh, cdm):
     '''
     Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
@@ -151,6 +153,7 @@ def uniformRefinementRoutine(ngmesh, cdm):
     toc = time.time()
     logger.info(f"\t\t\t[{time.time()}]Mapped the mesh to Netgen. Time taken: {toc-tic}")
     return (rdm, mapping.ngMesh)
+
 
 def uniformMapRoutine(meshes, lgmaps):
     '''
@@ -172,6 +175,7 @@ def uniformMapRoutine(meshes, lgmaps):
                                 for i, f2c in enumerate(fine_to_coarse_cells))
     return (coarse_to_fine_cells, fine_to_coarse_cells)
 
+
 def alfeldRefinementRoutine(ngmesh, cdm):
     '''
     Routing called inside of NetgenHierarchy to compute refined ngmesh and plex.
@@ -186,6 +190,7 @@ def alfeldRefinementRoutine(ngmesh, cdm):
     rdm = tr.apply(cdm)
     return (rdm, ngmesh)
 
+
 def alfeldMapRoutine(meshes):
     '''
     This function computes the coarse to fine and fine to coarse maps
@@ -193,10 +198,12 @@ def alfeldMapRoutine(meshes):
     '''
     raise NotImplementedError("Alfeld refinement is not implemented yet.")
 
+
 refinementTypes = {"uniform": (uniformRefinementRoutine, uniformMapRoutine),
                    "Alfeld": (alfeldRefinementRoutine, alfeldMapRoutine)}
 
-def NetgenHierarchy(mesh, levs, flags):
+
+def NetgenHierarchy(mesh, levs, flags, distribution_parameters=None):
     '''
     This function creates a Firedrake mesh hierarchy from Netgen/NGSolve meshes.
 
@@ -210,12 +217,15 @@ def NetgenHierarchy(mesh, levs, flags):
         each level of the mesh.
         -tol, geometric tolerance adopted in snapToNetgenDMPlex.
         -refinement_type, the refinment type to be used: uniform (default), Alfeld
+    :kwarg distribution_parameters: a dict of options controlling mesh distribution.
+        If ``None``, use the same distribution parameters as were used to distribute
+        the coarse mesh, otherwise, these options override the default.
     '''
     if mesh.geometric_dimension() > 3:
         raise NotImplementedError("Netgen hierachies are only implemented for 2D and 3D meshes.")
     logger.info(f"Creating a Netgen hierarchy with {levs} levels.")
     comm = mesh.comm
-    #Parsing netgen flags
+    # Parse netgen flags
     if not isinstance(flags, dict):
         flags = {}
     order = flags.get( "degree", 1)
@@ -235,15 +245,20 @@ def NetgenHierarchy(mesh, levs, flags):
     #Firedrake quoantities
     meshes = []
     lgmaps = []
-    params = {"partition": False}
-    #We curve the mesh
-    if order[0]>1:
+    parameters = {}
+    if distribution_parameters is not None:
+        parameters.update(distribution_parameters)
+    else:
+        parameters.update(mesh._distribution_parameters)
+    parameters["partition"] = False
+    # Curve the mesh
+    if order[0] > 1:
         ho_field = mesh.curve_field(
             order=order[0],
             permutation_tol=permutation_tol,
             cg_field=cg
         )
-        temp = fd.Mesh(ho_field,distribution_parameters=params, comm=comm)
+        temp = fd.Mesh(ho_field, distribution_parameters=parameters, comm=comm)
         temp.netgen_mesh = mesh.netgen_mesh
         temp._tolerance = mesh.tolerance
         mesh = temp
@@ -258,24 +273,24 @@ def NetgenHierarchy(mesh, levs, flags):
     o = impl.create_lgmap(mesh.topology_dm)
     lgmaps.append((no, o))
     mesh.topology_dm.setRefineLevel(0)
-    meshes += [mesh]
+    meshes.append(mesh)
     ngmesh = mesh.netgen_mesh
     for l in range(levs):
-        #Streightening the mesh
+        # Straighten the mesh
         ngmesh.Curve(1)
         rdm, ngmesh = refinementTypes[refType][0](ngmesh, cdm)
         cdm = rdm
-        #We snap the mesh to the Netgen mesh
+        # Snap the mesh to the Netgen mesh
         if snap == "geometry":
             snapToNetgenDMPlex(ngmesh, rdm, comm)
         #We construct a Firedrake mesh from the DMPlex mesh
         no = impl.create_lgmap(rdm)
-        mesh = fd.Mesh(rdm, dim=meshes[-1].geometric_dimension(), reorder=False,
-                       distribution_parameters=params, comm=comm)
+        mesh = fd.Mesh(rdm, dim=geometric_dimension(meshes[-1]), reorder=False,
+                       distribution_parameters=parameters, comm=comm)
         o = impl.create_lgmap(mesh.topology_dm)
         lgmaps.append((no, o))
         if optMoves:
-            #Optimises the mesh, for example smoothing
+            # Optimises the mesh, for example smoothing
             if ngmesh.dim == 2:
                 ngmesh.OptimizeMesh2d(MeshingParameters(optimize2d=optMoves))
             elif mesh.dim == 3:
@@ -283,7 +298,7 @@ def NetgenHierarchy(mesh, levs, flags):
             else:
                 raise ValueError("Only 2D and 3D meshes can be optimised.")
         mesh.netgen_mesh = ngmesh
-        #We curve the mesh
+        # Curve the mesh
         if order[l+1] > 1:
             logger.info("\t\t\tCurving the mesh ...")
             tic = time.time()
@@ -292,9 +307,8 @@ def NetgenHierarchy(mesh, levs, flags):
                     mesh.curve_field(order=order[l+1],
                                      location_tol=location_tol,
                                      permutation_tol=permutation_tol),
-                    distribution_parameters=params,
-                    comm=comm
-                )
+                                     distribution_parameters=parameters,
+                                     comm=comm)
             elif snap == "coarse":
                 mesh = snapToCoarse(ho_field, mesh, order[l+1], snap_smoothing, cg)
             toc = time.time()
@@ -303,8 +317,7 @@ def NetgenHierarchy(mesh, levs, flags):
                 vertices, with order {order[l+1]}, snapping to {snap}\
                 and optimisation moves {optMoves}.")
         mesh.topology_dm.setRefineLevel(1 + l)
-        meshes += [mesh]
-    #We populate the coarse to fine ma
+        meshes.append(mesh)
+    # Populate the coarse to fine map
     coarse_to_fine_cells, fine_to_coarse_cells = refinementTypes[refType][1](meshes, lgmaps)
-    return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells,
-                            1, nested=nested)
+    return fd.HierarchyBase(meshes, coarse_to_fine_cells, fine_to_coarse_cells, 1, nested=nested)
