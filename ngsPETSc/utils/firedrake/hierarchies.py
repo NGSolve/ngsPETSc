@@ -27,7 +27,7 @@ def snapToNetgenDMPlex(ngmesh, petscPlex, comm):
     '''
     This function snaps the coordinates of a DMPlex mesh to the coordinates of a Netgen mesh.
     '''
-    logger.info(f"\t\t\t[{time.time()}]Sanpping the DMPlex to NETGEN mesh")
+    logger.info(f"\t\t\t[{time.time()}]Snapping the DMPlex to NETGEN mesh")
     if len(ngmesh.Elements3D()) == 0:
         ng_coelement = ngmesh.Elements1D
     else:
@@ -52,7 +52,7 @@ def snapToNetgenDMPlex(ngmesh, petscPlex, comm):
     petscPlexCoordinates.setArray(petscCoordinates.reshape((-1,1)))
     petscPlex.setCoordinatesLocal(petscPlexCoordinates)
     toc = time.time()
-    logger.info(f"\t\t\tSanp the DMPlex to NETGEN mesh. Time taken: {toc - tic} seconds")
+    logger.info(f"\t\t\tSnap the DMPlex to NETGEN mesh. Time taken: {toc - tic} seconds")
 
 
 def snapToCoarse(coarse, linear, degree, snap_smoothing, cg):
@@ -209,7 +209,7 @@ def NetgenHierarchy(mesh, levs, flags, distribution_parameters=None):
 
     :arg mesh: the Netgen/NGSolve mesh
     :arg levs: the number of levels in the hierarchy
-    :arg flags: either a bool or a dictionray containing options for Netgen.
+    :arg flags: either a bool or a dictionary containing options for Netgen.
     If not False the hierachy is constructed using ngsPETSc, if None hierarchy
     constructed in a standard manner. Netgen flags includes:
         -degree, either an integer denoting the degree of curvature of all levels of
