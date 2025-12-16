@@ -17,8 +17,8 @@ except ImportError:
             Mesh = type(None)
 try:
     from numba import jit
-    numba = True 
-except:
+    numba = True
+except: # pylint: disable=bare-except
     jit = None
     numba = False
 
@@ -28,7 +28,10 @@ EDGE_SETS_LABEL = "Edge Sets"
 
 if numba:
     @jit(nopython=True, cache=True)
-    def build2DCells(coordinates, sIndicies, cell_indicies, start_end, vStart):
+    def build2DCells(coordinates, sIndicies, cell_indicies, start_end):
+        """
+        JIT Method used to construct 2D cells
+        """
         cStart = start_end[0]
         cEnd = start_end[1]
         cells = np.zeros((cell_indicies.shape[0], 3))
@@ -50,7 +53,10 @@ if numba:
         return cells
 
     @jit(nopython=True, cache=True)
-    def build3DCells(coordinates, sIndicies, cell_indicies, start_end, vStart):
+    def build3DCells(coordinates, sIndicies, cell_indicies, start_end):
+        """
+        JIT Method used to construct 3D cells
+        """
         cStart = start_end[0]
         cEnd = start_end[1]
         cells = np.zeros((cell_indicies.shape[0], 4))
@@ -76,7 +82,10 @@ if numba:
                 raise RuntimeError("We only support tets.")
         return cells
 else:
-    def build2DCells(coordinates, sIndicies, cell_indicies, start_end, vStart):
+    def build2DCells(coordinates, sIndicies, cell_indicies, start_end):
+        """
+        Method used to construct 2D cells
+        """
         cStart = start_end[0]
         cEnd = start_end[1]
         cells = np.zeros((cell_indicies.shape[0], 3))
@@ -97,7 +106,10 @@ else:
                 raise RuntimeError("We only support triangles.")
         return cells
 
-    def build3DCells(coordinates, sIndicies, cell_indicies, start_end, vStart):
+    def build3DCells(coordinates, sIndicies, cell_indicies, start_end):
+        """
+        Method used to construct 3D cells
+        """
         cStart = start_end[0]
         cEnd = start_end[1]
         cells = np.zeros((cell_indicies.shape[0], 4))
@@ -124,16 +136,25 @@ else:
         return cells
 
 def create2DNetgenMesh(ngMesh, coordinates, plex, geoInfo):
+    """
+    Method used to generate 2D NetgenMeshes
+    
+    :arg ngMesh: the netgen mesh to be populated
+    :arg coordinates: vertices coordinates 
+    :arg plex: PETSc DMPlex
+    :arg geoInfo: geometric information assosciated with the Netgen mesh
+
+    """
     ngMesh.AddPoints(coordinates)
     cStart,cEnd = plex.getHeightStratum(0)
     vStart, _ = plex.getHeightStratum(2)
     # Outside of jitted loop we put all calls to plex
     sIndicies = [plex.getCone(i) for i in range(cStart,cEnd)]
-    cells_indicies = np.vstack([np.hstack([plex.getCone(sIndex[k])-vStart 
+    cells_indicies = np.vstack([np.hstack([plex.getCone(sIndex[k])-vStart
                     for k in range(len(sIndex))]) for sIndex in sIndicies])
     ngMesh.Add(ngm.FaceDescriptor(bc=1))
     cells = build2DCells(coordinates, sIndicies,
-                         cells_indicies, (cStart, cEnd), vStart)
+                         cells_indicies, (cStart, cEnd))
     if cells.ndim == 2:
         ngMesh.AddElements(dim=2, index=1, data=cells, base=0)
     for bcLabel in range(1,plex.getLabelSize(FACE_SETS_LABEL)+1):
@@ -149,22 +170,30 @@ def create2DNetgenMesh(ngMesh, coordinates, plex, geoInfo):
                 ngMesh.Add(edge, project_geominfo=geoInfo)
 
 def create3DNetgenMesh(ngMesh, coordinates, plex, geoInfo):
+    """
+    Method used to generate 3D NetgenMeshes
+    
+    :arg ngMesh: the netgen mesh to be populated
+    :arg coordinates: vertices coordinates 
+    :arg plex: PETSc DMPlex
+    :arg geoInfo: geometric information assosciated with the Netgen mesh
+
+    """
     ngMesh.AddPoints(coordinates)
     cStart, cEnd = plex.getHeightStratum(0)
     vStart, _ = plex.getHeightStratum(3)
     # Outside of jitted loop we put all calls to plex
     sIndicies = [plex.getCone(i) for i in range(cStart,cEnd)]
-    
     f1Indicies = np.array([plex.getCone(s[0]) for s in sIndicies])
     f2Indicies = np.array([plex.getCone(s[1]) for s in sIndicies])
     fIndicies = np.hstack([f1Indicies,f2Indicies])
 
-    cells_indicies = np.vstack([np.hstack([plex.getCone(sIndex[k])-vStart 
+    cells_indicies = np.vstack([np.hstack([plex.getCone(sIndex[k])-vStart
                     for k in range(len(sIndex))]) for sIndex in fIndicies])
     ngMesh.Add(ngm.FaceDescriptor(bc=1))
     ngMesh.Add(ngm.FaceDescriptor(bc=plex.getLabelSize(FACE_SETS_LABEL)+1))
     cells = build3DCells(coordinates, sIndicies,
-                         cells_indicies, (cStart, cEnd), vStart)
+                         cells_indicies, (cStart, cEnd))
     if cells.ndim == 2:
         ngMesh.AddElements(dim=3, index=plex.getLabelSize(FACE_SETS_LABEL)+1,
                                 data=cells, base=0)

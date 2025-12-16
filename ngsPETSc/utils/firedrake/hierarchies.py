@@ -18,10 +18,12 @@ from petsc4py import PETSc
 from netgen.meshing import MeshingParameters
 from ngsPETSc.plex import MeshMapping
 from ngsPETSc.utils.utils import trim_util
+from ngsPETSc.utils.firedrake.meshes import geometric_dimension, topological_dimension
 logger = logging.getLogger("ngsPETSc")
 logging.basicConfig(filename='ngsPETSc.log',
                     encoding='utf-8',
                     level=logging.INFO)
+
 
 def snapToNetgenDMPlex(ngmesh, petscPlex, comm):
     '''
