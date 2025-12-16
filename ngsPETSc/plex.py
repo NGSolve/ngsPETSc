@@ -4,10 +4,9 @@ PETSc DMPlex using the petsc4py interface.
 '''
 import itertools
 import numpy as np
-from packaging.version import Version
 from petsc4py import PETSc
-
 import netgen.meshing as ngm
+from ngsPETSc.utils.utils import trim_util
 try:
     import ngsolve as ngs
 except ImportError:
@@ -16,10 +15,212 @@ except ImportError:
         class comp:
             "dummy class"
             Mesh = type(None)
+try:
+    from numba import jit
+    numba = True
+except: # pylint: disable=bare-except
+    jit = None
+    numba = False
 
 FACE_SETS_LABEL = "Face Sets"
 CELL_SETS_LABEL = "Cell Sets"
 EDGE_SETS_LABEL = "Edge Sets"
+
+if numba:
+    @jit(nopython=True, cache=True)
+    def build2DCells(coordinates, sIndicies, cell_indicies, start_end):
+        """
+        JIT Method used to construct 2D cells
+        """
+        cStart = start_end[0]
+        cEnd = start_end[1]
+        cells = np.zeros((cell_indicies.shape[0], 3))
+        for i in range(cStart,cEnd):
+            sIndex = sIndicies[i]
+            if len(sIndex)==3:
+                cell = list(set(cell_indicies[i]))
+                A = np.zeros((2,2))
+                A[0,0] = (coordinates[cell[1]]-coordinates[cell[0]])[0]
+                A[0,1] = (coordinates[cell[1]]-coordinates[cell[0]])[1]
+                A[1,0] = (coordinates[cell[2]]-coordinates[cell[1]])[0]
+                A[1,1] = (coordinates[cell[2]]-coordinates[cell[1]])[1]
+                if np.linalg.det(A) > 0:
+                    cells[i] = cell
+                else:
+                    cells[i] = np.array([cell[0],cell[2],cell[1]])
+            else:
+                raise RuntimeError("We only support triangles.")
+        return cells
+
+    @jit(nopython=True, cache=True)
+    def build3DCells(coordinates, sIndicies, cell_indicies, start_end):
+        """
+        JIT Method used to construct 3D cells
+        """
+        cStart = start_end[0]
+        cEnd = start_end[1]
+        cells = np.zeros((cell_indicies.shape[0], 4))
+        for i in range(cStart,cEnd):
+            sIndex = sIndicies[i]
+            if len(sIndex)==4:
+                cell = list(set(cell_indicies[i]))
+                A = np.zeros((3,3))
+                A[0,0] = (coordinates[cell[1]]-coordinates[cell[0]])[0]
+                A[0,1] = (coordinates[cell[1]]-coordinates[cell[0]])[1]
+                A[0,2] = (coordinates[cell[1]]-coordinates[cell[0]])[2]
+                A[1,0] = (coordinates[cell[2]]-coordinates[cell[1]])[0]
+                A[1,1] = (coordinates[cell[2]]-coordinates[cell[1]])[1]
+                A[1,2] = (coordinates[cell[2]]-coordinates[cell[1]])[2]
+                A[2,0] = (coordinates[cell[3]]-coordinates[cell[2]])[0]
+                A[2,1] = (coordinates[cell[3]]-coordinates[cell[2]])[1]
+                A[2,2] = (coordinates[cell[3]]-coordinates[cell[2]])[2]
+                if np.linalg.det(A) > 0:
+                    cells[i] = cell
+                else:
+                    cells[i] = np.array([cell[0],cell[1],cell[2], cell[2]])
+            else:
+                raise RuntimeError("We only support tets.")
+        return cells
+else:
+    def build2DCells(coordinates, sIndicies, cell_indicies, start_end):
+        """
+        Method used to construct 2D cells
+        """
+        cStart = start_end[0]
+        cEnd = start_end[1]
+        cells = np.zeros((cell_indicies.shape[0], 3))
+        for i in range(cStart,cEnd):
+            sIndex = sIndicies[i]
+            if len(sIndex)==3:
+                cell = list(set(cell_indicies[i]))
+                A = np.zeros((2,2))
+                A[0,0] = (coordinates[cell[1]]-coordinates[cell[0]])[0]
+                A[0,1] = (coordinates[cell[1]]-coordinates[cell[0]])[1]
+                A[1,0] = (coordinates[cell[2]]-coordinates[cell[1]])[0]
+                A[1,1] = (coordinates[cell[2]]-coordinates[cell[1]])[1]
+                if np.linalg.det(A) > 0:
+                    cells[i] = cell
+                else:
+                    cells[i] = np.array([cell[0],cell[2],cell[1]])
+            else:
+                raise RuntimeError("We only support triangles.")
+        return cells
+
+    def build3DCells(coordinates, sIndicies, cell_indicies, start_end):
+        """
+        Method used to construct 3D cells
+        """
+        cStart = start_end[0]
+        cEnd = start_end[1]
+        cells = np.zeros((cell_indicies.shape[0], 4))
+        for i in range(cStart,cEnd):
+            sIndex = sIndicies[i]
+            if len(sIndex)==4:
+                cell = list(set(cell_indicies[i]))
+                A = np.zeros((3,3))
+                A[0,0] = (coordinates[cell[1]]-coordinates[cell[0]])[0]
+                A[0,1] = (coordinates[cell[1]]-coordinates[cell[0]])[1]
+                A[0,2] = (coordinates[cell[1]]-coordinates[cell[0]])[2]
+                A[1,0] = (coordinates[cell[2]]-coordinates[cell[1]])[0]
+                A[1,1] = (coordinates[cell[2]]-coordinates[cell[1]])[1]
+                A[1,2] = (coordinates[cell[2]]-coordinates[cell[1]])[2]
+                A[2,0] = (coordinates[cell[3]]-coordinates[cell[2]])[0]
+                A[2,1] = (coordinates[cell[3]]-coordinates[cell[2]])[1]
+                A[2,2] = (coordinates[cell[3]]-coordinates[cell[2]])[2]
+                if np.linalg.det(A) > 0:
+                    cells[i] = cell
+                else:
+                    cells[i] = np.array([cell[0],cell[1],cell[3], cell[2]])
+            else:
+                raise RuntimeError("We only support tets.")
+        return cells
+
+def create2DNetgenMesh(ngMesh, coordinates, plex, geoInfo):
+    """
+    Method used to generate 2D NetgenMeshes
+    
+    :arg ngMesh: the netgen mesh to be populated
+    :arg coordinates: vertices coordinates 
+    :arg plex: PETSc DMPlex
+    :arg geoInfo: geometric information assosciated with the Netgen mesh
+
+    """
+    ngMesh.AddPoints(coordinates)
+    cStart,cEnd = plex.getHeightStratum(0)
+    vStart, _ = plex.getHeightStratum(2)
+    # Outside of jitted loop we put all calls to plex
+    sIndicies = [plex.getCone(i) for i in range(cStart,cEnd)]
+    cells_indicies = np.vstack([np.hstack([plex.getCone(sIndex[k])-vStart
+                    for k in range(len(sIndex))]) for sIndex in sIndicies])
+    ngMesh.Add(ngm.FaceDescriptor(bc=1))
+    cells = build2DCells(coordinates, sIndicies,
+                         cells_indicies, (cStart, cEnd))
+    if cells.ndim == 2:
+        ngMesh.AddElements(dim=2, index=1, data=cells, base=0)
+    for bcLabel in range(1,plex.getLabelSize(FACE_SETS_LABEL)+1):
+        if plex.getStratumSize("Face Sets",bcLabel) == 0:
+            continue
+        bcIndices = plex.getStratumIS("Face Sets",bcLabel).indices
+        for j in bcIndices:
+            bcIndex = plex.getCone(j)-vStart
+            if len(bcIndex) == 2:
+                edge = ngm.Element1D([v+1 for v in bcIndex],
+                                     index=bcLabel,
+                                     edgenr=bcLabel-1)
+                ngMesh.Add(edge, project_geominfo=geoInfo)
+
+def create3DNetgenMesh(ngMesh, coordinates, plex, geoInfo):
+    """
+    Method used to generate 3D NetgenMeshes
+    
+    :arg ngMesh: the netgen mesh to be populated
+    :arg coordinates: vertices coordinates 
+    :arg plex: PETSc DMPlex
+    :arg geoInfo: geometric information assosciated with the Netgen mesh
+
+    """
+    ngMesh.AddPoints(coordinates)
+    cStart, cEnd = plex.getHeightStratum(0)
+    vStart, _ = plex.getHeightStratum(3)
+    # Outside of jitted loop we put all calls to plex
+    sIndicies = [plex.getCone(i) for i in range(cStart,cEnd)]
+    f1Indicies = np.array([plex.getCone(s[0]) for s in sIndicies])
+    f2Indicies = np.array([plex.getCone(s[1]) for s in sIndicies])
+    fIndicies = np.hstack([f1Indicies,f2Indicies])
+
+    cells_indicies = np.vstack([np.hstack([plex.getCone(sIndex[k])-vStart
+                    for k in range(len(sIndex))]) for sIndex in fIndicies])
+    ngMesh.Add(ngm.FaceDescriptor(bc=1))
+    ngMesh.Add(ngm.FaceDescriptor(bc=plex.getLabelSize(FACE_SETS_LABEL)+1))
+    cells = build3DCells(coordinates, sIndicies,
+                         cells_indicies, (cStart, cEnd))
+    if cells.ndim == 2:
+        ngMesh.AddElements(dim=3, index=plex.getLabelSize(FACE_SETS_LABEL)+1,
+                                data=cells, base=0)
+    for bcLabel in range(1,plex.getLabelSize(FACE_SETS_LABEL)+1):
+        faces = []
+        if plex.getStratumSize("Face Sets",bcLabel) == 0:
+            continue
+        bcIndices = plex.getStratumIS("Face Sets",bcLabel).indices
+        for j in bcIndices:
+            sIndex  = plex.getCone(j)
+            if len(sIndex)==3:
+                S = list(itertools.chain.from_iterable([
+                    list(plex.getCone(sIndex[k])-vStart) for k in range(len(sIndex))]))
+                face = list(dict.fromkeys(S))
+                A = np.array([coordinates[face[1]]-coordinates[face[0]],
+                              coordinates[face[2]]-coordinates[face[1]],
+                              coordinates[face[0]]-coordinates[face[2]]])
+                eig = np.linalg.eig(A)[0].real
+                if eig[1]*eig[2] > 0:
+                    faces = faces + [face]
+                else:
+                    faces = faces + [[face[0],face[2],face[1]]]
+        ngMesh.Add(ngm.FaceDescriptor(bc=bcLabel, surfnr=bcLabel))
+        ngMesh.AddElements(dim=2, index=bcLabel,
+                           data=np.asarray(faces,dtype=np.int32), base=0,
+                           project_geometry = geoInfo)
+
 
 class MeshMapping:
     '''
@@ -31,9 +232,10 @@ class MeshMapping:
 
     '''
 
-    def __init__(self, mesh=None, comm=None, name="Default"):
+    def __init__(self, mesh=None, comm=None, geo=None, name="Default"):
         self.name = name
         self.comm = comm if comm is not None else PETSc.COMM_WORLD
+        self.geo = geo
         if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
             self.createPETScDMPlex(mesh)
         elif isinstance(mesh,PETSc.DMPlex):
@@ -58,103 +260,16 @@ class MeshMapping:
         self.petscPlex = plex
         ngMesh = ngm.Mesh(dim=plex.getCoordinateDim())
         self.ngMesh = ngMesh
+        self.geoInfo = False
+        if self.geo:
+            self.ngMesh.SetGeometry(self.geo)
+            self.geoInfo = True
 
         coordinates = coordinates.reshape(-1,plex.getDimension())
         if plex.getDimension() == 2:
-            self.ngMesh.AddPoints(coordinates)
-            cStart,cEnd = plex.getHeightStratum(0)
-            vStart, _ = plex.getHeightStratum(2)
-            cells = []
-            for i in range(cStart,cEnd):
-                sIndex  = plex.getCone(i)
-                if len(sIndex)==3:
-                    S = list(itertools.chain.from_iterable([
-                        list(plex.getCone(sIndex[k])-vStart) for k in range(len(sIndex))]))
-                    cell = list(dict.fromkeys(S))
-                    A = np.array([coordinates[cell[1]]-coordinates[cell[0]],
-                                 coordinates[cell[2]]-coordinates[cell[1]]])
-                    if np.linalg.det(A) > 0:
-                        cells = cells + [cell]
-                    else:
-                        cells = cells + [[cell[0],cell[2],cell[1]]]
-                else:
-                    S = [plex.getCone(sIndex[k])-vStart for k in list(range(len(sIndex)))]
-                    k = 0
-                    cell = []
-                    while k <  len(sIndex):
-                        if S[k][0] == S[k-1][1]:
-                            cell = cell+[S[k][0]]
-                        else:
-                            if k == 0  and S[k][0] not in list(S[k+1]):
-                                S[-1] = np.array([S[-1][1],S[-1][0]])
-                            else:
-                                S[k] = np.array([S[k][1],S[k][0]])
-                            cell = cell+[S[k][0]]
-                        k = k+1
-                    cells = cells + [cell]
-            self.ngMesh.Add(ngm.FaceDescriptor(bc=1))
-            cells = np.asarray(cells, dtype=np.int32)
-            if cells.ndim == 2:
-                self.ngMesh.AddElements(dim=2, index=1, data=cells, base=0)
-            for bcLabel in range(1,plex.getLabelSize(FACE_SETS_LABEL)+1):
-                if plex.getStratumSize("Face Sets",bcLabel) == 0:
-                    continue
-                bcIndices = plex.getStratumIS("Face Sets",bcLabel).indices
-                for j in bcIndices:
-                    bcIndex = plex.getCone(j)-vStart
-                    if len(bcIndex) == 2:
-                        edge = ngm.Element1D([v+1 for v in bcIndex],index=bcLabel)
-                        self.ngMesh.Add(edge)
+            create2DNetgenMesh(self.ngMesh, coordinates, plex, self.geoInfo)
         elif plex.getDimension() == 3:
-            self.ngMesh.AddPoints(coordinates)
-            cStart, cEnd = plex.getHeightStratum(0)
-            vStart, _ = plex.getHeightStratum(3)
-            cells = []
-            for i in range(cStart,cEnd):
-                fIndex  = plex.getCone(i)
-                f1 = plex.getCone(fIndex[0])
-                f2 = plex.getCone(fIndex[1])
-                sIndex = [f1[0],f1[1],f1[2],f2[0],f2[1],f2[2]]
-                if len(fIndex) == 4:
-                    S = list(itertools.chain.from_iterable([
-                        list(plex.getCone(sIndex[k])-vStart) for k in list(range(len(sIndex)))]))
-                    cell = list(dict.fromkeys(S))
-                    A = np.array([coordinates[cell[1]]-coordinates[cell[0]],
-                                  coordinates[cell[2]]-coordinates[cell[1]],
-                                  coordinates[cell[3]]-coordinates[cell[2]]])
-                    if np.linalg.det(A) > 0:
-                        cells = cells + [cell]
-                    else:
-                        cells = cells + [[cell[0],cell[1],cell[3],cell[2]]]
-            #fd = self.ngmesh.Add(ngm.FaceDescriptor(bc=plex.getLabelSize(FACE_SETS_LABEL)+1))
-            self.ngMesh.Add(ngm.FaceDescriptor(bc=plex.getLabelSize(FACE_SETS_LABEL)+1))
-            cells = np.asarray(cells, dtype=np.int32)
-            if cells.ndim == 2:
-                self.ngMesh.AddElements(dim=3, index=plex.getLabelSize(FACE_SETS_LABEL)+1,
-                                        data=cells, base=0)
-            for bcLabel in range(1,plex.getLabelSize(FACE_SETS_LABEL)+1):
-                faces = []
-                if plex.getStratumSize("Face Sets",bcLabel) == 0:
-                    continue
-                bcIndices = plex.getStratumIS("Face Sets",bcLabel).indices
-                for j in bcIndices:
-                    sIndex  = plex.getCone(j)
-                    if len(sIndex)==3:
-                        S = list(itertools.chain.from_iterable([
-                            list(plex.getCone(sIndex[k])-vStart) for k in range(len(sIndex))]))
-                        face = list(dict.fromkeys(S))
-                        A = np.array([coordinates[face[1]]-coordinates[face[0]],
-                                      coordinates[face[2]]-coordinates[face[1]],
-                                      coordinates[face[0]]-coordinates[face[2]]])
-                        eig = np.linalg.eig(A)[0].real
-                        if eig[1]*eig[2] > 0:
-                            faces = faces + [face]
-                        else:
-                            faces = faces + [[face[0],face[2],face[1]]]
-                #fd = self.ngmesh.Add(ngm.FaceDescriptor(bc=bcLabel))
-                self.ngMesh.Add(ngm.FaceDescriptor(bc=bcLabel))
-                self.ngMesh.AddElements(dim=2, index=bcLabel,
-                                        data=np.asarray(faces,dtype=np.int32), base=0)
+            create3DNetgenMesh(self.ngMesh, coordinates, plex, self.geoInfo)
         else:
             raise NotImplementedError("No implementation for dimension greater than 3.")
 
@@ -170,6 +285,7 @@ class MeshMapping:
         else:
             self.ngMesh = mesh
         comm = self.comm
+        self.geo = self.ngMesh.GetGeometry()
         if self.ngMesh.dim == 3:
             if comm.rank == 0:
                 V = self.ngMesh.Coordinates()
@@ -180,16 +296,7 @@ class MeshMapping:
                     surfMesh, dim = True, 2
                     T = self.ngMesh.Elements2D().NumPy()["nodes"]
 
-                if Version(np.__version__) >= Version("2.2"):
-                    T = np.trim_zeros(T, "b", axis=1).astype(np.int32) - 1
-                else:
-                    T = (
-                        np.array(
-                            [list(np.trim_zeros(a, "b")) for a in list(T)],
-                            dtype=np.int32,
-                        )
-                        - 1
-                    )
+                T  = trim_util(T)
 
                 plex = PETSc.DMPlex().createFromCellList(dim, T, V, comm=comm)
                 plex.setName(self.name)

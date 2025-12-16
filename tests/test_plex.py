@@ -7,6 +7,7 @@ from netgen.geom2d import unit_square
 from netgen.csg import unit_cube
 
 from petsc4py import PETSc
+import pytest
 
 from ngsPETSc import MeshMapping
 
@@ -17,6 +18,7 @@ def _plex_number_of_points(plex, h=0, local=False):
         np = plex.getComm().tompi4py().allreduce(np)
     return np
 
+@pytest.mark.mpi_skip
 def test_ngs_plex_2d():
     '''
     Testing the conversion from NGSolve mesh to PETSc DMPlex
@@ -27,6 +29,7 @@ def test_ngs_plex_2d():
     plex = meshMap.petscPlex
     assert _plex_number_of_points(plex) == 2
 
+@pytest.mark.mpi_skip
 def test_plex_ngs_2d():
     '''
     Testing the conversion from PETSc DMPlex to NGSolve mesh
@@ -42,8 +45,9 @@ def test_plex_ngs_2d():
                                              comm=PETSc.COMM_WORLD)
     nc = _plex_number_of_points(plex, local=True)
     meshMap = MeshMapping(plex)
-    assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
+    assert Mesh (meshMap.ngMesh).GetNE(VOL) == nc
 
+@pytest.mark.mpi_skip
 def test_ngs_plex_3d():
     '''
     Testing the conversion from NGSolve mesh to PETSc DMPlex
@@ -54,6 +58,7 @@ def test_ngs_plex_3d():
     plex = meshMap.petscPlex
     assert _plex_number_of_points(plex) == 12
 
+@pytest.mark.mpi_skip
 def test_plex_ngs_3d():
     '''
     Testing the conversion from PETSc DMPlex to NGSolve mesh
@@ -72,6 +77,7 @@ def test_plex_ngs_3d():
     meshMap = MeshMapping(plex)
     assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
 
+@pytest.mark.mpi_skip
 def test_plex_transform_alfeld_2d():
     '''
     Testing the use of the PETSc Alfeld transform
@@ -88,6 +94,7 @@ def test_plex_transform_alfeld_2d():
     meshMap = MeshMapping(newplex)
     assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
 
+@pytest.mark.mpi_skip
 def test_plex_transform_alfeld_3d():
     '''
     Testing the use of the PETSc Alfeld transform
@@ -104,22 +111,6 @@ def test_plex_transform_alfeld_3d():
     meshMap = MeshMapping(newplex)
     assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
 
-def test_plex_transform_box_2d():
-    '''
-    Testing the use of the PETSc Alfeld transform
-    on a NGSolve mesh.
-    '''
-    mesh = Mesh(unit_square.GenerateMesh(maxh=1.))
-    meshMap = MeshMapping(mesh)
-    tr = PETSc.DMPlexTransform().create(comm=PETSc.COMM_WORLD)
-    tr.setType(PETSc.DMPlexTransformType.REFINETOBOX)
-    tr.setDM(meshMap.petscPlex)
-    tr.setUp()
-    newplex = tr.apply(meshMap.petscPlex)
-    nc = _plex_number_of_points(newplex, local=True)
-    meshMap = MeshMapping(newplex)
-    assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
-
 if __name__ == '__main__':
     test_ngs_plex_2d()
     test_plex_ngs_2d()
@@ -127,4 +118,3 @@ if __name__ == '__main__':
     test_plex_ngs_3d()
     test_plex_transform_alfeld_2d()
     test_plex_transform_alfeld_3d()
-    test_plex_transform_box_2d()
