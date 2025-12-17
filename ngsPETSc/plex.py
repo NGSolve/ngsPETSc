@@ -3,6 +3,7 @@ This module contains all the functions related to wrapping NGSolve meshes to
 PETSc DMPlex using the petsc4py interface.
 '''
 import itertools
+import warnings
 import numpy as np
 from petsc4py import PETSc
 import netgen.meshing as ngm
@@ -47,7 +48,7 @@ if numba:
                 if np.linalg.det(A) > 0:
                     cells[i] = cell
                 else:
-                    cells[i] = np.array([cell[0],cell[2],cell[1]])
+                    cells[i] = np.array([cell[0], cell[2], cell[1]])
             else:
                 raise RuntimeError("We only support triangles.")
         return cells
@@ -77,7 +78,7 @@ if numba:
                 if np.linalg.det(A) > 0:
                     cells[i] = cell
                 else:
-                    cells[i] = np.array([cell[0],cell[1],cell[2], cell[2]])
+                    cells[i] = np.array([cell[0], cell[1], cell[2], cell[2]])
             else:
                 raise RuntimeError("We only support tets.")
         return cells
@@ -86,22 +87,19 @@ else:
         """
         Method used to construct 2D cells
         """
-        cStart = start_end[0]
-        cEnd = start_end[1]
+        cStart, cEnd = start_end
         cells = np.zeros((cell_indicies.shape[0], 3))
         for i in range(cStart,cEnd):
             sIndex = sIndicies[i]
             if len(sIndex)==3:
                 cell = list(set(cell_indicies[i]))
                 A = np.zeros((2,2))
-                A[0,0] = (coordinates[cell[1]]-coordinates[cell[0]])[0]
-                A[0,1] = (coordinates[cell[1]]-coordinates[cell[0]])[1]
-                A[1,0] = (coordinates[cell[2]]-coordinates[cell[1]])[0]
-                A[1,1] = (coordinates[cell[2]]-coordinates[cell[1]])[1]
+                for i in range(2):
+                    A[i, :] = coordinates[cell[i+1]] - coordinates[cell[i]]
                 if np.linalg.det(A) > 0:
                     cells[i] = cell
                 else:
-                    cells[i] = np.array([cell[0],cell[2],cell[1]])
+                    cells[i] = np.array([cell[0], cell[2], cell[1]])
             else:
                 raise RuntimeError("We only support triangles.")
         return cells
@@ -110,27 +108,19 @@ else:
         """
         Method used to construct 3D cells
         """
-        cStart = start_end[0]
-        cEnd = start_end[1]
+        cStart, cEnd = start_end
         cells = np.zeros((cell_indicies.shape[0], 4))
         for i in range(cStart,cEnd):
             sIndex = sIndicies[i]
             if len(sIndex)==4:
                 cell = list(set(cell_indicies[i]))
                 A = np.zeros((3,3))
-                A[0,0] = (coordinates[cell[1]]-coordinates[cell[0]])[0]
-                A[0,1] = (coordinates[cell[1]]-coordinates[cell[0]])[1]
-                A[0,2] = (coordinates[cell[1]]-coordinates[cell[0]])[2]
-                A[1,0] = (coordinates[cell[2]]-coordinates[cell[1]])[0]
-                A[1,1] = (coordinates[cell[2]]-coordinates[cell[1]])[1]
-                A[1,2] = (coordinates[cell[2]]-coordinates[cell[1]])[2]
-                A[2,0] = (coordinates[cell[3]]-coordinates[cell[2]])[0]
-                A[2,1] = (coordinates[cell[3]]-coordinates[cell[2]])[1]
-                A[2,2] = (coordinates[cell[3]]-coordinates[cell[2]])[2]
+                for i in range(3):
+                    A[i, :] = coordinates[cell[i+1]] - coordinates[cell[i]]
                 if np.linalg.det(A) > 0:
                     cells[i] = cell
                 else:
-                    cells[i] = np.array([cell[0],cell[1],cell[3], cell[2]])
+                    cells[i] = np.array([cell[0], cell[1], cell[3], cell[2]])
             else:
                 raise RuntimeError("We only support tets.")
         return cells
@@ -284,6 +274,8 @@ class MeshMapping:
             self.ngMesh = mesh.ngmesh
         else:
             self.ngMesh = mesh
+        if len(self.ngMesh.GetIdentifications()) > 0:
+            warnings.warn("Periodic meshes are not supported by ngsPETSc" , RuntimeWarning)
         comm = self.comm
         self.geo = self.ngMesh.GetGeometry()
         if self.ngMesh.dim == 3:
