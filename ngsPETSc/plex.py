@@ -275,7 +275,7 @@ class MeshMapping:
         else:
             self.ngMesh = mesh
         if len(self.ngMesh.GetIdentifications()) > 0:
-            warnings.warn("Periodic mesh are not supported by ngsPETSc" , RuntimeWarning)
+            warnings.warn("Periodic meshes are not supported by ngsPETSc" , RuntimeWarning)
         comm = self.comm
         self.geo = self.ngMesh.GetGeometry()
         if self.ngMesh.dim == 3:
