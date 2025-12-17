@@ -3,6 +3,7 @@ This module contains all the functions related to wrapping NGSolve meshes to
 PETSc DMPlex using the petsc4py interface.
 '''
 import itertools
+import warnings
 import numpy as np
 from petsc4py import PETSc
 import netgen.meshing as ngm
@@ -273,6 +274,8 @@ class MeshMapping:
             self.ngMesh = mesh.ngmesh
         else:
             self.ngMesh = mesh
+        if len(self.ngMesh.GetIdentifications()) > 0:
+            warnings.warn("Periodic mesh are not supported by ngsPETSc" , RuntimeWarning)
         comm = self.comm
         self.geo = self.ngMesh.GetGeometry()
         if self.ngMesh.dim == 3:
