@@ -74,6 +74,7 @@ jobs:
     timeout-minutes: 50
     env:
       GITHUB_WORKSPACE: $HOME
+      FIREDRAKE_CI: 1
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
@@ -110,6 +111,7 @@ jobs:
     timeout-minutes: 50
     env:
       GITHUB_WORKSPACE: $HOME
+      FIREDRAKE_CI: 1
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
