@@ -616,7 +616,7 @@ class GeometricModel:
             else:
                 el.refine = False
         if not refine_faces and dim == 3:
-            _dim_to_element_wrapper(self.ngmesh)[2]().Numpy()["refine"] = 0
+            _dim_to_element_wrapper(self.ngmesh)[2]().NumPy()["refine"] = 0
         self.ngmesh.Refine(adaptive=True)
         self.ngmesh.Curve(1)  # Reset mesh to be linear
 
