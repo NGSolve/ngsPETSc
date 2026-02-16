@@ -11,6 +11,8 @@ on:
     schedule:
     - cron:  '30 10 7,14,21,28 * *'
 
+    workflow_dispatch:
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -139,7 +141,7 @@ jobs:
           mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/multigrid/test_netgen_gmg.py
           pytest -m "not parallel" tests/firedrake/regression/test_netgen.py
           mpirun --allow-run-as-root -n 2 pytest -m "parallel" tests/firedrake/regression/test_netgen.py
-  
+
   fenicsx-stable:
     runs-on: ubuntu-latest
     container:
@@ -176,7 +178,7 @@ jobs:
         run: |
           python3 -m pip install --no-build-isolation pytest poetry
           python3 -m pip install . --check-build-dependencies --no-build-isolation
-     
+
       - name: Run tests (serial)
         run: |
           mpirun -n 2 python3 -m pytest -vs ./tests/test_fenicsx.py
