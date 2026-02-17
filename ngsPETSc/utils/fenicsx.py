@@ -386,7 +386,7 @@ class GeometricModel:
 
         # Extract global number of cells in the NetGen mesh
         dim_to_element_getter = _dim_to_element_wrapper(self.ngmesh)
-        ng_element = dim_to_element_getter[self.ngmesh.dim]
+        ng_element = dim_to_element_getter[self._mesh.topology.dim]
         ng_dimension = len(ng_element())  # Number of cells in NGS grid (on any rank)
 
         # For each cell type we compute the curved coordinates by curving the netgen mesh
