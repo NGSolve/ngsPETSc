@@ -236,9 +236,63 @@ def test_mixed():
     )
     assert len(domain.topology._cpp_object.cell_types) == 2  # pylint: disable=W0212
     domain = geoModel.curveField(2)
-    from dolfinx.io.vtkhdf import write_mesh
 
-    write_mesh("mixed_mesh.vtkhdf", domain)
+
+def test_manifold():
+    """
+    Testing FEnICSx interface with Netgen generating a higher order manifold
+    """
+
+    try:
+        from mpi4py import MPI
+        import dolfinx
+        import ngsPETSc.utils.fenicsx as ngfx
+    except ImportError:
+        pytest.skip("DOLFINx unavailable, skipping FENICSx test")
+
+    from netgen.occ import Pnt, SplineApproximation, Face, Wire, Axis, OCCGeometry, Z
+    from netgen.meshing import MeshingStep
+    import numpy as np
+    import ufl
+    from scipy.special import ellipe
+
+    # Ellipsoid with center (0,R,0) with Y-radius a, Z-radius b
+    R = 3.0
+    a = 1.5
+    b = 1.6
+
+    def Curve(t):
+        return Pnt(0, R+a*np.cos(t), b*np.sin(t))
+
+    n = 100
+    pnts = [Curve(2*np.pi*t/n) for t in range(n+1)]
+
+    spline = SplineApproximation(pnts)
+    f = Face(Wire(spline))
+
+    torus = f.Revolve(Axis((0,0,0), Z), 360)
+    torus_geo = OCCGeometry(torus)
+
+    meshing_options = {"perfstepsend" : MeshingStep.MESHSURFACE}
+
+    geoModel = ngfx.GeometricModel(torus_geo, MPI.COMM_WORLD)
+    mesh, (_, _), _ = geoModel.model_to_mesh(gdim=3, hmax=0.5, meshing_options=meshing_options)
+
+    order = 5
+    mesh = geoModel.curveField(order)
+
+    # Exact surface area
+    path_length = 2 * np.pi * R
+    m = 1 - (min(a, b)/max(a, b))**2
+    ellipse_perimeter = 4 * max(a, b) * ellipe(m)
+    area_exact = path_length * ellipse_perimeter
+
+    # Approx area
+    surf = dolfinx.fem.form(dolfinx.fem.Constant(mesh, dolfinx.default_scalar_type(1.0))*ufl.dx)
+    surface_area = mesh.comm.allreduce(dolfinx.fem.assemble_scalar(surf), op=MPI.SUM)
+    atol = 10*np.finfo(dolfinx.default_real_type).eps
+    assert np.isclose(surface_area, area_exact, atol=atol)
+
 
 
 if __name__ == "__main__":
@@ -247,3 +301,4 @@ if __name__ == "__main__":
     test_markers(2)
     test_refine(3)
     test_mixed()
+    test_manifold()
