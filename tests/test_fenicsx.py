@@ -3,7 +3,7 @@ This module test the utils.fenicsx class
 """
 import pytest
 from packaging.version import Version
-
+import inspect
 
 def test_square_netgen():
     """
@@ -104,8 +104,14 @@ def test_markers(order):
     geo = OCCGeometry(shape, dim=2)
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
     gm = dolfinx.mesh.GhostMode.shared_facet
-    partitioner = dolfinx.mesh.create_cell_partitioner(gm)
-    _, (ct, _), region_map = geoModel.model_to_mesh(hmax=0.02, partitioner=partitioner)
+
+    sig = inspect.signature(dolfinx.mesh.create_cell_partitioner)   
+    part_kwargs = {}
+    if "max_facet_to_cell_links" in list(sig.parameters.keys()):
+        part_kwargs["max_facet_to_cell_links"] = 2
+
+    partitioner = dolfinx.mesh.create_cell_partitioner(gm, **part_kwargs)
+    _, (ct, _), region_map = geoModel.model_to_mesh(hmax=0.02, partitioner=partitioner, max_facet_to_cell_links=2)
     curved_domain = geoModel.curveField(order)
 
     steel_circle = region_map[(2, "circle")]
@@ -165,13 +171,19 @@ def test_refine(order):
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
 
     gm = dolfinx.mesh.GhostMode.shared_facet
-    partitioner = dolfinx.mesh.create_cell_partitioner(gm)
+    sig = inspect.signature(dolfinx.mesh.create_cell_partitioner)   
+    part_kwargs = {}
+    if "max_facet_to_cell_links" in list(sig.parameters.keys()):
+        part_kwargs["max_facet_to_cell_links"] = 2
+
+    partitioner = dolfinx.mesh.create_cell_partitioner(gm, **part_kwargs)
+
     if order == 1:
         hmax = 0.08
     else:
         hmax = 0.1
     mesh, (_, _), region_map = geoModel.model_to_mesh(
-        hmax=hmax, partitioner=partitioner, gdim=3
+        hmax=hmax, partitioner=partitioner, gdim=3, max_facet_to_cell_links=2
     )
     mesh = geoModel.curveField(order)
 
@@ -228,11 +240,16 @@ def test_mixed():
     geo = SplineGeometry()
     geo.AddCircle((1, 1.2), 1)
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
-    part = dolfinx.mesh.create_cell_partitioner(
-        dolfinx.graph.partitioner_kahip(), dolfinx.mesh.GhostMode.none
-    )
+  
+    sig = inspect.signature(dolfinx.mesh.create_cell_partitioner)   
+    part_kwargs = {}
+    if "max_facet_to_cell_links" in list(sig.parameters.keys()):
+        part_kwargs["max_facet_to_cell_links"] = 2
+
+    part = dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.none, **part_kwargs)
+
     domain, _, _ = geoModel.model_to_mesh(
-        hmax=0.4, meshing_options={"quad_dominated": True}, partitioner=part, gdim=2
+        hmax=0.4, meshing_options={"quad_dominated": True}, partitioner=part, gdim=2, max_facet_to_cell_links=2
     )
     assert len(domain.topology._cpp_object.cell_types) == 2  # pylint: disable=W0212
     domain = geoModel.curveField(2)

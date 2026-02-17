@@ -5,6 +5,8 @@ the package will only be used in combination with FEniCSx.
 """
 
 import typing
+import inspect
+
 import basix.ufl
 import dolfinx
 
@@ -24,6 +26,13 @@ from ngsPETSc import MeshMapping
 # Map from Netgen cell type (integer tuple) to GMSH cell type
 _ngs_to_cells = {(2, 3): 2, (2, 4): 3, (3, 4): 4}
 
+# Default cell partitioner
+sig = inspect.signature(dolfinx.mesh.create_cell_partitioner)
+part_kwargs = {}
+if "max_facet_to_cell_links" in list(sig.parameters.keys()):
+    part_kwargs["max_facet_to_cell_links"] = 2
+_default_partitioner = dolfinx.cpp.mesh.create_cell_partitioner(
+    dolfinx.mesh.GhostMode.shared_facet, **part_kwargs)
 
 def _dim_to_element_wrapper(ngmesh: typing.Any) -> dict[int, typing.Any]:
     """Convenience wrapper to extract elements from a NetGen mesh based on topological dimension"""
@@ -78,10 +87,11 @@ class GeometricModel:
         partitioner: typing.Callable[
             [_MPI.Comm, int, int, dolfinx.cpp.graph.AdjacencyList_int32],
             dolfinx.cpp.graph.AdjacencyList_int32,
-        ] = dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.shared_facet),
+        ] = _default_partitioner,
         transform: typing.Any = None,
         routine: typing.Any = None,
         meshing_options: dict[str, typing.Any] | None = None,
+        max_facet_to_cell_links: int = 2
     ) -> tuple[
         dolfinx.mesh.Mesh,
         tuple[dolfinx.mesh.MeshTags | None, dolfinx.mesh.MeshTags | None],
@@ -100,7 +110,8 @@ class GeometricModel:
             routine: Function to be applied to the mesh after generation
                 takes as plan the mesh and the NetGen model and returns the
                 same objects after the routine has been applied.
-
+            max_facet_to_cell_links: The maximum number of cells a facet can be connected to. 
+                Note that this number should be reflected in the cell partitioner as well.
         Returns:
             A DOLFINx mesh for the given NetGen model. It also extracts cell tags,
             facet tags and a mapping from the NetGen label to the corresponding integer marker(s).
@@ -126,7 +137,8 @@ class GeometricModel:
 
         assert ngmesh.dim in (2, 3), "Only 2D and 3D meshes are supported."
         regions = self.extract_regions()
-        ct, ft = self.extract_linear_mesh(gdim=gdim, partitioner=partitioner)
+        ct, ft = self.extract_linear_mesh(gdim=gdim, partitioner=partitioner,
+                                          max_facet_to_cell_links=max_facet_to_cell_links)
         return self._mesh, (ct, ft), regions
 
     def extract_regions(self):
@@ -148,9 +160,8 @@ class GeometricModel:
     def extract_linear_mesh(
         self,
         gdim: int,
-        partitioner=dolfinx.mesh.create_cell_partitioner(
-            dolfinx.mesh.GhostMode.shared_facet
-        ),
+        partitioner=_default_partitioner,
+        max_facet_to_cell_links: int = 2
     ) -> tuple[dolfinx.mesh.MeshTags, dolfinx.mesh.MeshTags]:
         """
         Extract a DOLFINx mesh (and correpsonding cell and facet tags) from the Netgen mesh.
@@ -222,6 +233,9 @@ class GeometricModel:
 
         # Permute the vertices of the NetGen mesh to match the DOLFINx ordering
         # and create the DOLFINx mesh
+        mesh_sig = inspect.signature(dolfinx.mesh.create_mesh)
+        kwargs: dict[str, int] = {}
+
         if mixed_mesh:
             ufl_domain = [
                 gmshio.ufl_mesh(
@@ -254,7 +268,7 @@ class GeometricModel:
                 c_els,
                 V,
                 partitioner,
-                2  # Maximum number of cells connected to any facet
+                max_facet_to_cell_links
             )
             # Wrap as Python object
             mesh = dolfinx.mesh.Mesh(cpp_mesh, domain=None)
@@ -269,11 +283,14 @@ class GeometricModel:
                 :, dolfinx.cpp.io.perm_vtk(dolfinx.mesh.to_type(cell_str), T.shape[1])
             ]
             V = V[:, :gdim].copy()
+            if "max_facet_to_cell_links" in list(mesh_sig.parameters.keys()):
+                kwargs["max_facet_to_cell_links"] = max_facet_to_cell_links
             mesh = dolfinx.mesh.create_mesh(
                 self.comm,
                 cells=T,
                 x=V,
                 e=ufl_domain,
+                **kwargs
             )
         # Extract cell and facet tags (for non-mixed meshes)
         if mixed_mesh:
