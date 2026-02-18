@@ -90,6 +90,7 @@ def test_markers(order):
         import ngsPETSc.utils.fenicsx as ngfx
         import dolfinx
         import ufl
+        from dolfinx import __version__ as dfx_version
         from netgen.occ import OCCGeometry, WorkPlane, Glue
         import numpy as np
     except ImportError:
@@ -104,7 +105,10 @@ def test_markers(order):
     geo = OCCGeometry(shape, dim=2)
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
     gm = dolfinx.mesh.GhostMode.shared_facet
-    partitioner = dolfinx.mesh.create_cell_partitioner(gm)
+    if Version(dfx_version) >= Version("0.11.0.dev0"):
+        partitioner = dolfinx.mesh.create_cell_partitioner(gm, 2)
+    else:
+        partitioner = dolfinx.mesh.create_cell_partitioner(gm)
     _, (ct, _), region_map = geoModel.model_to_mesh(hmax=0.02, partitioner=partitioner)
     curved_domain = geoModel.curveField(order)
 
@@ -144,6 +148,7 @@ def test_refine(order):
         import ngsPETSc.utils.fenicsx as ngfx
         import dolfinx
         import ufl
+        from dolfinx import __version__ as dfx_version
         from netgen.csg import Sphere, Pnt, CSGeometry
         import numpy as np
     except ImportError:
@@ -165,7 +170,10 @@ def test_refine(order):
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
 
     gm = dolfinx.mesh.GhostMode.shared_facet
-    partitioner = dolfinx.mesh.create_cell_partitioner(gm)
+    if Version(dfx_version) >= Version("0.11.0.dev0"):
+        partitioner = dolfinx.mesh.create_cell_partitioner(gm, 2)
+    else:
+        partitioner = dolfinx.mesh.create_cell_partitioner(gm)
     if order == 1:
         hmax = 0.08
     else:
@@ -216,6 +224,7 @@ def test_mixed():
     try:
         from mpi4py import MPI
         import dolfinx
+        from dolfinx import __version__ as dfx_version
         import ngsPETSc.utils.fenicsx as ngfx
     except ImportError:
         pytest.skip("DOLFINx unavailable, skipping FENICSx test")
@@ -228,11 +237,16 @@ def test_mixed():
     geo = SplineGeometry()
     geo.AddCircle((1, 1.2), 1)
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
-    part = dolfinx.mesh.create_cell_partitioner(
-        dolfinx.graph.partitioner_kahip(), dolfinx.mesh.GhostMode.none
-    )
+    if Version(dfx_version) >= Version("0.11.0.dev0"):
+        partitioner = dolfinx.mesh.create_cell_partitioner(
+            dolfinx.graph.partitioner_kahip(), dolfinx.mesh.GhostMode.none, 2
+        )
+    else:
+        partitioner = dolfinx.mesh.create_cell_partitioner(
+            dolfinx.graph.partitioner_kahip(), dolfinx.mesh.GhostMode.none
+        )
     domain, _, _ = geoModel.model_to_mesh(
-        hmax=0.4, meshing_options={"quad_dominated": True}, partitioner=part, gdim=2
+        hmax=0.4, meshing_options={"quad_dominated": True}, partitioner=partitioner, gdim=2
     )
     assert len(domain.topology._cpp_object.cell_types) == 2  # pylint: disable=W0212
     domain = geoModel.curveField(2)
