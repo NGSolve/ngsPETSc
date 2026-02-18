@@ -78,7 +78,7 @@ class GeometricModel:
         partitioner: typing.Callable[
             [_MPI.Comm, int, int, dolfinx.cpp.graph.AdjacencyList_int32],
             dolfinx.cpp.graph.AdjacencyList_int32,
-        ] = dolfinx.mesh.create_cell_partitioner(dolfinx.mesh.GhostMode.shared_facet),
+        ] | None = None,
         transform: typing.Any = None,
         routine: typing.Any = None,
         meshing_options: dict[str, typing.Any] | None = None,
@@ -105,6 +105,13 @@ class GeometricModel:
             A DOLFINx mesh for the given NetGen model. It also extracts cell tags,
             facet tags and a mapping from the NetGen label to the corresponding integer marker(s).
         """
+        if partitioner is None:
+            if Version(dolfinx.__version__) >= Version("0.11.0.dev0"):
+                partitioner = dolfinx.mesh.create_cell_partitioner(
+                    dolfinx.mesh.GhostMode.shared_facet, 2)
+            else:
+                partitioner = dolfinx.mesh.create_cell_partitioner(
+                    dolfinx.mesh.GhostMode.shared_facet)
         meshing_options = {} if meshing_options is None else meshing_options
 
         # To be parallel safe, we generate on all processes
@@ -148,9 +155,10 @@ class GeometricModel:
     def extract_linear_mesh(
         self,
         gdim: int,
-        partitioner=dolfinx.mesh.create_cell_partitioner(
-            dolfinx.mesh.GhostMode.shared_facet
-        ),
+        partitioner: typing.Callable[
+            [_MPI.Comm, int, int, dolfinx.cpp.graph.AdjacencyList_int32],
+            dolfinx.cpp.graph.AdjacencyList_int32,
+        ] | None = None,
     ) -> tuple[dolfinx.mesh.MeshTags, dolfinx.mesh.MeshTags]:
         """
         Extract a DOLFINx mesh (and correpsonding cell and facet tags) from the Netgen mesh.
@@ -165,8 +173,15 @@ class GeometricModel:
         Returns:
             The cell and facet tags of the DOLFINx mesh.
         """
-        # Extract the elements from the NetGen mesh
+        if partitioner is None:
+            if Version(dolfinx.__version__) >= Version("0.11.0.dev0"):
+                partitioner = dolfinx.mesh.create_cell_partitioner(
+                    dolfinx.mesh.GhostMode.shared_facet, 2)
+            else:
+                partitioner = dolfinx.mesh.create_cell_partitioner(
+                    dolfinx.mesh.GhostMode.shared_facet)
 
+        # Extract the elements from the NetGen mesh
         ngmesh = self.ngmesh
         elements_as_numpy = _dim_to_element_wrapper(ngmesh)[ngmesh.dim]().NumPy()
         T = elements_as_numpy["nodes"]
