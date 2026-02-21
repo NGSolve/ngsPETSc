@@ -22,7 +22,7 @@ from ngsPETSc.utils.utils import find_permutation
 from ngsPETSc import MeshMapping
 
 # Map from Netgen cell type (integer tuple) to GMSH cell type
-_ngs_to_cells = {(2, 3): 2, (2, 4): 3, (3, 4): 4}
+_ngs_to_cells = {(2, 3): 2, (3, 3): 2, (3, 4): 3, (2, 4): 3, (3, 4): 4}
 
 
 def _dim_to_element_wrapper(ngmesh: typing.Any) -> dict[int, typing.Any]:
@@ -183,8 +183,12 @@ class GeometricModel:
 
         # Extract the elements from the NetGen mesh
         ngmesh = self.ngmesh
-        elements_as_numpy = _dim_to_element_wrapper(ngmesh)[ngmesh.dim]().NumPy()
-        T = elements_as_numpy["nodes"]
+        # Go from geometric dimension and downwards to the first non-zero element
+        for topo_dim in reversed(range(0, gdim+1)):
+            elements_as_numpy = _dim_to_element_wrapper(ngmesh)[topo_dim]().NumPy()
+            T = elements_as_numpy["nodes"]
+            if T.shape[0] > 0:
+                break
 
         # Sort elements by number of vertices, i.e. group them by cell type
         number_of_vertices = elements_as_numpy["np"]
@@ -295,9 +299,9 @@ class GeometricModel:
             ct = None
             ft = None
         else:
-            ct = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim)
+            ct = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=mesh.topology.dim)
             ct.name = "Cell tags"
-            ft = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=ngmesh.dim - 1)
+            ft = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=mesh.topology.dim - 1)
             ft.name = "Facet tags"
 
         # Attach DOLFINx mesh to the GeometricModel
@@ -397,7 +401,7 @@ class GeometricModel:
 
         # Extract global number of cells in the NetGen mesh
         dim_to_element_getter = _dim_to_element_wrapper(self.ngmesh)
-        ng_element = dim_to_element_getter[self.ngmesh.dim]
+        ng_element = dim_to_element_getter[self._mesh.topology.dim]
         ng_dimension = len(ng_element())  # Number of cells in NGS grid (on any rank)
 
         # For each cell type we compute the curved coordinates by curving the netgen mesh
@@ -653,8 +657,9 @@ def extract_element_tags(
         dolfinx_mesh: The DOLFINx mesh to which the facet tags will be distributed to.
         dim: The topological dimension of the entities to extract.
     """
+
     tdim = dolfinx_mesh.topology.dim
-    assert ngmesh.dim == tdim, f"Mismatch: ({ngmesh.dim=}!={tdim=})"
+    assert 0 <= dim <= tdim
     assert dolfinx_mesh.geometry.cmap.degree == 1, (
         "Can only extract element tags from linear grids"
     )
