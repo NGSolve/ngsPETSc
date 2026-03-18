@@ -36,11 +36,6 @@ def buildCells(coordinates, plex):
     cells = [[v-vStart for v in plex.getAdjacency(c) if vStart <= v < vEnd]
              for c in range(cStart, cEnd)]
     cells = np.array(cells)
-
-    for i in range(cells.shape[0]):
-        A = np.diff(coordinates[cells[i]], axis=0)
-        if np.linalg.det(A) < 0:
-            cells[i, [-2, -1]] = cells[i, [-1, -2]]
     return cells
 
 
