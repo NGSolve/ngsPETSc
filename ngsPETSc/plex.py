@@ -141,7 +141,7 @@ class MeshMapping:
         :arg plex: the PETSc DMPlex to be converted in NGSolve mesh object
 
         '''
-        if plex.getDimension() not in [2,3]:
+        if plex.getDimension() not in {2, 3}:
             raise NotImplementedError(f"Not implemented for dimension {plex.getDimension()}.")
         nv = plex.getDepthStratum(0)[1] - plex.getDepthStratum(0)[0]
         coordinates = plex.getCoordinatesLocal().getArray()
@@ -192,7 +192,6 @@ class MeshMapping:
                 T  = trim_util(T)
 
                 plex = PETSc.DMPlex().createFromCellList(dim, T, V, comm=comm)
-                plex.setName(self.name)
                 vStart, _ = plex.getDepthStratum(0)
                 if surfMesh:
                     for e in self.ngMesh.Elements1D():
@@ -205,20 +204,17 @@ class MeshMapping:
                     for e in self.ngMesh.Elements1D():
                         join = plex.getJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(EDGE_SETS_LABEL, join[0], int(e.index))
-                self.petscPlex = plex
             else:
                 plex = PETSc.DMPlex().createFromCellList(3,
-                                                        np.zeros((0, 4), dtype=np.int32),
-                                                        np.zeros((0, 3), dtype=np.double),
-                                                        comm=comm)
-                self.petscPlex = plex
+                                                         np.zeros((0, 4), dtype=np.int32),
+                                                         np.zeros((0, 3), dtype=np.double),
+                                                         comm=comm)
         elif self.ngMesh.dim == 2:
             if comm.rank == 0:
                 V = self.ngMesh.Coordinates()
                 T = self.ngMesh.Elements2D().NumPy()["nodes"]
-                T = np.array([list(np.trim_zeros(a, 'b')) for a in list(T)])-1
+                T = np.array([list(np.trim_zeros(a, 'b')) for a in T]) - 1
                 plex = PETSc.DMPlex().createFromCellList(2, T, V, comm=comm)
-                plex.setName(self.name)
                 vStart, _ = plex.getDepthStratum(0)   # vertices
                 for e in self.ngMesh.Elements1D():
                     join = plex.getJoin([vStart+v.nr-1 for v in e.vertices])
@@ -227,11 +223,10 @@ class MeshMapping:
                     for e in self.ngMesh.Elements2D():
                         join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
                         plex.setLabelValue(CELL_SETS_LABEL, join[0], int(e.index))
-
-                self.petscPlex = plex
             else:
                 plex = PETSc.DMPlex().createFromCellList(2,
-                                                        np.zeros((0, 3), dtype=np.int32),
-                                                        np.zeros((0, 2), dtype=np.double),
-                                                        comm=comm)
-                self.petscPlex = plex
+                                                         np.zeros((0, 3), dtype=np.int32),
+                                                         np.zeros((0, 2), dtype=np.double),
+                                                         comm=comm)
+        plex.setName(self.name)
+        self.petscPlex = plex
