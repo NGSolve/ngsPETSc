@@ -49,18 +49,23 @@ def createNetgenMesh(ngMesh, coordinates, plex, geoInfo):
     """
     ngMesh.AddPoints(coordinates)
     tdim = plex.getDimension()
+    gdim = plex.getCoordinateDim()
+    codim = gdim - tdim
 
     plex.setBasicAdjacency(True, True)
     cells = buildSimplices(plex)
 
+    surfaceLabel = FACE_SETS_LABEL if codim == 0 else CELL_SETS_LABEL
+    cellIndex = plex.getLabelSize(surfaceLabel) + 1
+
     ngMesh.Add(ngm.FaceDescriptor(bc=1))
-    ngMesh.Add(ngm.FaceDescriptor(bc=plex.getLabelSize(FACE_SETS_LABEL)+1))
-    ngMesh.AddElements(dim=tdim,
-                       index=plex.getLabelSize(FACE_SETS_LABEL)+1,
-                       data=cells, base=0)
+    ngMesh.Add(ngm.FaceDescriptor(bc=cellIndex))
+    ngMesh.AddElements(dim=tdim, index=cellIndex,
+                       data=cells, base=0,
+                       project_geometry=geoInfo)
 
     fstart, fend = plex.getHeightStratum(1)
-    for bcLabel in range(1, plex.getLabelSize(FACE_SETS_LABEL)+1):
+    for bcLabel in range(1, cellIndex):
         if plex.getStratumSize(FACE_SETS_LABEL, bcLabel) == 0:
             continue
         bcIndices = plex.getStratumIS(FACE_SETS_LABEL, bcLabel).indices
@@ -71,6 +76,7 @@ def createNetgenMesh(ngMesh, coordinates, plex, geoInfo):
         ngMesh.AddElements(dim=tdim-1, index=bcLabel,
                            data=faces, base=0,
                            project_geometry=geoInfo)
+
 
 
 class MeshMapping:
