@@ -52,31 +52,40 @@ def createNetgenMesh(ngMesh, coordinates, plex, geoInfo):
     gdim = plex.getCoordinateDim()
     codim = gdim - tdim
 
+    adjacency = plex.getBasicAdjacency()
     plex.setBasicAdjacency(True, True)
     cells = buildSimplices(plex)
 
-    surfaceLabel = FACE_SETS_LABEL if codim == 0 else CELL_SETS_LABEL
-    cellIndex = plex.getLabelSize(surfaceLabel) + 1
-
     ngMesh.Add(ngm.FaceDescriptor(bc=1))
-    ngMesh.Add(ngm.FaceDescriptor(bc=cellIndex))
+    if gdim == 2 and tdim == 2:
+        cellIndex = 1
+    else:
+        surfaceLabel = FACE_SETS_LABEL if codim == 0 else CELL_SETS_LABEL
+        cellIndex = plex.getLabelSize(surfaceLabel) + 1
+        ngMesh.Add(ngm.FaceDescriptor(bc=cellIndex))
+
     ngMesh.AddElements(dim=tdim, index=cellIndex,
                        data=cells, base=0,
                        project_geometry=geoInfo)
 
     fstart, fend = plex.getHeightStratum(1)
-    for bcLabel in range(1, cellIndex):
+    for bcLabel in range(1, plex.getLabelSize(FACE_SETS_LABEL) + 1):
         if plex.getStratumSize(FACE_SETS_LABEL, bcLabel) == 0:
             continue
         bcIndices = plex.getStratumIS(FACE_SETS_LABEL, bcLabel).indices
         fpoints = bcIndices[np.logical_and(fstart <= bcIndices, bcIndices < fend)]
         faces = buildSimplices(plex, points=fpoints)
 
-        ngMesh.Add(ngm.FaceDescriptor(bc=bcLabel, surfnr=bcLabel))
-        ngMesh.AddElements(dim=tdim-1, index=bcLabel,
-                           data=faces, base=0,
-                           project_geometry=geoInfo)
-
+        if tdim == 2:
+            for face in faces:
+                edge = ngm.Element1D(list(face+1), index=bcLabel, edgenr=bcLabel-1)
+                ngMesh.Add(edge, project_geominfo=geoInfo)
+        else:
+            ngMesh.Add(ngm.FaceDescriptor(bc=bcLabel, surfnr=bcLabel))
+            ngMesh.AddElements(dim=tdim-1, index=bcLabel,
+                               data=faces, base=0,
+                               project_geometry=geoInfo)
+    plex.setBasicAdjacency(*adjacency)
 
 
 class MeshMapping:
@@ -167,8 +176,8 @@ class MeshMapping:
                     join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
                     plex.setLabelValue(codim_label[codim], join[0], int(e.index))
         else:
-            T = np.zeros((0, tdim + 1), dtype=PETSc.IntType)
-            V = np.zeros((0, gdim), dtype=PETSc.RealType)
-            plex = PETSc.DMPlex().createFromCellList(gdim, T, V, comm=comm)
+            T = np.empty((0, tdim + 1), dtype=PETSc.IntType)
+            V = np.empty((0, gdim), dtype=PETSc.RealType)
+            plex = PETSc.DMPlex().createFromCellList(tdim, T, V, comm=comm)
         plex.setName(self.name)
         self.petscPlex = plex
