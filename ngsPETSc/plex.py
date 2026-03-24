@@ -6,6 +6,7 @@ import warnings
 import numpy as np
 from petsc4py import PETSc
 import netgen.meshing as ngm
+from netgen.occ import OCCGeometry
 from ngsPETSc.utils.utils import trim_util
 try:
     import ngsolve as ngs
@@ -37,27 +38,41 @@ def buildSimplices(plex, points=None):
     return np.array(T, dtype=PETSc.IntType)
 
 
-def createNetgenMesh(ngMesh, coordinates, plex, geoInfo):
+def createNetgenMesh(plex, geo):
     """
     Method used to generate NetgenMeshes
 
-    :arg ngMesh: the netgen mesh to be populated
-    :arg coordinates: vertices coordinates
     :arg plex: PETSc DMPlex
-    :arg geoInfo: geometric information assosciated with the Netgen mesh
+    :arg geo: Netgen geometry
 
     """
-    ngMesh.AddPoints(coordinates)
+    # Create a Netgen Mesh
     tdim = plex.getDimension()
     gdim = plex.getCoordinateDim()
     codim = gdim - tdim
+    ngMesh = ngm.Mesh(dim=gdim)
+    if geo is not None:
+        ngMesh.SetGeometry(geo)
+        geoInfo = True
+    else:
+        geoInfo = False
 
+    # Add vertices
+    vStart, vEnd = plex.getDepthStratum(0)
+    nv = vEnd - vStart
+    coordinates = plex.getCoordinatesLocal().getArray()
+    if coordinates.size != nv * gdim:
+        raise NotImplementedError("High-order mesh conversion is not supported")
+    coordinates = coordinates.reshape(nv, gdim)
+    ngMesh.AddPoints(coordinates)
+
+    # Addd topology
     adjacency = plex.getBasicAdjacency()
     plex.setBasicAdjacency(True, True)
     cells = buildSimplices(plex)
 
     ngMesh.Add(ngm.FaceDescriptor(bc=1))
-    if gdim == 2 and tdim == 2:
+    if gdim == 2:
         cellIndex = 1
     else:
         surfaceLabel = FACE_SETS_LABEL if codim == 0 else CELL_SETS_LABEL
@@ -86,6 +101,7 @@ def createNetgenMesh(ngMesh, coordinates, plex, geoInfo):
                                data=faces, base=0,
                                project_geometry=geoInfo)
     plex.setBasicAdjacency(*adjacency)
+    return ngMesh
 
 
 class MeshMapping:
@@ -101,38 +117,27 @@ class MeshMapping:
     def __init__(self, mesh=None, comm=None, geo=None, name="Default"):
         self.name = name
         self.comm = comm if comm is not None else PETSc.COMM_WORLD
-        self.geo = geo
-        if isinstance(mesh,(ngs.comp.Mesh,ngm.Mesh)):
-            self.createPETScDMPlex(mesh)
-        elif isinstance(mesh,PETSc.DMPlex):
-            self.createNGSMesh(mesh)
+        if isinstance(mesh, (ngs.comp.Mesh, ngm.Mesh)):
+            self.ngMesh, self.petscPlex = self.createPETScDMPlex(mesh)
+        elif isinstance(mesh, PETSc.DMPlex):
+            if (geo is not None) and not isinstance(geo, OCCGeometry):
+                raise ValueError("Conversion from DMPlex to Netgen mesh requires OCCGeometry")
+            self.ngMesh, self.petscPlex = self.createNGSMesh(mesh, geo)
         else:
             raise ValueError("Mesh format not recognised.")
+        self.geo = self.ngMesh.GetGeometry()
+        self.geoInfo = bool(self.geo)
 
-    def createNGSMesh(self, plex):
+    def createNGSMesh(self, plex, geo):
         '''
         This function generates an NGSolve mesh from the local part of a PETSc DMPlex
 
         :arg plex: the PETSc DMPlex to be converted in NGSolve mesh object
+        :arg geo: Netgen geometry
 
         '''
-        vStart, vEnd = plex.getDepthStratum(0)
-        nv = vEnd - vStart
-        coordinates = plex.getCoordinatesLocal().getArray()
-        gdim = plex.getCoordinateDim()
-        if coordinates.size != nv * gdim:
-            raise NotImplementedError("High-order mesh conversion is not supported")
-        coordinates = coordinates.reshape(nv, gdim)
-
-        self.petscPlex = plex
-        ngMesh = ngm.Mesh(dim=gdim)
-        self.ngMesh = ngMesh
-        self.geoInfo = False
-        if self.geo:
-            self.ngMesh.SetGeometry(self.geo)
-            self.geoInfo = True
-
-        createNetgenMesh(self.ngMesh, coordinates, plex, self.geoInfo)
+        ngMesh = createNetgenMesh(plex, geo)
+        return ngMesh, plex
 
     def createPETScDMPlex(self, mesh):
         '''
@@ -142,20 +147,19 @@ class MeshMapping:
 
         '''
         if isinstance(mesh, ngs.comp.Mesh):
-            self.ngMesh = mesh.ngmesh
+            ngMesh = mesh.ngmesh
         else:
-            self.ngMesh = mesh
-        if len(self.ngMesh.GetIdentifications()) > 0:
+            ngMesh = mesh
+        if len(ngMesh.GetIdentifications()) > 0:
             warnings.warn("Periodic meshes are not supported by ngsPETSc" , RuntimeWarning)
         comm = self.comm
-        self.geo = self.ngMesh.GetGeometry()
         els = {
-            0: self.ngMesh.Elements0D,
-            1: self.ngMesh.Elements1D,
-            2: self.ngMesh.Elements2D,
-            3: self.ngMesh.Elements3D,
+            0: ngMesh.Elements0D,
+            1: ngMesh.Elements1D,
+            2: ngMesh.Elements2D,
+            3: ngMesh.Elements3D,
         }
-        gdim = self.ngMesh.dim
+        gdim = ngMesh.dim
         tdim = gdim
         cells = els[tdim]()
         while len(cells) == 0 and tdim > 0:
@@ -165,7 +169,7 @@ class MeshMapping:
         if comm.rank == 0:
             cells_np = cells.NumPy()
             T = trim_util(cells_np["nodes"])
-            V = self.ngMesh.Coordinates()
+            V = ngMesh.Coordinates()
             plex = PETSc.DMPlex().createFromCellList(tdim, T, V, comm=comm)
             vStart, _ = plex.getDepthStratum(0)
             codim_label = {0: CELL_SETS_LABEL, 1: FACE_SETS_LABEL, 2: EDGE_SETS_LABEL}
@@ -180,4 +184,4 @@ class MeshMapping:
             V = np.empty((0, gdim), dtype=PETSc.RealType)
             plex = PETSc.DMPlex().createFromCellList(tdim, T, V, comm=comm)
         plex.setName(self.name)
-        self.petscPlex = plex
+        return ngMesh, plex
