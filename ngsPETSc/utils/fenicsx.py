@@ -588,8 +588,13 @@ class GeometricModel:
                 geom_imap.size_local + geom_imap.num_ghosts, dtype=np.int32
             )
             igi = geom_imap.local_to_global(local_node_indices)
-            geometry = dolfinx.mesh.create_geometry(
-                geom_imap, cell_node_map, c_el._cpp_object, x[:, :geom_dim].copy(), igi
+            try:
+                geometry = dolfinx.mesh.create_geometry(
+                    geom_imap, cell_node_map, c_el._cpp_object, x[:, :geom_dim].copy(), igi
+                )
+            except AttributeError:
+                geometry = dolfinx.mesh.create_geometry(
+                    geom_imap, cell_node_map, c_el, x[:, :geom_dim].copy(), igi
             )
 
             # Create DOLFINx C++ mesh
