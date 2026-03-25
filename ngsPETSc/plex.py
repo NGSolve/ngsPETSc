@@ -5,6 +5,7 @@ PETSc DMPlex using the petsc4py interface.
 import warnings
 import numpy as np
 from petsc4py import PETSc
+from mpi4py import MPI
 import netgen.meshing as ngm
 from netgen.occ import OCCGeometry
 from ngsPETSc.utils.utils import trim_util
@@ -116,7 +117,11 @@ class MeshMapping:
 
     def __init__(self, mesh=None, comm=None, geo=None, name="Default"):
         self.name = name
-        self.comm = comm if comm is not None else PETSc.COMM_WORLD
+        if comm is None:
+            comm = MPI.COMM_WORLD
+        elif isinstance(comm, PETSc.Comm):
+            comm = comm.tompi4py()
+        self.comm = comm
         if isinstance(mesh, (ngs.comp.Mesh, ngm.Mesh)):
             self.ngMesh, self.petscPlex = self.createPETScDMPlex(mesh)
         elif isinstance(mesh, PETSc.DMPlex):
