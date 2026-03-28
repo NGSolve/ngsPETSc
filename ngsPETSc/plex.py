@@ -8,6 +8,10 @@ from petsc4py import PETSc
 from mpi4py import MPI
 import netgen.meshing as ngm
 from netgen.occ import OCCGeometry
+try:
+    from netgen.geom2d import SplineGeometry
+except ImportError:
+    SplineGeometry = None
 from ngsPETSc.utils.utils import trim_util
 try:
     import ngsolve as ngs
@@ -94,7 +98,8 @@ def createNetgenMesh(plex, geo):
 
         if tdim == 2:
             for face in faces:
-                edge = ngm.Element1D(list(face+1), index=bcLabel, edgenr=bcLabel-1)
+                edgenr = bcLabel if (SplineGeometry and isinstance(geo, SplineGeometry)) else bcLabel-1
+                edge = ngm.Element1D(list(face+1), index=bcLabel, edgenr=edgenr)
                 ngMesh.Add(edge, project_geominfo=geoInfo)
         else:
             ngMesh.Add(ngm.FaceDescriptor(bc=bcLabel, surfnr=bcLabel))
@@ -125,8 +130,8 @@ class MeshMapping:
         if isinstance(mesh, (ngs.comp.Mesh, ngm.Mesh)):
             self.ngMesh, self.petscPlex = self.createPETScDMPlex(mesh)
         elif isinstance(mesh, PETSc.DMPlex):
-            if (geo is not None) and not isinstance(geo, OCCGeometry):
-                raise ValueError("Conversion from DMPlex to Netgen mesh requires OCCGeometry")
+            if (geo is not None) and not isinstance(geo, (OCCGeometry,) + ((SplineGeometry,) if SplineGeometry else ())):
+                raise ValueError("Conversion from DMPlex to Netgen mesh requires OCCGeometry or SplineGeometry")
             self.ngMesh, self.petscPlex = self.createNGSMesh(mesh, geo)
         else:
             raise ValueError("Mesh format not recognised.")
