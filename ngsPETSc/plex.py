@@ -27,6 +27,50 @@ CELL_SETS_LABEL = "Cell Sets"
 EDGE_SETS_LABEL = "Edge Sets"
 
 
+def projectToSplineGeo(p2d, geo):
+    """
+    Project a 2D point onto the nearest arc of a SplineGeometry.
+
+    For circular arcs the centre and radius are recovered from the arc
+    endpoints and their outward unit normals via:
+        r = |p_start - p_end| / |n_start - n_end|
+        centre = p_start - r * n_start
+    For line segments the foot of the perpendicular (clamped to the
+    segment) is used instead.
+    """
+    best_dist = np.inf
+    best_proj = p2d.copy()
+    for i in range(geo.GetNrLines()):
+        spline = geo.GetSpline(i)
+        p_start = np.asarray(spline.StartPoint())[:2]
+        p_end = np.asarray(spline.EndPoint())[:2]
+        n_start = np.asarray(spline.GetNormal(0))[:2]
+        n_end = np.asarray(spline.GetNormal(1))[:2]
+        dn = n_start - n_end
+        dn_norm = np.linalg.norm(dn)
+        if dn_norm < 1e-12:
+            # Line segment: project to nearest point on the segment
+            d = p_end - p_start
+            dlen2 = float(np.dot(d, d))
+            if dlen2 < 1e-30:
+                p_proj = p_start.copy()
+            else:
+                t = float(np.clip(np.dot(p2d - p_start, d) / dlen2, 0.0, 1.0))
+                p_proj = p_start + t * d
+        else:
+            # Circular arc
+            r = np.linalg.norm(p_start - p_end) / dn_norm
+            center = p_start - r * n_start
+            pc = p2d - center
+            pc_norm = np.linalg.norm(pc)
+            p_proj = (center + r * pc / pc_norm) if pc_norm > 1e-30 else p_start.copy()
+        dist = np.linalg.norm(p2d - p_proj)
+        if dist < best_dist:
+            best_dist = dist
+            best_proj = p_proj
+    return best_proj
+
+
 def buildSimplices(plex, points=None):
     """
     Return a numpy.array with the vertices of each simplex in the plex
@@ -69,6 +113,29 @@ def createNetgenMesh(plex, geo):
     if coordinates.size != nv * gdim:
         raise NotImplementedError("High-order mesh conversion is not supported")
     coordinates = coordinates.reshape(nv, gdim)
+    # For SplineGeometry, project boundary vertices onto the geometry arcs before
+    # inserting them into the ngmesh.  Netgen's Add(edge, project_geominfo=True)
+    # calls ProjectPointEdge internally, which computes the projected position but
+    # never writes it back to the vertex coordinates (only epgeominfo.dist is
+    # updated).  This means boundary midpoints introduced by a PETSc refinement
+    # (e.g. DMPlexTransform REFINEREGULAR) stay at their linearly-interpolated
+    # positions unless we correct them here.
+    if geoInfo and SplineGeometry and isinstance(geo, SplineGeometry):
+        fstart_tmp, fend_tmp = plex.getHeightStratum(1)
+        bnd_vert_set = set()
+        for lval in range(1, plex.getLabelSize(FACE_SETS_LABEL) + 1):
+            if plex.getStratumSize(FACE_SETS_LABEL, lval) == 0:
+                continue
+            bc_ids = plex.getStratumIS(FACE_SETS_LABEL, lval).indices
+            fedges = bc_ids[np.logical_and(fstart_tmp <= bc_ids, bc_ids < fend_tmp)]
+            for fedge in fedges:
+                for v in plex.getCone(fedge):
+                    if vStart <= v < vEnd:
+                        bnd_vert_set.add(v - vStart)
+        if bnd_vert_set:
+            coordinates = coordinates.copy()
+            for vi in bnd_vert_set:
+                coordinates[vi, :2] = projectToSplineGeo(coordinates[vi, :2], geo)
     ngMesh.AddPoints(coordinates)
 
     # Addd topology
@@ -98,7 +165,8 @@ def createNetgenMesh(plex, geo):
 
         if tdim == 2:
             for face in faces:
-                edgenr = bcLabel if (SplineGeometry and isinstance(geo, SplineGeometry)) else bcLabel-1
+                isSpline = SplineGeometry and isinstance(geo, SplineGeometry)
+                edgenr = bcLabel if isSpline else bcLabel-1
                 edge = ngm.Element1D(list(face+1), index=bcLabel, edgenr=edgenr)
                 ngMesh.Add(edge, project_geominfo=geoInfo)
         else:
@@ -130,8 +198,10 @@ class MeshMapping:
         if isinstance(mesh, (ngs.comp.Mesh, ngm.Mesh)):
             self.ngMesh, self.petscPlex = self.createPETScDMPlex(mesh)
         elif isinstance(mesh, PETSc.DMPlex):
-            if (geo is not None) and not isinstance(geo, (OCCGeometry,) + ((SplineGeometry,) if SplineGeometry else ())):
-                raise ValueError("Conversion from DMPlex to Netgen mesh requires OCCGeometry or SplineGeometry")
+            supportedGeo = (OCCGeometry,) + ((SplineGeometry,) if SplineGeometry else ())
+            if (geo is not None) and not isinstance(geo, supportedGeo):
+                raise ValueError(
+                    "Conversion from DMPlex to Netgen mesh requires OCCGeometry or SplineGeometry")
             self.ngMesh, self.petscPlex = self.createNGSMesh(mesh, geo)
         else:
             raise ValueError("Mesh format not recognised.")
