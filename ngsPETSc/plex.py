@@ -98,7 +98,8 @@ def createNetgenMesh(plex, geo):
 
         if tdim == 2:
             for face in faces:
-                edgenr = bcLabel if (SplineGeometry and isinstance(geo, SplineGeometry)) else bcLabel-1
+                isSpline = SplineGeometry and isinstance(geo, SplineGeometry)
+                edgenr = bcLabel if isSpline else bcLabel-1
                 edge = ngm.Element1D(list(face+1), index=bcLabel, edgenr=edgenr)
                 ngMesh.Add(edge, project_geominfo=geoInfo)
         else:
@@ -130,8 +131,10 @@ class MeshMapping:
         if isinstance(mesh, (ngs.comp.Mesh, ngm.Mesh)):
             self.ngMesh, self.petscPlex = self.createPETScDMPlex(mesh)
         elif isinstance(mesh, PETSc.DMPlex):
-            if (geo is not None) and not isinstance(geo, (OCCGeometry,) + ((SplineGeometry,) if SplineGeometry else ())):
-                raise ValueError("Conversion from DMPlex to Netgen mesh requires OCCGeometry or SplineGeometry")
+            supportedGeo = (OCCGeometry,) + ((SplineGeometry,) if SplineGeometry else ())
+            if (geo is not None) and not isinstance(geo, supportedGeo):
+                raise ValueError(
+                    "Conversion from DMPlex to Netgen mesh requires OCCGeometry or SplineGeometry")
             self.ngMesh, self.petscPlex = self.createNGSMesh(mesh, geo)
         else:
             raise ValueError("Mesh format not recognised.")
