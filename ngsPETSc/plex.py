@@ -89,8 +89,7 @@ def createNetgenMesh(plex, geo):
     edgenr_mapping = None
     if geo is not None:
         if isinstance(geo, ngm.Mesh):
-            edges = geo.Elements1D()
-            edgenr_mapping = {e.index: e.edgenr for e in edges}
+            edgenr_mapping = {e.index: e.edgenr for e in geo.Elements1D()}
             geo = geo.GetGeometry()
         ngMesh.SetGeometry(geo)
         geoInfo = True
