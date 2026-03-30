@@ -200,7 +200,7 @@ class MeshMapping:
         elif isinstance(mesh, PETSc.DMPlex):
             supportedGeo = (OCCGeometry,) + ((SplineGeometry,) if SplineGeometry else ())
             if (geo is not None) and not isinstance(geo, supportedGeo):
-                raise ValueError(
+                raise TypeError(
                     "Conversion from DMPlex to Netgen mesh requires OCCGeometry or SplineGeometry")
             self.ngMesh, self.petscPlex = self.createNGSMesh(mesh, geo)
         else:
