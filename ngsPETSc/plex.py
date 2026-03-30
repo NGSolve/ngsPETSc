@@ -23,6 +23,40 @@ CELL_SETS_LABEL = "Cell Sets"
 EDGE_SETS_LABEL = "Edge Sets"
 
 
+class MeshMapping:
+    """
+    A mapping between a Netgen/NGSolve mesh and a PETSc DMPlex
+
+    :arg mesh: the source mesh, either a Netgen/NGSolve mesh or a PETSc DMPlex
+    :kwarg comm: an optional MPI.Comm
+    :kwarg geo: the underlying Netgen geometry, ignored if mesh is a Netgen mesh
+    :kwarg name: the name of to be assigned to the PETSc DMPlex, by default this is set to "Default"
+    """
+    def __init__(self, mesh, comm=None, geo=None, name="Default"):
+        self.name = name
+        if comm is None:
+            comm = MPI.COMM_WORLD
+        elif isinstance(comm, PETSc.Comm):
+            comm = comm.tompi4py()
+
+        if isinstance(mesh, ngs.comp.Mesh):
+            mesh = mesh.ngmesh
+
+        if isinstance(mesh, ngm.Mesh):
+            ngmesh = mesh
+            plex = createPETScDMPlex(ngmesh, comm, name)
+        elif isinstance(mesh, PETSc.DMPlex):
+            plex = mesh
+            ngmesh = createNetgenMesh(plex, geo)
+        else:
+            raise TypeError("Mesh format not recognised.")
+        self.petscPlex = plex
+        self.ngMesh = ngmesh
+        self.comm = comm
+        self.geo = self.ngMesh.GetGeometry()
+        self.geoInfo = bool(self.geo)
+
+
 def buildSimplices(plex, points=None):
     """
     Return a numpy.array with the vertices of each simplex in the plex
@@ -44,7 +78,7 @@ def createNetgenMesh(plex, geo):
     Create a Netgen mesh from the local part of a PETSc DMPlex
 
     :arg plex: the PETSc DMPlex to be converted in NGSolve mesh object
-    :arg geo: Netgen geometry
+    :arg geo: Netgen geometry or Netgen mesh to extract geometry from
 
     """
     # Create a Netgen Mesh
@@ -52,7 +86,12 @@ def createNetgenMesh(plex, geo):
     gdim = plex.getCoordinateDim()
     codim = gdim - tdim
     ngMesh = ngm.Mesh(dim=gdim)
+    edgenr_mapping = None
     if geo is not None:
+        if isinstance(geo, ngm.Mesh):
+            edges = geo.Elements1D()
+            edgenr_mapping = {e.index: e.edgenr for e in edges}
+            geo = geo.GetGeometry()
         ngMesh.SetGeometry(geo)
         geoInfo = True
     else:
@@ -93,9 +132,12 @@ def createNetgenMesh(plex, geo):
         fpoints = bcIndices[np.logical_and(fstart <= bcIndices, bcIndices < fend)]
         faces = buildSimplices(plex, points=fpoints)
         if tdim == 2:
+            if edgenr_mapping is not None:
+                edgenr = edgenr_mapping[bcLabel]
+            else:
+                edgenr = bcLabel-1 if isinstance(geo, OCCGeometry) else bcLabel
             faces += 1
             for face in faces:
-                edgenr = bcLabel-1 if isinstance(geo, OCCGeometry) else bcLabel
                 edge = ngm.Element1D(list(face), index=bcLabel, edgenr=edgenr)
                 ngMesh.Add(edge, project_geominfo=geoInfo)
         else:
@@ -107,49 +149,15 @@ def createNetgenMesh(plex, geo):
     return ngMesh
 
 
-class MeshMapping:
-    """
-    A mapping between a Netgen/NGSolve mesh and a PETSc DMPlex
-
-    :arg mesh: the source mesh, either a Netgen/NGSolve mesh or a PETSc DMPlex
-    :kwarg comm: an optional MPI.Comm
-    :kwarg geo: the underlying Netgen geometry, ignored if mesh is a Netgen mesh
-    :kwarg name: the name of to be assigned to the PETSc DMPlex, by default this is set to "Default"
-    """
-    def __init__(self, mesh, comm=None, geo=None, name="Default"):
-        self.name = name
-        if comm is None:
-            comm = MPI.COMM_WORLD
-        elif isinstance(comm, PETSc.Comm):
-            comm = comm.tompi4py()
-
-        if isinstance(mesh, ngs.comp.Mesh):
-            mesh = mesh.ngmesh
-
-        if isinstance(mesh, ngm.Mesh):
-            ngmesh = mesh
-            plex = createPETScDMPlex(ngmesh, comm, name)
-        elif isinstance(mesh, PETSc.DMPlex):
-            plex = mesh
-            ngmesh = createNetgenMesh(plex, geo)
-        else:
-            raise TypeError("Mesh format not recognised.")
-        self.petscPlex = plex
-        self.ngMesh = ngmesh
-        self.comm = comm
-        self.geo = self.ngMesh.GetGeometry()
-        self.geoInfo = bool(self.geo)
-
-
 def createPETScDMPlex(ngMesh, comm, name):
-    '''
+    """
     Create a PETSc DMPlex from a Netgen/NGSolve mesh object
 
     :arg ngMesh: the serial Netgen mesh object to be converted
     :arg comm: the MPI.Comm object
 
     :returns: a tuple of Netgen mesh and DMPlex
-    '''
+    """
     if len(ngMesh.GetIdentifications()) > 0:
         warnings.warn("Periodic meshes are not supported by ngsPETSc" , RuntimeWarning)
     els = {
