@@ -26,6 +26,8 @@ FACE_SETS_LABEL = "Face Sets"
 CELL_SETS_LABEL = "Cell Sets"
 EDGE_SETS_LABEL = "Edge Sets"
 
+supported_geometries = (OCCGeometry,) + ((SplineGeometry,) if SplineGeometry else ())
+
 
 def projectToSplineGeo(p2d, geo):
     """
@@ -198,8 +200,7 @@ class MeshMapping:
         if isinstance(mesh, (ngs.comp.Mesh, ngm.Mesh)):
             self.ngMesh, self.petscPlex = self.createPETScDMPlex(mesh)
         elif isinstance(mesh, PETSc.DMPlex):
-            supportedGeo = (OCCGeometry,) + ((SplineGeometry,) if SplineGeometry else ())
-            if (geo is not None) and not isinstance(geo, supportedGeo):
+            if (geo is not None) and not isinstance(geo, supported_geometries):
                 raise ValueError(
                     "Conversion from DMPlex to Netgen mesh requires OCCGeometry or SplineGeometry")
             self.ngMesh, self.petscPlex = self.createNGSMesh(mesh, geo)
