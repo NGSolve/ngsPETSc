@@ -33,7 +33,6 @@ class MeshMapping:
     :kwarg name: the name of to be assigned to the PETSc DMPlex, by default this is set to "Default"
     """
     def __init__(self, mesh, comm=None, geo=None, name="Default"):
-        self.name = name
         if comm is None:
             comm = MPI.COMM_WORLD
         elif isinstance(comm, PETSc.Comm):
@@ -84,7 +83,6 @@ def createNetgenMesh(plex, geo):
     # Create a Netgen Mesh
     tdim = plex.getDimension()
     gdim = plex.getCoordinateDim()
-    codim = gdim - tdim
     ngMesh = ngm.Mesh(dim=gdim)
     edgenr_mapping = None
     if geo is not None:
@@ -105,45 +103,59 @@ def createNetgenMesh(plex, geo):
     coordinates = coordinates.reshape(nv, gdim)
     ngMesh.AddPoints(coordinates)
 
-    # Add topology
+    # Set adjacency
     adjacency = plex.getBasicAdjacency()
     plex.setBasicAdjacency(True, True)
-    cells = buildSimplices(plex)
 
-    ngMesh.Add(ngm.FaceDescriptor(bc=1))
-    if gdim == 2:
-        cellIndex = 1
+    # Add labeled entities
+    codim_label = {0: CELL_SETS_LABEL, 1: FACE_SETS_LABEL, 2: EDGE_SETS_LABEL}
+    for depth in range(1, tdim+1):
+        codim = tdim - depth
+        pStart, pEnd = plex.getHeightStratum(codim)
+
+        labelName = codim_label[codim]
+        labelIds = plex.getLabelIdIS(labelName).indices
+        for index in labelIds:
+            if plex.getStratumSize(labelName, index) == 0:
+                continue
+
+            points = plex.getStratumIS(labelName, index).indices
+            points = points[np.logical_and(pStart <= points, points < pEnd)]
+            T = buildSimplices(plex, points=points)
+            if depth == 1:
+                if edgenr_mapping is not None:
+                    edgenr = edgenr_mapping[index]
+                else:
+                    edgenr = index-1 if isinstance(geo, OCCGeometry) else index
+                T += 1
+                for Te in T:
+                    edge = ngm.Element1D(list(Te), index=index, edgenr=edgenr)
+                    ngMesh.Add(edge, project_geominfo=geoInfo)
+            else:
+                if depth == 2:
+                    surfnr = index if isinstance(geo, OCCGeometry) else index-1
+                    index = ngMesh.Add(ngm.FaceDescriptor(bc=index, surfnr=surfnr))
+                ngMesh.AddElements(dim=depth, index=index, data=T, base=0,
+                                   project_geometry=geoInfo)
+
+    # Add unlabeled cells
+    labelName = codim_label[0]
+    if plex.getLabelSize(labelName) > 0:
+        cStart, cEnd = plex.getHeightStratum(0)
+        labelIds = plex.getLabelIdIS(labelName).indices
+        points = np.concatenate([plex.getStratumIS(labelName, index).indices for index in labelIds])
+        points = np.setdiff1d(np.arange(cStart, cEnd), points)
     else:
-        surfaceLabel = FACE_SETS_LABEL if codim == 0 else CELL_SETS_LABEL
-        cellIndex = plex.getLabelSize(surfaceLabel) + 1
-        ngMesh.Add(ngm.FaceDescriptor(bc=cellIndex))
-
-    ngMesh.AddElements(dim=tdim, index=cellIndex,
+        points = None
+    cells = buildSimplices(plex, points=points)
+    index = plex.getLabelSize(labelName) + 1
+    if tdim == 2:
+        surfnr = index if isinstance(geo, OCCGeometry) else index-1
+        index = ngMesh.Add(ngm.FaceDescriptor(bc=index, surfnr=surfnr))
+    ngMesh.AddElements(dim=tdim, index=index,
                        data=cells, base=0,
                        project_geometry=geoInfo)
 
-    fstart, fend = plex.getHeightStratum(1)
-    bcLabels = plex.getLabelIdIS(FACE_SETS_LABEL).indices
-    for bcLabel in bcLabels:
-        if plex.getStratumSize(FACE_SETS_LABEL, bcLabel) == 0:
-            continue
-        bcIndices = plex.getStratumIS(FACE_SETS_LABEL, bcLabel).indices
-        fpoints = bcIndices[np.logical_and(fstart <= bcIndices, bcIndices < fend)]
-        faces = buildSimplices(plex, points=fpoints)
-        if tdim == 2:
-            if edgenr_mapping is not None:
-                edgenr = edgenr_mapping[bcLabel]
-            else:
-                edgenr = bcLabel-1 if isinstance(geo, OCCGeometry) else bcLabel
-            faces += 1
-            for face in faces:
-                edge = ngm.Element1D(list(face), index=bcLabel, edgenr=edgenr)
-                ngMesh.Add(edge, project_geominfo=geoInfo)
-        else:
-            ngMesh.Add(ngm.FaceDescriptor(bc=bcLabel, surfnr=bcLabel))
-            ngMesh.AddElements(dim=tdim-1, index=bcLabel,
-                               data=faces, base=0,
-                               project_geometry=geoInfo)
     plex.setBasicAdjacency(*adjacency)
     return ngMesh
 
