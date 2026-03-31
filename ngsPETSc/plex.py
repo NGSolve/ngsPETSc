@@ -2,6 +2,7 @@
 This module contains all the functions related to wrapping NGSolve meshes to
 PETSc DMPlex using the petsc4py interface.
 '''
+from collections import defaultdict
 import warnings
 import numpy as np
 from petsc4py import PETSc
@@ -205,4 +206,17 @@ def createPETScDMPlex(ngMesh, comm, name):
         V = np.empty((0, gdim), dtype=PETSc.RealType)
         plex = PETSc.DMPlex().createFromCellList(tdim, T, V, comm=comm)
     plex.setName(name)
+
+    codim_entity = {0: "cell", 1: "face", 2: "edge"}
+    for codim in range(tdim):
+        label_mapping = defaultdict(list)
+        if comm.rank == 0:
+            regions = ngMesh.GetRegionNames(codim=codim)
+            for label, rname in enumerate(regions, start=1):
+                label_mapping[rname].append(label)
+
+        label_mapping = comm.bcast(dict(label_mapping), root=0)
+        entity = codim_entity[codim]
+        plex.setAttr(f"{entity}_region_names", label_mapping)
+
     return plex
