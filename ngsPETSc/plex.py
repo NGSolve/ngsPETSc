@@ -72,6 +72,35 @@ def buildSimplices(plex, points=None):
     return np.array(T, dtype=PETSc.IntType)
 
 
+def addSimplices(ngMesh, dim, index, data, project_geometry, isoccgeom, edgenr_mapping):
+    """
+    Add simplices to a Netgen mesh
+
+    :arg ngMesh: the Netgen Mesh
+    :arg dim: the simplex dimension
+    :arg index: the region index
+    :arg data: a numpy.array with the vertices of each simplex
+    :project_geometry: whether to project points to the geometry
+    :isoccgeom: whether we have an OCCGeometry, required to decide index conventions
+    :edgenr_mapping: a dict mapping from region index to edgenr
+
+    """
+    if dim == 1:
+        if edgenr_mapping is not None:
+            edgenr = edgenr_mapping[index]
+        else:
+            edgenr = index-1 if isoccgeom else index
+        for edge in data:
+            ngMesh.Add(ngm.Element1D(list(edge+1), index=index, edgenr=edgenr),
+                       project_geominfo=project_geometry)
+    else:
+        if dim == 2:
+            surfnr = index if isoccgeom else index-1
+            index = ngMesh.Add(ngm.FaceDescriptor(bc=index, surfnr=surfnr))
+        ngMesh.AddElements(dim=dim, index=index, data=data, base=0,
+                           project_geometry=project_geometry)
+
+
 def createNetgenMesh(plex, geo):
     """
     Create a Netgen mesh from the local part of a PETSc DMPlex
@@ -93,6 +122,7 @@ def createNetgenMesh(plex, geo):
         geoInfo = True
     else:
         geoInfo = False
+    isoccgeom = isinstance(geo, OCCGeometry)
 
     # Add vertices
     vStart, vEnd = plex.getDepthStratum(0)
@@ -122,21 +152,7 @@ def createNetgenMesh(plex, geo):
             points = plex.getStratumIS(labelName, index).indices
             points = points[np.logical_and(pStart <= points, points < pEnd)]
             T = buildSimplices(plex, points=points)
-            if depth == 1:
-                if edgenr_mapping is not None:
-                    edgenr = edgenr_mapping[index]
-                else:
-                    edgenr = index-1 if isinstance(geo, OCCGeometry) else index
-                T += 1
-                for Te in T:
-                    edge = ngm.Element1D(list(Te), index=index, edgenr=edgenr)
-                    ngMesh.Add(edge, project_geominfo=geoInfo)
-            else:
-                if depth == 2:
-                    surfnr = index if isinstance(geo, OCCGeometry) else index-1
-                    index = ngMesh.Add(ngm.FaceDescriptor(bc=index, surfnr=surfnr))
-                ngMesh.AddElements(dim=depth, index=index, data=T, base=0,
-                                   project_geometry=geoInfo)
+            addSimplices(ngMesh, depth, index, T, geoInfo, isoccgeom, edgenr_mapping)
 
     # Add unlabeled cells
     labelName = codim_label[0]
@@ -147,14 +163,9 @@ def createNetgenMesh(plex, geo):
         points = np.setdiff1d(np.arange(cStart, cEnd), points)
     else:
         points = None
-    cells = buildSimplices(plex, points=points)
     index = plex.getLabelSize(labelName) + 1
-    if tdim == 2:
-        surfnr = index if isinstance(geo, OCCGeometry) else index-1
-        index = ngMesh.Add(ngm.FaceDescriptor(bc=index, surfnr=surfnr))
-    ngMesh.AddElements(dim=tdim, index=index,
-                       data=cells, base=0,
-                       project_geometry=geoInfo)
+    T = buildSimplices(plex, points=points)
+    addSimplices(ngMesh, tdim, index, T, geoInfo, isoccgeom, edgenr_mapping)
 
     plex.setBasicAdjacency(*adjacency)
     return ngMesh
