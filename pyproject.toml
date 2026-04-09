@@ -11,9 +11,11 @@ authors = [
   { name = "Patrick E. Farrell", email = "patrick.farrell@maths.ox.ac.uk" },
   { name = "Stefano Zampini", email = "stefano.zampini@kaust.edu.sa" },
   { name = "Jack Betteridge", email = "J.Betteridge@imperial.ac.uk" },
+  { name = "Pablo D. Brubeck", email = "brubeck@protonmail.com"},
 ]
 maintainers = [
   { name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk" },
+  { name = "Pablo D. Brubeck", email = "brubeck@protonmail.com"},
 ]
 readme = "README.md"
 license = "MIT"
@@ -25,7 +27,7 @@ classifiers = [
   "Development Status :: 3 - Alpha",
 ]
 dependencies = [
-  "netgen-mesher >= 6.2,<7.0",
+  "netgen-mesher >= 6.2.2603,<7.0",
   "petsc4py >=3.22,<4.0",
   "numpy >=2,<3",
   "scipy >=1,<2",
