@@ -60,10 +60,6 @@ jobs:
         run: |
           . venv-ngspetsc/bin/activate
           cd ngspetsc-repo
-          echo "import petsc4py"
-          python -c "import petsc4py"
-          echo "import ngsolve"
-          python -c "import ngsolve"
           python -m pytest -v tests/test_env.py
           python -m pytest -v tests/test_vec.py
           python -m pytest -v tests/test_mat.py
