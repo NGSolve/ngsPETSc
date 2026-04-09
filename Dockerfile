@@ -8,7 +8,7 @@ ENV SLEPC_DIR /root/slepc
 ENV SLEPC_ARCH linux_debug
 #Installing dependencies using aptitude
 RUN apt-get update \
-    && apt-get -y install git libopenmpi-dev build-essential cmake wget libssl-dev python3 python3-distutils python3-tk libpython3-dev libxmu-dev tk-dev tcl-dev g++ libglu1-mesa-dev liblapacke-dev libblas-dev liblapack-dev
+    && apt-get -y install git libopenmpi-dev build-essential cmake wget libssl-dev python3 python3-setuptools python3-tk libpython3-dev libxmu-dev tk-dev tcl-dev g++ libglu1-mesa-dev liblapacke-dev libblas-dev liblapack-dev
 #RUN apt-get update \
 #    && apt-get -y install libocct-data-exchange-dev libocct-draw-dev occt-misc
 #Building cmake
