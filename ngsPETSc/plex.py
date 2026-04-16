@@ -85,6 +85,8 @@ def addSimplices(ngMesh, dim, index, data, project_geometry, isoccgeom, edgenr_m
     :edgenr_mapping: a dict mapping from region index to edgenr
 
     """
+    if len(data) == 0:
+        return
     if dim == 1:
         if edgenr_mapping is not None:
             edgenr = edgenr_mapping[index]
