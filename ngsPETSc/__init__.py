@@ -20,6 +20,18 @@ except ImportError:
 if dolfinx:
     from ngsPETSc.utils.fenicsx import *
 
+#Firedrake webgui visualization
+try:
+    import firedrake
+    import webgui_jupyter_widgets
+except ImportError:
+    firedrake = None
+    webgui_jupyter_widgets = None
+
+if firedrake and webgui_jupyter_widgets:
+    from ngsPETSc.utils.firedrake_webgui import Draw, FiredrakeScene
+    __all__ = __all__ + ["Draw", "FiredrakeScene"]
+
 #Netgen
 try:
     import ngsolve

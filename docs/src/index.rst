@@ -53,6 +53,7 @@ Welcome to ngsPETSc's documentation!
    utils/firedrake/lomesh.py
    utils/firedrake/homesh.py
    utils/firedrake/surfaces.py
+   utils/firedrake/webgui
    FEniCSx-Netgen interface via ngsPETSc <https://jsdokken.com/dolfinx-tutorial/chapter2/amr.html>
    
 Indices and tables
