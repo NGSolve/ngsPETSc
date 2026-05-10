@@ -24,6 +24,147 @@ _POINTEVAL_FAMILIES = (
 _MAX_SUBDIVISION = 10
 
 
+# ---------------------------------------------------------------------------
+# Colour maps. Stops are ParaView-style ``(t, (r, g, b))`` control points with
+# ``t in [0, 1]``; we resample to ``_COLORMAP_RESOLUTION`` evenly spaced RGB
+# triples and hand the table to webgui via ``data["colors"]`` so it replaces
+# webgui's built-in rainbow texture.
+#
+# ``mana`` is a 33-stop, IBM-colourblind-safe map with a pale-peach centre and
+# dark navy/red ends, designed to mirror ParaView's "Cool to Warm (Extended)"
+# preset whilst threading through the paper-plot palette.
+# ``cool_to_warm`` is the ParaView preset of the same name.
+# ``ngs`` is the original blue-cyan-green-yellow-red rainbow that NGSolve's
+# webgui ships as its built-in colour map.
+
+_MANA_STOPS = [
+    (0.00000, (0.098039, 0.137255, 0.352941)),
+    (0.03125, (0.207283, 0.138936, 0.373669)),
+    (0.06250, (0.316527, 0.140616, 0.394398)),
+    (0.09375, (0.425770, 0.142297, 0.415126)),
+    (0.12500, (0.535014, 0.143978, 0.435854)),
+    (0.15625, (0.644258, 0.145658, 0.456583)),
+    (0.18750, (0.753501, 0.147339, 0.477311)),
+    (0.21875, (0.862745, 0.149020, 0.498039)),
+    (0.25000, (0.803922, 0.200490, 0.560784)),
+    (0.28125, (0.745098, 0.251961, 0.623529)),
+    (0.31250, (0.686275, 0.303431, 0.686275)),
+    (0.34375, (0.627451, 0.354902, 0.749020)),
+    (0.37500, (0.568627, 0.406373, 0.811765)),
+    (0.40625, (0.509804, 0.457843, 0.874510)),
+    (0.43750, (0.450980, 0.509314, 0.937255)),
+    (0.46875, (0.392157, 0.560784, 1.000000)),
+    (0.50000, (0.343137, 0.611765, 0.916667)),
+    (0.53125, (0.294118, 0.662745, 0.833333)),
+    (0.56250, (0.245098, 0.713725, 0.750000)),
+    (0.59375, (0.196078, 0.764706, 0.666667)),
+    (0.62500, (0.464052, 0.797386, 0.699346)),
+    (0.65625, (0.732026, 0.830065, 0.732026)),
+    (0.68750, (1.000000, 0.862745, 0.764706)),
+    (0.71875, (0.993464, 0.790850, 0.679739)),
+    (0.75000, (0.986928, 0.718954, 0.594771)),
+    (0.78125, (0.980392, 0.647059, 0.509804)),
+    (0.81250, (0.933333, 0.560784, 0.435294)),
+    (0.84375, (0.886275, 0.474510, 0.360784)),
+    (0.87500, (0.839216, 0.388235, 0.286275)),
+    (0.90625, (0.729412, 0.291176, 0.245098)),
+    (0.93750, (0.619608, 0.194118, 0.203922)),
+    (0.96875, (0.509804, 0.097059, 0.162745)),
+    (1.00000, (0.400000, 0.000000, 0.121569)),
+]
+
+_COOL_TO_WARM_STOPS = [
+    (0.00000, (0.000000, 0.000000, 0.349020)),
+    (0.03125, (0.039216, 0.062745, 0.380392)),
+    (0.06250, (0.062745, 0.117647, 0.411765)),
+    (0.09375, (0.090196, 0.184314, 0.450980)),
+    (0.12500, (0.125490, 0.262745, 0.501961)),
+    (0.15625, (0.160784, 0.337255, 0.541176)),
+    (0.18750, (0.200000, 0.396078, 0.568627)),
+    (0.21875, (0.239216, 0.454902, 0.600000)),
+    (0.25000, (0.286275, 0.521569, 0.650980)),
+    (0.28125, (0.337255, 0.592157, 0.701961)),
+    (0.31250, (0.388235, 0.654902, 0.749020)),
+    (0.34375, (0.466667, 0.737255, 0.819608)),
+    (0.37500, (0.572549, 0.819608, 0.878431)),
+    (0.40625, (0.654902, 0.866667, 0.909804)),
+    (0.43750, (0.752941, 0.917647, 0.941176)),
+    (0.46875, (0.823529, 0.956863, 0.968627)),
+    (0.50000, (0.988235, 0.960784, 0.901961)),
+    (0.51562, (0.941176, 0.984314, 0.988235)),
+    (0.53125, (0.988235, 0.945098, 0.850980)),
+    (0.56250, (0.980392, 0.898039, 0.784314)),
+    (0.59375, (0.968627, 0.835294, 0.698039)),
+    (0.62500, (0.949020, 0.733333, 0.588235)),
+    (0.65625, (0.929412, 0.650980, 0.509804)),
+    (0.68750, (0.909804, 0.564706, 0.435294)),
+    (0.71875, (0.878431, 0.458824, 0.352941)),
+    (0.75000, (0.839216, 0.388235, 0.286275)),
+    (0.78125, (0.760784, 0.294118, 0.211765)),
+    (0.81250, (0.701961, 0.211765, 0.168627)),
+    (0.84375, (0.650980, 0.156863, 0.129412)),
+    (0.87500, (0.600000, 0.094118, 0.094118)),
+    (0.90625, (0.549020, 0.066667, 0.098039)),
+    (0.93750, (0.501961, 0.050980, 0.125490)),
+    (0.96875, (0.450000, 0.054902, 0.172549)),
+    (1.00000, (0.400000, 0.000000, 0.121569)),
+]
+
+# NGSolve webgui's built-in rainbow: piecewise-linear blue-cyan-green-yellow-red.
+_NGS_STOPS = [
+    (0.00, (0.0, 0.0, 1.0)),
+    (0.25, (0.0, 1.0, 1.0)),
+    (0.50, (0.0, 1.0, 0.0)),
+    (0.75, (1.0, 1.0, 0.0)),
+    (1.00, (1.0, 0.0, 0.0)),
+]
+
+_NAMED_COLORMAPS = {
+    "mana": _MANA_STOPS,
+    "cool_to_warm": _COOL_TO_WARM_STOPS,
+    "ngs": _NGS_STOPS,
+}
+
+_DEFAULT_COLORMAP = "mana"
+_COLORMAP_RESOLUTION = 256
+
+
+def _sample_colormap(spec, n=_COLORMAP_RESOLUTION):
+    """Resample a ParaView-style stop list into ``n`` RGB triples.
+
+    ``spec`` may be:
+      * ``None`` — use webgui's default colormap (returns ``None``);
+      * a string naming an entry in :data:`_NAMED_COLORMAPS`;
+      * a list of ``(t, (r, g, b))`` tuples with ``t`` in ``[0, 1]``;
+      * an ``(N, 3)`` array of RGB rows assumed to span ``[0, 1]`` evenly.
+    """
+    if spec is None:
+        return None
+    if isinstance(spec, str):
+        try:
+            spec = _NAMED_COLORMAPS[spec]
+        except KeyError as exc:
+            raise ValueError(
+                f"Unknown colormap {spec!r}; choose from "
+                f"{sorted(_NAMED_COLORMAPS)} or pass a stop list."
+            ) from exc
+
+    arr = np.asarray(spec, dtype=object)
+    if arr.ndim == 2 and arr.shape[1] == 3 and not isinstance(spec[0][0], tuple):
+        # plain (N, 3) RGB rows -> assume uniform sampling
+        rgb = np.asarray(spec, dtype=np.float64)
+        ts_in = np.linspace(0.0, 1.0, len(rgb))
+    else:
+        ts_in = np.asarray([s[0] for s in spec], dtype=np.float64)
+        rgb = np.asarray([s[1] for s in spec], dtype=np.float64)
+
+    ts_out = np.linspace(0.0, 1.0, n)
+    out = np.empty((n, 3), dtype=np.float64)
+    for k in range(3):
+        out[:, k] = np.interp(ts_out, ts_in, rgb[:, k])
+    return out.tolist()
+
+
 def _get_mesh_and_func(obj):
     import firedrake
     if isinstance(obj, firedrake.Function):
@@ -449,12 +590,20 @@ class FiredrakeScene(BaseWebGuiScene):
     subdivision : int, optional
         Sub-triangles per element edge. Defaults to the source element
         degree, capped at 10.
+    colormap : str, list, ndarray, or None, optional
+        Colour map used by the on-screen colour bar. Strings select a
+        built-in (``"mana"`` (default), ``"cool_to_warm"``, ``"ngs"``);
+        a stop list ``[(t, (r, g, b)), ...]`` or an ``(N, 3)`` RGB array
+        is also accepted. Pass ``None`` to fall back to webgui's default
+        rainbow (equivalent to ``"ngs"``).
     """
 
-    def __init__(self, obj, mesh=None, subdivision=None, **kwargs):
+    def __init__(self, obj, mesh=None, subdivision=None,
+                 colormap=_DEFAULT_COLORMAP, **kwargs):
         self.obj = obj
         self._mesh_override = mesh
         self.subdivision = subdivision
+        self.colormap = colormap
         self.kwargs = kwargs
         self.encoding = 'b64'
 
@@ -514,6 +663,10 @@ class FiredrakeScene(BaseWebGuiScene):
             cnm = mesh.coordinates.cell_node_map().values.astype(np.int32)
             d["tets"] = encodeData(cnm, np.int32, self.encoding)
 
+        colors = _sample_colormap(self.colormap)
+        if colors is not None:
+            d["colors"] = colors
+
         d.update({k: v for k, v in self.kwargs.items()
                   if k in ("settings", "autoscale", "min", "max",
                            "draw_vol", "draw_surf", "show_wireframe")})
@@ -532,10 +685,11 @@ class FiredrakeScene(BaseWebGuiScene):
         super().Redraw()
 
 
-def Draw(obj, mesh=None, subdivision=None, **kwargs):
+def Draw(obj, mesh=None, subdivision=None, colormap=_DEFAULT_COLORMAP, **kwargs):
     """Draw a Firedrake Mesh or Function in Jupyter."""
     width = kwargs.pop("width", None)
     height = kwargs.pop("height", None)
-    scene = FiredrakeScene(obj, mesh=mesh, subdivision=subdivision, **kwargs)
+    scene = FiredrakeScene(obj, mesh=mesh, subdivision=subdivision,
+                           colormap=colormap, **kwargs)
     scene.Draw(width=width, height=height)
     return scene
