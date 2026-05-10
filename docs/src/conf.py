@@ -23,6 +23,11 @@ release = '0.0.5'
 extensions = ['sphinx.ext.autodoc', 'sphinxcontrib.video', 'sphinx_autodoc_typehints',"sphinx.ext.mathjax","sphinx.ext.todo",
               "IPython.sphinxext.ipython_console_highlighting", "IPython.sphinxext.ipython_directive",
               "nbsphinx", 'sphinx.ext.autodoc', "autoapi.extension"]
+# Render notebooks from their stored outputs; do not re-execute at build time.
+# RTD's build env does not have Firedrake installed, so any notebook that
+# imports it (e.g. utils/firedrake/webgui.ipynb) must be executed locally
+# before committing.
+nbsphinx_execute = 'never'
 autosummary_generate = True  # Turn on sphinx.ext.autosummary]
 autoapi_dirs = ['../../ngsPETSc']
 templates_path = ['_templates']

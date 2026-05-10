@@ -1,23 +1,32 @@
 Installation
 -----------------
 To install ngsPETSc (if you have a working PETSc and petsc4py installation) you need to clone the GitHub repository, and then you can install it using pip.
+
 ::
+
     git clone https://github.com/NGSolve/ngsPETSc.git
     cd ngsPETSc
     pip install .
+
 Or you can use the wheel we publish on PyPi.
+
 ::
+
     pip install ngsPETSc
 
 Alternatively, you can also build PETSc, SLEPc and NGSolve from source and then install ngsPETSc.
 First we install all the needed packages using apt and pip or an equivalent package manager.
+
 ::
+
     apt-get update
     apt-get -y install git build-essential cmake python3 python3-distutils python3-tk libpython3-dev libxmu-dev tk-dev tcl-dev g++ libglu1-mesa-dev liblapacke-dev libblas-dev liblapack-dev
     pip install numpy cython pytest pytest-mpi netgen-occt netgen-occt-devel
 
 We now install PETSc from scratch in a suitable folder, with OpenMPI, HYPRE, Metis, MUMPS, SuprLU, Scalapack and eigen.
+
 ::
+
     git clone https://gitlab.com/petsc/petsc.git
     cd petsc
     python configure --download-cmake \
@@ -40,26 +49,35 @@ To build PETSc you need to run the Makefile as suggested at the end of the confi
 We now need to set in the ``.bashrc`` (on OSX in ``.bash_profile``) file the ``PETSC_DIR``, ``PETSC_ARCH`` system variables as they appear when we finish build PETSc.
 You also need to add to your ``PYTHONPATH`` the ``PYTHONPATH`` that appears when we finished building PETSc.
 We also suggest adding the following line to your ``.bashrc`` the following lines:
+
 ::
+
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PETSC_DIR/$PETSC_ARCH/lib
-    export PATH=$PATH:$PETSC_DIR/$PETSC_ARCH/bin 
+    export PATH=$PATH:$PETSC_DIR/$PETSC_ARCH/bin
 
 We now install SLEPc from source.
+
 ::
+
     git clone https://gitlab.com/slepc/slepc.git
     cd slepc
     python configure --download-blopex --with-slepc4py=1
+
 To build SLEPc you need to run the Makefile as suggested at the end of the configuration script.
 Again set in the ``.bashrc`` (for MacOS user ``.bash_profile``) file the ``SLEPC_DIR`` system variable as it appears when we finish build SLEPc.
 You also need to add to your ``PYTHONPATH`` the ``PYTHONPATH`` that appears when we finished building SLEPc.
 We now build mpi4py from source in order to have an mpi4py installation that uses PETSc's local MPI installation.
+
 ::
+
     git clone https://github.com/mpi4py/mpi4py.git
     cd mpi4py
     pip install .
 
 Now we build NGSolve from source.
+
 ::
+
     export BASEDIR=$PWD/ngsuite
     mkdir -p $BASEDIR
     cd $BASEDIR
@@ -74,17 +92,23 @@ Now we build NGSolve from source.
     make install
 
 You should add to your ``.bashrc`` the ``BASEDIR`` system variable:
+
 ::
-    echo "export $BASEDIR=${BASEDIR}" >> ~/.bashrc  
+
+    echo "export $BASEDIR=${BASEDIR}" >> ~/.bashrc
 
 We suggest you add the following lines to your ``.bashrc``:
+
 ::
+
     export NETGENDIR="${BASEDIR}/ngsolve-install/bin"
     export PATH=$NETGENDIR:$PATH
     export PYTHONPATH=$PYTHONPATH:$NETGENDIR/../`python3 -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(1,0,''))"`
 
 We are now finally ready to install ngsPETSc:
-:: 
+
+::
+
     git clone https://github.com/NGSolve/ngsPETSc.git
     cd ngsPETSc
     NGSPETSC_NO_INSTALL_REQUIRED=ON pip install .
