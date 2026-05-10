@@ -1,21 +1,13 @@
 """Firedrake mesh/function visualization via webgui jupyter widgets.
 
-Mirrors the NGSolve ``BuildRenderData`` scheme so webgui's WebGL shaders
-receive the data layout they expect:
-
-* Surfaces (2D triangles and 3D boundary facets) are sent as cubic
-  Bernstein/Bézier control points; source elements of degree > 3 are
-  sub-triangulated into multiple cubic patches.
-* 3D meshes with a function additionally ship ``points3d`` so the
-  clipping shader can slice the volume.
-
-Supports scalar and vector function spaces (Lagrange/CG, DG, RT,
-Nedelec, BDM), live updates via :meth:`FiredrakeScene.Redraw`, and
-ParaView-style colour maps.
+Supports:
+  * 2D triangular and 3D tetrahedral meshes.
+  * Scalar and vector function spaces (Lagrange/CG, DG, RT, Nedelec, ...).
+  * High polynomial orders (sub-triangulation level controllable via
+    ``subdivision``; defaults to the source element degree, capped at 10).
+  * Live updates via :meth:`FiredrakeScene.Redraw` for time-dependent
+    simulations and :func:`ipywidgets`-driven parameter sliders.
 """
-
-import math
-from functools import lru_cache
 
 import numpy as np
 from webgui_jupyter_widgets import BaseWebGuiScene, encodeData
@@ -29,11 +21,7 @@ _POINTEVAL_FAMILIES = (
     "Q", "DPC",
 )
 
-# Webgui's WebGL shaders cap at cubic Bernstein on triangles and P2 on tets;
-# sub-triangulation handles higher-degree sources on the surface.
-_MAX_ORDER_2D = 3
-_MAX_ORDER_3D = 2
-_MAX_SOURCE_DEGREE = 10
+_MAX_SUBDIVISION = 10
 
 
 # ---------------------------------------------------------------------------
@@ -177,10 +165,6 @@ def _sample_colormap(spec, n=_COLORMAP_RESOLUTION):
     return out.tolist()
 
 
-# ---------------------------------------------------------------------------
-# Mesh / function plumbing
-# ---------------------------------------------------------------------------
-
 def _get_mesh_and_func(obj):
     import firedrake
     if isinstance(obj, firedrake.Function):
@@ -206,36 +190,47 @@ def _value_shape(func_or_space):
         return fs.ufl_element().value_shape
 
 
-# UFC tetrahedron face data.
+def _ref_lattice_tri(n):
+    """Uniform lattice on UFC reference triangle.
+
+    Returns ``(pts, tris)`` with ``pts`` of shape ``(npts, 2)`` and
+    ``tris`` of shape ``(ntris, 3)``. Sub-triangles are CCW so their
+    normals point in +z.
+    """
+    pts = np.array([[i / n, j / n] for j in range(n + 1)
+                    for i in range(n + 1 - j)], dtype=np.float64)
+
+    def idx(i, j):
+        return j * (n + 1) - j * (j - 1) // 2 + i
+
+    tris = []
+    for j in range(n):
+        for i in range(n - j):
+            tris.append([idx(i, j), idx(i + 1, j), idx(i, j + 1)])
+            if i + j < n - 1:
+                tris.append([idx(i + 1, j),
+                             idx(i + 1, j + 1),
+                             idx(i, j + 1)])
+    return pts, np.asarray(tris, dtype=np.int32)
+
+
+# UFC tetrahedron facets — vertices in canonical order, opposite vertex marker.
 _UFC_TET_VERTS = np.array([[0, 0, 0], [1, 0, 0],
                            [0, 1, 0], [0, 0, 1]], dtype=np.float64)
 _UFC_TET_FACET_VERTS = (
     (1, 2, 3),  # facet 0 opposite V0
-    (0, 3, 2),  # facet 1 opposite V1  (V2/V3 swapped: outward normal)
+    (0, 2, 3),  # facet 1 opposite V1
     (0, 1, 3),  # facet 2 opposite V2
-    (0, 2, 1),  # facet 3 opposite V3  (V1/V2 swapped: outward normal)
+    (0, 1, 2),  # facet 3 opposite V3
 )
-
-# Canonical P2-Lagrange points on the UFC reference tetrahedron — 4 corners
-# followed by 6 edge midpoints in the order used by webgui's volume shader
-# (matches NGSolve's ``makeP2Tets`` layout: V0, V1, V2, V3, mid(V0V3),
-# mid(V1V3), mid(V2V3), mid(V0V1), mid(V0V2), mid(V1V2)).
-_UFC_TET_P2_PTS = np.array([
-    [0.0, 0.0, 0.0],
-    [1.0, 0.0, 0.0],
-    [0.0, 1.0, 0.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 0.5],
-    [0.5, 0.0, 0.5],
-    [0.0, 0.5, 0.5],
-    [0.5, 0.0, 0.0],
-    [0.0, 0.5, 0.0],
-    [0.5, 0.5, 0.0],
-], dtype=np.float64)
 
 
 def _facet_ref_pts_3d(local_facet, ref_pts_2d):
-    """Map 2D reference triangle points to a face of the UFC tet."""
+    """Map 2D reference triangle points to a face of the UFC tet.
+
+    ``ref_pts_2d`` are (s, t) coordinates with s, t >= 0, s + t <= 1.
+    Returns 3D ref-tet coordinates of shape ``(npts, 3)``.
+    """
     f0, f1, f2 = _UFC_TET_FACET_VERTS[local_facet]
     V0 = _UFC_TET_VERTS[f0]
     V1 = _UFC_TET_VERTS[f1]
@@ -245,13 +240,13 @@ def _facet_ref_pts_3d(local_facet, ref_pts_2d):
     return V0 + s * (V1 - V0) + t * (V2 - V0)
 
 
-def _interp_for_vis(func, mesh, deg):
+def _interp_for_vis(func, mesh, n):
     """Return a sample-able function and its value rank.
 
     For Lagrange / DG-style spaces the original ``func`` is returned.
     Non-pointwise families (RT, Nedelec, BDM, ...) are interpolated
-    into a *discontinuous* DG_deg / vector-DG_deg space so that any
-    genuine cross-cell discontinuity in the field — only the
+    into a *discontinuous* DG_n / vector-DG_n space so that any genuine
+    cross-cell discontinuity in the field — only the
     normal/tangential trace of an H(div)/H(curl) field is continuous —
     is preserved by the renderer.
     """
@@ -264,10 +259,10 @@ def _interp_for_vis(func, mesh, deg):
         return func, len(shape)
 
     if shape == ():
-        V = firedrake.FunctionSpace(mesh, "DG", deg)
+        V = firedrake.FunctionSpace(mesh, "DG", n)
     else:
         vdim = int(np.prod(shape))
-        V = firedrake.VectorFunctionSpace(mesh, "DG", deg, dim=vdim)
+        V = firedrake.VectorFunctionSpace(mesh, "DG", n, dim=vdim)
 
     target = firedrake.Function(V)
     try:
@@ -300,8 +295,10 @@ def _per_cell_eval(func, ref_pts):
         if dofs.ndim == 2:
             return np.einsum('cd,dn->cn', dofs, phi)
         return np.einsum('cdv,dn->cnv', dofs, phi)
-    # vector basis (ndof, vdim, npts) — happens only when the caller
-    # supplied a function in such a space directly.
+    # vector basis (ndof, vdim, npts) — Piola is already baked in via
+    # interpolation to CG, so this branch is only hit when the user
+    # supplied a function in such a space directly. We still do a plain
+    # einsum and warn about possible inaccuracy.
     return np.einsum('cd,dvn->cnv', dofs, phi)
 
 
@@ -316,355 +313,190 @@ def _per_cell_coords(mesh, ref_pts):
     return np.einsum('cd,dgn->cng', dofs, phi)
 
 
-# ---------------------------------------------------------------------------
-# Bernstein/Bézier helpers
-# ---------------------------------------------------------------------------
-
-def _bernstein_trig_lattice(og):
-    """Bernstein-Lagrange points on the UFC reference triangle.
-
-    Returns an ``(ndtrig, 2)`` array with rows ``(ix/og, iy/og)``
-    iterated x-outer / y-inner. Matches the mode ordering in
-    :func:`_bernstein_trig_inverse` so the inverse Bernstein matrix
-    multiplication produces consistent control points that webgui's
-    WebGL shader can consume.
-    """
-    pts = []
-    for ix in range(og + 1):
-        for iy in range(og + 1 - ix):
-            pts.append((ix / og, iy / og))
-    return np.asarray(pts, dtype=np.float64)
+def _orient_tris_2d(verts, tris):
+    """Force CCW winding so normals point +z."""
+    p0 = verts[tris[:, 0]]
+    p1 = verts[tris[:, 1]]
+    p2 = verts[tris[:, 2]]
+    cross_z = (p1[:, 0] - p0[:, 0]) * (p2[:, 1] - p0[:, 1]) \
+            - (p1[:, 1] - p0[:, 1]) * (p2[:, 0] - p0[:, 0])
+    flip = cross_z < 0
+    tris[flip, 1], tris[flip, 2] = tris[flip, 2].copy(), tris[flip, 1].copy()
+    return tris
 
 
-def _bernstein_seg_lattice(og):
-    """1D Bernstein-Lagrange points on ``[0, 1]``."""
-    return np.linspace(0.0, 1.0, og + 1, dtype=np.float64)
-
-
-def _bernstein_trig_value(x, y, i, j, n):
-    """Triangular Bernstein polynomial ``B^n_{ij}(x, y)``."""
-    coef = math.factorial(n) / (
-        math.factorial(i) * math.factorial(j) * math.factorial(n - i - j)
-    )
-    return coef * x**i * y**j * (1.0 - x - y)**(n - i - j)
-
-
-def _bernstein_seg_value(x, j, n):
-    """1D Bernstein polynomial ``B^n_j(x)``."""
-    coef = math.factorial(n) / (math.factorial(j) * math.factorial(n - j))
-    return coef * x**j * (1.0 - x)**(n - j)
-
-
-@lru_cache(maxsize=8)
-def _bernstein_trig_inverse(og):
-    """Inverse Bernstein-triangle basis matrix at the canonical lattice."""
-    ndtrig = (og + 1) * (og + 2) // 2
-    Bvals = np.zeros((ndtrig, ndtrig), dtype=np.float64)
-    ii = 0
-    for ix in range(og + 1):
-        for iy in range(og + 1 - ix):
-            jj = 0
-            for jx in range(og + 1):
-                for jy in range(og + 1 - jx):
-                    Bvals[ii, jj] = _bernstein_trig_value(
-                        ix / og, iy / og, jx, jy, og)
-                    jj += 1
-            ii += 1
-    return np.linalg.inv(Bvals)
-
-
-@lru_cache(maxsize=8)
-def _bernstein_seg_inverse(og):
-    """Inverse 1D Bernstein basis matrix at the canonical lattice."""
-    Bvals = np.zeros((og + 1, og + 1), dtype=np.float64)
-    for i in range(og + 1):
-        for j in range(og + 1):
-            Bvals[i, j] = _bernstein_seg_value(i / og, j, og)
-    return np.linalg.inv(Bvals)
-
-
-def _sub_trig_patches(deg):
-    """Affine maps from cubic-patch reference triangle to a source cell.
-
-    Mirrors NGSolve's ``_make_trig`` tiling: for ``deg <= 3`` returns a
-    single identity patch; for higher degrees the source triangle is
-    split into ``n*n`` upward and ``(n-1)*(n-1)`` downward cubic
-    patches, with ``n = (deg + 2) // 3``.
-
-    Each entry is ``(origin, e1, e2)``: a cubic-patch point ``(s, t)``
-    maps to ``origin + s*e1 + t*e2`` in the source cell's reference
-    coordinates.
-    """
-    if deg <= _MAX_ORDER_2D:
-        return [(np.array([0.0, 0.0]),
-                 np.array([1.0, 0.0]),
-                 np.array([0.0, 1.0]))]
-    n = (deg + 2) // 3
-    h = 1.0 / n
-    patches = []
-    for i in range(n):
-        for j in range(n - i):
-            patches.append((np.array([i * h, j * h]),
-                            np.array([h, 0.0]),
-                            np.array([0.0, h])))
-    for i in range(n - 1):
-        for j in range(n - i - 1):
-            patches.append((np.array([(i + 1) * h, (j + 1) * h]),
-                            np.array([-h, 0.0]),
-                            np.array([0.0, -h])))
-    return patches
-
-
-def _scalar_field(vals):
-    """Reduce a sampled function array to a single scalar per point.
-
-    ``vals`` has shape ``(..., npts)`` for scalars or ``(..., npts, vdim)``
-    for vectors. Vectors collapse via Euclidean norm so the colour bar
-    always shows magnitude. Returns just the scalar array — ``funcdim``
-    is always ``1`` from the renderer's point of view, since pmat[..., 3]
-    carries the only function component we ship.
-    """
+def _flatten_funcvals(vals):
+    """Flatten per-cell, per-vertex function values to (nverts,) or (nverts, vdim)."""
     if vals.ndim == 2:
-        return vals
-    return np.linalg.norm(vals, axis=-1)
+        return vals.astype(np.float32).reshape(-1)
+    return vals.astype(np.float32).reshape(-1, vals.shape[-1])
 
 
-def _pad_to_3d(coord_pts):
-    """Pad a per-cell coordinate array of shape ``(..., gdim)`` to ``(..., 3)``."""
-    if coord_pts.shape[-1] == 3:
-        return coord_pts.astype(np.float64, copy=False)
-    pad = np.zeros(coord_pts.shape[:-1] + (3,), dtype=np.float64)
-    pad[..., :coord_pts.shape[-1]] = coord_pts
-    return pad
+def _build_2d(mesh, func, n, encoding):
+    """Build vertex / triangle / value arrays for a 2D mesh."""
+    ref_pts, ref_tris = _ref_lattice_tri(n)
+    npts = ref_pts.shape[0]
 
+    cell_coords = _per_cell_coords(mesh, ref_pts)        # (ncells, npts, gdim)
+    ncells, _, gdim = cell_coords.shape
 
-def _bernstein_patches(ref_pts_per_patch, mesh, func, ncells, og):
-    """Pack ``(ncells * npatches, ndtrig, 4)`` of geometry+value samples.
+    verts3d = np.zeros((ncells * npts, 3), dtype=np.float32)
+    verts3d[:, :gdim] = cell_coords.reshape(-1, gdim).astype(np.float32)
 
-    ``ref_pts_per_patch`` is an ``(npatches * ndtrig, 2)`` array of
-    Bernstein-Lagrange points laid out patch-major in the source cell's
-    reference triangle, where ``ndtrig = (og+1)(og+2)/2``.
-
-    Returns a ``(ncells * npatches, ndtrig, 4)`` array ``[x, y, z, f]``
-    plus the ``funcdim`` recorded for the original function (or ``0``
-    if ``func is None``).
-    """
-    ndtrig = (og + 1) * (og + 2) // 2
-    npatches = ref_pts_per_patch.shape[0] // ndtrig
-
-    coord_pts = _per_cell_coords(mesh, ref_pts_per_patch)
-    coord_pts_3d = _pad_to_3d(coord_pts)
-    # (ncells, npatches, ndtrig, 3)
-    coord_pts_3d = coord_pts_3d.reshape(ncells, npatches, ndtrig, 3)
+    base = (np.arange(ncells, dtype=np.int32) * npts)[:, None, None]
+    tris = (base + ref_tris[None, :, :]).reshape(-1, 3)
+    _orient_tris_2d(verts3d, tris)
 
     if func is not None:
-        f_vis, _ = _interp_for_vis(func, mesh, max(og, 1))
-        f_vals = _per_cell_eval(f_vis, ref_pts_per_patch)
-        scalar_vals = _scalar_field(f_vals).reshape(ncells, npatches, ndtrig)
-        funcdim = 1
+        f_vis, _ = _interp_for_vis(func, mesh, n)
+        cell_vals = _per_cell_eval(f_vis, ref_pts)
+        funcdim = 1 if cell_vals.ndim == 2 else cell_vals.shape[-1]
+        vals = _flatten_funcvals(cell_vals)
     else:
-        scalar_vals = np.zeros((ncells, npatches, ndtrig), dtype=np.float64)
+        vals = np.zeros(ncells * npts, dtype=np.float32)
         funcdim = 0
 
-    pmat = np.empty((ncells, npatches, ndtrig, 4), dtype=np.float64)
-    pmat[..., :3] = coord_pts_3d
-    pmat[..., 3] = scalar_vals
-    return pmat.reshape(ncells * npatches, ndtrig, 4), funcdim
+    # Geometry edges = mesh boundary segments, sub-divided.
+    segs = _build_2d_boundary_segments(mesh, n, npts, encoding)
+    return verts3d, tris, vals, funcdim, segs
 
 
-def _encode_bezier_trigs(pmat_flat, og, encoding):
-    """Convert per-patch Lagrange samples to encoded Bernstein control points.
-
-    Input ``pmat_flat`` has shape ``(npatches_total, ndtrig, 4)``.
-    Returns a list of ``ndtrig`` encoded ``(npatches_total, 4)`` arrays —
-    NGSolve's ``Bezier_trig_points`` layout.
-    """
-    iB = _bernstein_trig_inverse(og)
-    # ``BezierPnts[i, p, k] = sum_j iB[i, j] * pmat_flat[p, j, k]``
-    bezier = np.einsum('ij,pjk->ipk', iB, pmat_flat).astype(np.float32)
-    return [encodeData(bezier[i], np.float32, encoding)
-            for i in range(bezier.shape[0])]
-
-
-# ---------------------------------------------------------------------------
-# Surface builders
-# ---------------------------------------------------------------------------
-
-def _build_bezier_2d(mesh, func, order, encoding):
-    """Bernstein control points for a 2D triangle mesh.
-
-    Returns ``(Bezier_trig_points, edges, funcdim, og)`` where
-    ``Bezier_trig_points`` follows webgui's list-of-arrays layout,
-    ``edges`` is a parallel list along the 1D mesh boundary, and
-    ``og`` is the cubic-or-less Bernstein order used by the shader.
-    """
-    og = min(order, _MAX_ORDER_2D)
-    ndtrig = (og + 1) * (og + 2) // 2
-
-    patches = _sub_trig_patches(order)
-    npatches = len(patches)
-    cubic_lattice = _bernstein_trig_lattice(og)  # (ndtrig, 2)
-
-    ref_pts_per_patch = np.empty((npatches * ndtrig, 2), dtype=np.float64)
-    for k, (origin, e1, e2) in enumerate(patches):
-        block = (origin
-                 + cubic_lattice[:, 0:1] * e1
-                 + cubic_lattice[:, 1:2] * e2)
-        ref_pts_per_patch[k * ndtrig:(k + 1) * ndtrig] = block
-
-    coords = mesh.coordinates
-    ncells = coords.cell_node_map().values.shape[0]
-    pmat_flat, funcdim = _bernstein_patches(
-        ref_pts_per_patch, mesh, func, ncells, og)
-    bezier_trig_points = _encode_bezier_trigs(pmat_flat, og, encoding)
-    edges = _build_bezier_2d_edges(mesh, og, encoding)
-    return bezier_trig_points, edges, funcdim, og
-
-
-def _build_bezier_2d_edges(mesh, og, encoding):
-    """1D Bernstein control points along the 2D mesh boundary."""
-    ef = mesh.exterior_facets
-    nsegs = int(ef.facet_cell.size)
-    if nsegs == 0:
-        empty = np.zeros((0, 4), dtype=np.float32)
-        return [encodeData(empty, np.float32, encoding) for _ in range(og + 1)]
-
-    # Edge endpoints in the parent triangle's reference coords,
-    # per local facet number.
-    facet_endpoints = {
-        0: (np.array([1.0, 0.0]), np.array([0.0, 1.0])),  # opp V0
-        1: (np.array([0.0, 0.0]), np.array([0.0, 1.0])),  # opp V1
-        2: (np.array([0.0, 0.0]), np.array([1.0, 0.0])),  # opp V2
-    }
-    seg_lattice = _bernstein_seg_lattice(og)             # (og+1,)
-
-    facet_cells = ef.facet_cell[:, 0]
-    local_facets = ef.local_facet_dat.data_ro
-
-    ref_pts_all = np.empty((nsegs * (og + 1), 2), dtype=np.float64)
-    for k in range(nsegs):
-        a, b = facet_endpoints[int(local_facets[k])]
-        ref_pts_all[k * (og + 1):(k + 1) * (og + 1)] = (
-            a[None, :] + seg_lattice[:, None] * (b - a)[None, :])
-
-    coords = mesh.coordinates
-    phi = _tabulate(coords, ref_pts_all)         # (ndof_c, nsegs*(og+1))
-    cdofs = coords.dat.data_ro[coords.cell_node_map().values]  # (ncells, ndof_c, gdim)
-    # For each segment k, take its (og+1) points from the (nsegs*(og+1),) axis
-    phi_per = phi.reshape(phi.shape[0], nsegs, og + 1)  # (ndof_c, nsegs, og+1)
-
-    pts = np.einsum('cdg,dcn->cng', cdofs[facet_cells], phi_per).astype(np.float64)
-    # ``pts`` shape: (nsegs, og+1, gdim)
-    pts3d = _pad_to_3d(pts)
-
-    pmat = np.zeros((nsegs, og + 1, 4), dtype=np.float64)
-    pmat[..., :3] = pts3d
-    iB = _bernstein_seg_inverse(og)
-    edge_data = np.einsum('ij,sjk->isk', iB, pmat).astype(np.float32)
-    return [encodeData(edge_data[i], np.float32, encoding)
-            for i in range(og + 1)]
-
-
-def _build_bezier_3d_surface(mesh, func, order, encoding):
-    """Bernstein control points for the boundary of a 3D tet mesh."""
+def _build_2d_boundary_segments(mesh, n, npts, encoding):
+    """Sub-segmented boundary of a 2D mesh, indexing into the per-cell lattice."""
     ef = mesh.exterior_facets
     if ef.facet_cell.size == 0:
-        og = min(order, _MAX_ORDER_2D)
-        empty_trig = np.zeros((0, 4), dtype=np.float32)
-        bez = [encodeData(empty_trig, np.float32, encoding)
-               for _ in range((og + 1) * (og + 2) // 2)]
-        edges = [encodeData(empty_trig, np.float32, encoding)
-                 for _ in range(og + 1)]
-        return bez, edges, 0, og
-
-    og = min(order, _MAX_ORDER_2D)
-    ndtrig = (og + 1) * (og + 2) // 2
-
-    patches = _sub_trig_patches(order)
-    npatches_per_face = len(patches)
-    cubic_lattice = _bernstein_trig_lattice(og)
-
-    # 2D ref-triangle points for each patch (patch-major).
-    ref_pts_2d_per_patch = np.empty(
-        (npatches_per_face * ndtrig, 2), dtype=np.float64)
-    for k, (origin, e1, e2) in enumerate(patches):
-        ref_pts_2d_per_patch[k * ndtrig:(k + 1) * ndtrig] = (
-            origin + cubic_lattice[:, 0:1] * e1
-                   + cubic_lattice[:, 1:2] * e2)
+        return encodeData(np.zeros((0, 2), dtype=np.int32), np.int32, encoding)
 
     facet_cells = ef.facet_cell[:, 0]
     local_facets = ef.local_facet_dat.data_ro
-    nfacets = len(local_facets)
 
-    coords = mesh.coordinates
-    coord_dofs = coords.dat.data_ro[coords.cell_node_map().values]
-    # Cache (ndof_c, npts) tabulations per local facet number.
-    coord_phi = {
-        f: _tabulate(coords, _facet_ref_pts_3d(f, ref_pts_2d_per_patch))
-        for f in range(4)
+    # In a triangle, local facet i is the edge opposite vertex i.
+    # In our lattice, vertex 0 = (0,0) -> idx 0 (j=0,i=0)
+    # vertex 1 = (1,0) -> idx n
+    # vertex 2 = (0,1) -> last point in column j=n -> idx (n*(n+3))//2
+    def idx(i, j, m):
+        return j * (m + 1) - j * (j - 1) // 2 + i
+
+    # For each local facet, list of (i,j) pairs on the relevant edge.
+    edges = {
+        # opposite V0 = edge V1-V2: i+j = n
+        0: [(n - j, j) for j in range(n + 1)],
+        # opposite V1 = edge V0-V2: i = 0
+        1: [(0, j) for j in range(n + 1)],
+        # opposite V2 = edge V0-V1: j = 0
+        2: [(i, 0) for i in range(n + 1)],
     }
 
-    f_vis = None
-    func_phi = None
-    func_dofs = None
-    if func is not None:
-        f_vis, _ = _interp_for_vis(func, mesh, max(og, 1))
-        func_phi = {
-            f: _tabulate(f_vis, _facet_ref_pts_3d(f, ref_pts_2d_per_patch))
-            for f in range(4)
-        }
-        func_dofs = f_vis.dat.data_ro[f_vis.cell_node_map().values]
-
-    npts_per_face = npatches_per_face * ndtrig
-    pmat = np.zeros((nfacets * npatches_per_face, ndtrig, 4), dtype=np.float64)
-    funcdim = 0
-    for k in range(nfacets):
-        cell = int(facet_cells[k])
-        f = int(local_facets[k])
-        phi_c = coord_phi[f]                      # (ndof_c, npts_per_face)
-        c_dofs = coord_dofs[cell]                 # (ndof_c, 3)
-        pts = np.einsum('dg,dn->ng', c_dofs, phi_c)  # (npts_per_face, 3)
-        pmat[k * npatches_per_face:(k + 1) * npatches_per_face, :, :3] = (
-            pts.reshape(npatches_per_face, ndtrig, 3))
-
-        if func is not None:
-            phi_f = func_phi[f]
-            fd = func_dofs[cell]
-            if fd.ndim == 1:                      # scalar dofs
-                fvals = np.einsum('d,dn->n', fd, phi_f)
-            elif fd.ndim == 2 and phi_f.ndim == 2:
-                fvals_vec = np.einsum('dv,dn->nv', fd, phi_f)
-                fvals = np.linalg.norm(fvals_vec, axis=-1)
-            else:
-                fvals_vec = np.einsum('d,dvn->nv', fd, phi_f)
-                fvals = np.linalg.norm(fvals_vec, axis=-1)
-            funcdim = 1
-            pmat[k * npatches_per_face:(k + 1) * npatches_per_face, :, 3] = (
-                fvals.reshape(npatches_per_face, ndtrig))
-
-    bezier_trig_points = _encode_bezier_trigs(pmat, og, encoding)
-    edges = _build_bezier_3d_edges(mesh, ef, og, encoding)
-    return bezier_trig_points, edges, funcdim, og
+    segs = []
+    for f, cell in zip(local_facets, facet_cells):
+        chain = [idx(i, j, n) + cell * npts for (i, j) in edges[int(f)]]
+        for a, b in zip(chain[:-1], chain[1:]):
+            segs.append((a, b))
+    segs = np.asarray(segs, dtype=np.int32)
+    return encodeData(segs, np.int32, encoding)
 
 
-def _build_bezier_3d_edges(mesh, ef, og, encoding):
-    """Feature edges between boundary facets carrying different markers.
+def _build_3d_boundary(mesh, func, n, encoding):
+    """Build per-facet sub-triangulated boundary of a 3D tet mesh."""
+    ef = mesh.exterior_facets
+    if ef.facet_cell.size == 0:
+        empty = np.zeros((0, 3), dtype=np.float32)
+        return (empty,
+                np.zeros((0, 3), dtype=np.int32),
+                np.zeros(0, dtype=np.float32),
+                0,
+                encodeData(np.zeros((0, 2), dtype=np.int32),
+                           np.int32, encoding))
 
-    Returns a list of ``og+1`` encoded ``(nseg, 4)`` arrays in NGSolve's
-    Bernstein-edge layout.
-    """
+    ref_pts_2d, ref_tris = _ref_lattice_tri(n)
+    npts = ref_pts_2d.shape[0]
     facet_cells = ef.facet_cell[:, 0]
     local_facets = ef.local_facet_dat.data_ro
     nfacets = len(local_facets)
-    if nfacets == 0:
-        empty = np.zeros((0, 4), dtype=np.float32)
-        return [encodeData(empty, np.float32, encoding) for _ in range(og + 1)]
 
     coords = mesh.coordinates
-    cnm = coords.cell_node_map().values
-    parent_verts = cnm[facet_cells]
+    coord_phi_cache = {f: _tabulate(coords, _facet_ref_pts_3d(f, ref_pts_2d))
+                       for f in range(4)}
+    coord_dofs = coords.dat.data_ro[coords.cell_node_map().values]  # (ncells, ndof_c, gdim)
 
-    # Coarse boundary-triangle in original vertex indices (3 verts/facet).
+    f_vis = func_phi_cache = func_dofs = None
+    funcdim = 0
+    if func is not None:
+        f_vis, _ = _interp_for_vis(func, mesh, n)
+        func_phi_cache = {f: _tabulate(f_vis, _facet_ref_pts_3d(f, ref_pts_2d))
+                          for f in range(4)}
+        func_dofs = f_vis.dat.data_ro[f_vis.cell_node_map().values]
+
+    verts = np.empty((nfacets * npts, 3), dtype=np.float32)
+    if func is not None:
+        if func_dofs.ndim == 2:
+            funcdim = 1
+            vals = np.empty(nfacets * npts, dtype=np.float32)
+        else:
+            funcdim = func_dofs.shape[-1]
+            vals = np.empty((nfacets * npts, funcdim), dtype=np.float32)
+    else:
+        vals = np.zeros(nfacets * npts, dtype=np.float32)
+
+    tris = np.empty((nfacets * ref_tris.shape[0], 3), dtype=np.int32)
+    full_coord_cnm = coords.cell_node_map().values
+    parent_verts = full_coord_cnm[facet_cells]
+
+    for k in range(nfacets):
+        cell = facet_cells[k]
+        f = int(local_facets[k])
+        phi_c = coord_phi_cache[f]                       # (ndof_c, npts)
+        c_dofs = coord_dofs[cell]                        # (ndof_c, 3)
+        pts = np.einsum('dg,dn->ng', c_dofs, phi_c)      # (npts, 3)
+        verts[k * npts:(k + 1) * npts] = pts.astype(np.float32)
+
+        sub = ref_tris.copy()
+        # Orient each facet's sub-triangulation so the outward normal
+        # points away from the opposite tet vertex.
+        v_a = pts[sub[:, 0]]
+        v_b = pts[sub[:, 1]]
+        v_c = pts[sub[:, 2]]
+        normals = np.cross(v_b - v_a, v_c - v_a)
+        opp_idx = parent_verts[k][f]
+        opp_pt = mesh.coordinates.dat.data_ro[opp_idx]
+        face_centroids = (v_a + v_b + v_c) / 3.0
+        flip = np.sum(normals * (face_centroids - opp_pt), axis=1) < 0
+        sub[flip, 1], sub[flip, 2] = sub[flip, 2].copy(), sub[flip, 1].copy()
+        tris[k * ref_tris.shape[0]:(k + 1) * ref_tris.shape[0]] = sub + k * npts
+
+        if func is not None:
+            phi_f = func_phi_cache[f]
+            fd_ = func_dofs[cell]
+            if fd_.ndim == 1:
+                vals_k = np.einsum('d,dn->n', fd_, phi_f)
+            elif fd_.ndim == 2 and phi_f.ndim == 2:
+                vals_k = np.einsum('dv,dn->nv', fd_, phi_f)
+            else:
+                vals_k = np.einsum('d,dvn->nv', fd_, phi_f)
+            if vals.ndim == 1:
+                vals[k * npts:(k + 1) * npts] = vals_k.astype(np.float32)
+            else:
+                vals[k * npts:(k + 1) * npts] = vals_k.astype(np.float32)
+
+    # Geometry edges of the 3D boundary = edges where adjacent boundary
+    # facets carry different markers. We identify these on the coarse
+    # facet triangulation and then sub-divide along the lattice.
+    segs = _build_3d_boundary_edges(mesh, ef, parent_verts, local_facets,
+                                    n, npts, encoding)
+    return verts, tris, vals, funcdim, segs
+
+
+def _build_3d_boundary_edges(mesh, ef, parent_verts, local_facets,
+                             n, npts, encoding):
+    """Geometry edges between boundary regions with different markers,
+    sub-divided into the per-facet lattice index space.
+    """
+    nfacets = parent_verts.shape[0]
+    facet_markers = np.zeros(nfacets, dtype=np.int32)
+    for m in ef.unique_markers:
+        facet_markers[ef.subset(m).indices] = m
+
+    # Coarse boundary triangle in original vertex indices.
     bnd = np.empty((nfacets, 3), dtype=np.int32)
     for k in range(nfacets):
         bnd[k] = np.delete(parent_verts[k], int(local_facets[k]))
@@ -673,110 +505,52 @@ def _build_bezier_3d_edges(mesh, ef, og, encoding):
     for k in range(nfacets):
         tri = bnd[k]
         for a, b in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
-            key = (int(min(a, b)), int(max(a, b)))
-            edge_to_facets.setdefault(key, []).append(k)
+            e = (min(a, b), max(a, b))
+            edge_to_facets.setdefault(e, []).append(k)
 
-    # Markers per boundary facet.
-    facet_markers = np.zeros(nfacets, dtype=np.int32)
-    try:
-        for m in ef.unique_markers:
-            facet_markers[ef.subset(m).indices] = m
-    except Exception:
-        pass
+    # For each cross-marker edge, locate it inside each adjacent facet's
+    # local lattice and emit sub-segments along the lattice.
+    def lattice_idx(i, j):
+        return j * (n + 1) - j * (j - 1) // 2 + i
 
-    # In the local facet's 2D ref coords, the three vertices are at
-    # (0,0), (1,0), (0,1); each (la, lb) pair maps to an affine segment.
-    edge_endpoints_2d = {
-        (0, 1): (np.array([0.0, 0.0]), np.array([1.0, 0.0])),
-        (1, 2): (np.array([1.0, 0.0]), np.array([0.0, 1.0])),
-        (0, 2): (np.array([0.0, 0.0]), np.array([0.0, 1.0])),
+    edge_lattice = {
+        # vertex order in the local facet's _UFC_TET_FACET_VERTS:
+        # local0 -> (0,0); local1 -> (n,0); local2 -> (0,n)
+        (0, 1): [(i, 0) for i in range(n + 1)],   # along edge V_loc0->V_loc1
+        (1, 2): [(n - j, j) for j in range(n + 1)],   # V_loc1->V_loc2
+        (0, 2): [(0, j) for j in range(n + 1)],   # V_loc0->V_loc2
     }
 
-    seg_lattice = _bernstein_seg_lattice(og)
-    crease_segments = []                            # (ndof_c, npts) per segment
-    crease_cells = []                               # parent cell index
+    segs = []
     for edge, facets in edge_to_facets.items():
-        markers = {int(facet_markers[k]) for k in facets}
+        markers = {facet_markers[k] for k in facets}
         if len(markers) <= 1:
             continue
-        k0 = facets[0]
-        f = int(local_facets[k0])
+        k = facets[0]
+        f = int(local_facets[k])
+        # Map original vertex ids -> local 0/1/2 in this facet
         face_globals = _UFC_TET_FACET_VERTS[f]
-        cell = int(facet_cells[k0])
-        cell_verts = cnm[cell]
-        local_for = {int(cell_verts[face_globals[i]]): i for i in range(3)}
+        cell = ef.facet_cell[k, 0]
+        cnm = mesh.coordinates.cell_node_map().values[cell]
+        local_for = {int(cnm[face_globals[0]]): 0,
+                     int(cnm[face_globals[1]]): 1,
+                     int(cnm[face_globals[2]]): 2}
         a, b = edge
-        la = local_for[a]
-        lb = local_for[b]
+        la, lb = local_for[a], local_for[b]
         key = (min(la, lb), max(la, lb))
-        p_start_2d, p_end_2d = edge_endpoints_2d[key]
+        chain = edge_lattice[key]
         if (la, lb) != key:
-            p_start_2d, p_end_2d = p_end_2d, p_start_2d
-        # Lattice points along this segment in the local facet's 2D ref.
-        pts2d = (p_start_2d[None, :]
-                 + seg_lattice[:, None] * (p_end_2d - p_start_2d)[None, :])
-        pts3d_ref = _facet_ref_pts_3d(f, pts2d)
-        crease_segments.append(pts3d_ref)
-        crease_cells.append(cell)
+            chain = list(reversed(chain))
+        idxs = [lattice_idx(i, j) + k * npts for (i, j) in chain]
+        for x, y in zip(idxs[:-1], idxs[1:]):
+            segs.append((x, y))
 
-    if not crease_segments:
-        empty = np.zeros((0, 4), dtype=np.float32)
-        return [encodeData(empty, np.float32, encoding) for _ in range(og + 1)]
-
-    # Evaluate coordinates per segment via the parent cell's tabulation.
-    seg_pts_3d = np.empty((len(crease_segments), og + 1, 3), dtype=np.float64)
-    coord_dofs = coords.dat.data_ro[cnm]
-    for k, (pts3d_ref, cell) in enumerate(zip(crease_segments, crease_cells)):
-        phi_c = _tabulate(coords, pts3d_ref)
-        seg_pts_3d[k] = np.einsum('dg,dn->ng', coord_dofs[cell], phi_c)
-
-    pmat = np.zeros((seg_pts_3d.shape[0], og + 1, 4), dtype=np.float64)
-    pmat[..., :3] = seg_pts_3d
-    iB = _bernstein_seg_inverse(og)
-    edge_data = np.einsum('ij,sjk->isk', iB, pmat).astype(np.float32)
-    return [encodeData(edge_data[i], np.float32, encoding)
-            for i in range(og + 1)]
-
-
-# ---------------------------------------------------------------------------
-# Volume builder (3D clipping shader input)
-# ---------------------------------------------------------------------------
-
-def _build_bezier_3d_volume(mesh, func, order3d, encoding):
-    """``points3d`` for clipping a 3D tet mesh.
-
-    Returns a list of ``np_per_tet`` encoded ``(ntets, 4)`` arrays where
-    ``np_per_tet = 4`` for ``order3d == 1`` and ``10`` for ``order3d == 2``.
-    """
-    if order3d == 1:
-        ref_pts = _UFC_TET_VERTS
+    if not segs:
+        segs = np.zeros((0, 2), dtype=np.int32)
     else:
-        ref_pts = _UFC_TET_P2_PTS
-    np_per_tet = ref_pts.shape[0]
+        segs = np.asarray(segs, dtype=np.int32)
+    return encodeData(segs, np.int32, encoding)
 
-    coord_pts = _per_cell_coords(mesh, ref_pts)    # (ncells, np_per_tet, 3)
-    coord_pts_3d = _pad_to_3d(coord_pts)
-
-    if func is not None:
-        f_vis, _ = _interp_for_vis(func, mesh, max(order3d, 1))
-        f_vals = _per_cell_eval(f_vis, ref_pts)
-        scalar_vals = _scalar_field(f_vals)
-    else:
-        scalar_vals = np.zeros((coord_pts_3d.shape[0], np_per_tet),
-                               dtype=np.float64)
-
-    pmat = np.empty((coord_pts_3d.shape[0], np_per_tet, 4), dtype=np.float64)
-    pmat[..., :3] = coord_pts_3d
-    pmat[..., 3] = scalar_vals
-    # Layout: list[np_per_tet] of (ntets, 4).
-    out = [encodeData(pmat[:, i, :].astype(np.float32), np.float32, encoding)
-           for i in range(np_per_tet)]
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Scene
-# ---------------------------------------------------------------------------
 
 def _func_minmax(func):
     if func is None:
@@ -787,8 +561,8 @@ def _func_minmax(func):
     return float(vals.min()), float(vals.max())
 
 
-def _source_degree(func, mesh):
-    """Pick the source-cell polynomial degree driving sub-triangulation."""
+def _default_subdivision(func, mesh):
+    """Pick a sensible sub-triangulation level."""
     deg = 1
     if func is not None:
         try:
@@ -800,41 +574,7 @@ def _source_degree(func, mesh):
         coord_deg = int(mesh.coordinates.function_space().ufl_element().degree())
     except (TypeError, ValueError):
         coord_deg = 1
-    return max(1, min(_MAX_SOURCE_DEGREE, max(deg, coord_deg)))
-
-
-def _normalize_clipping(clipping):
-    """Translate the ``clipping`` kwarg into webgui data-dict keys.
-
-    Mirrors NGSolve's ``WebGLScene.GetData`` (lines 287-308 of
-    ``netgen/webgui.py``): accepts ``True`` / ``False`` / ``None`` /
-    ``dict``. Returns a dict of data-dict keys to merge in.
-    """
-    if clipping is None or clipping is False:
-        return {}
-    if clipping is True:
-        return {"clipping": True}
-    if not isinstance(clipping, dict):
-        raise TypeError(f"Unsupported clipping spec: {type(clipping)!r}")
-
-    out = {"clipping": True}
-    spec = dict(clipping)
-    if "vec" in spec:
-        vec = spec.pop("vec")
-        spec.setdefault("x", float(vec[0]))
-        spec.setdefault("y", float(vec[1]))
-        spec.setdefault("z", float(vec[2]))
-    pnt = spec.pop("pnt", None)
-    allowed = {"x", "y", "z", "dist", "function"}
-    for name, val in spec.items():
-        if name not in allowed:
-            raise ValueError(
-                f"Unsupported clipping key {name!r}; "
-                f"allowed: {sorted(allowed | {'vec', 'pnt'})}")
-        out[f"clipping_{name}"] = val
-    if pnt is not None:
-        out["_clipping_pnt"] = list(map(float, pnt))
-    return out
+    return max(1, min(_MAX_SUBDIVISION, max(deg, coord_deg)))
 
 
 class FiredrakeScene(BaseWebGuiScene):
@@ -847,127 +587,89 @@ class FiredrakeScene(BaseWebGuiScene):
     mesh : firedrake.MeshGeometry, optional
         Override mesh (when ``obj`` is a function but you want to show
         it on a different mesh).
-    order : int, optional
-        Source polynomial degree driving sub-triangulation; surfaces use
-        cubic Bernstein patches (capped at 3) and split source cells of
-        higher degree into multiple patches. Defaults to the source
-        element / coordinate degree (clamped to 10).
+    subdivision : int, optional
+        Sub-triangles per element edge. Defaults to the source element
+        degree, capped at 10.
     colormap : str, list, ndarray, or None, optional
         Colour map used by the on-screen colour bar. Strings select a
         built-in (``"mana"`` (default), ``"cool_to_warm"``, ``"ngs"``);
         a stop list ``[(t, (r, g, b)), ...]`` or an ``(N, 3)`` RGB array
         is also accepted. Pass ``None`` to fall back to webgui's default
-        rainbow.
-    clipping : bool or dict, optional
-        Enable webgui's clipping plane. ``True`` enables with defaults;
-        a dict may set any of ``x``, ``y``, ``z``, ``dist``, ``function``
-        (replaces those individual keys), plus the conveniences ``vec``
-        (3-vector → x/y/z) and ``pnt`` (overrides ``mesh_center``).
-        Only meaningful for 3D meshes.
-    draw_vol : bool, optional
-        For 3D meshes, ship volume samples (``points3d``) so the
-        clipping shader has something to slice. Default ``True`` when a
-        function is provided. Ignored in 2D.
+        rainbow (equivalent to ``"ngs"``).
     """
 
-    def __init__(self, obj, mesh=None, order=None,
-                 colormap=_DEFAULT_COLORMAP,
-                 clipping=None,
-                 draw_vol=True,
-                 **kwargs):
-        # Back-compat: accept the old ``subdivision`` kwarg as an alias.
-        if order is None and "subdivision" in kwargs:
-            order = kwargs.pop("subdivision")
+    def __init__(self, obj, mesh=None, subdivision=None,
+                 colormap=_DEFAULT_COLORMAP, **kwargs):
         self.obj = obj
         self._mesh_override = mesh
-        self.order = order
+        self.subdivision = subdivision
         self.colormap = colormap
-        self.clipping = clipping
-        self.draw_vol = draw_vol
         self.kwargs = kwargs
-        self.encoding = "b64"
+        self.encoding = 'b64'
 
     def _resolve(self):
         mesh, func = _get_mesh_and_func(self.obj)
         if self._mesh_override is not None:
             mesh = self._mesh_override
-        order = self.order or _source_degree(func, mesh)
-        order = max(1, min(_MAX_SOURCE_DEGREE, int(order)))
-        return mesh, func, order
+        n = self.subdivision or _default_subdivision(func, mesh)
+        n = max(1, min(_MAX_SUBDIVISION, int(n)))
+        return mesh, func, n
 
     def GetData(self, set_minmax=True):
-        mesh, func, order = self._resolve()
+        mesh, func, n = self._resolve()
         tdim = mesh.topological_dimension
 
         if tdim == 2:
-            bez_trigs, edges, funcdim, og2 = _build_bezier_2d(
-                mesh, func, order, self.encoding)
-            order3d = 0
-            points3d = None
+            verts3d, tris, vals, funcdim, segs_enc = _build_2d(
+                mesh, func, n, self.encoding)
         elif tdim == 3:
-            bez_trigs, edges, funcdim, og2 = _build_bezier_3d_surface(
-                mesh, func, order, self.encoding)
-            order3d = min(order, _MAX_ORDER_3D)
-            if func is not None and self.draw_vol:
-                points3d = _build_bezier_3d_volume(
-                    mesh, func, order3d, self.encoding)
-            else:
-                points3d = None
+            verts3d, tris, vals, funcdim, segs_enc = _build_3d_boundary(
+                mesh, func, n, self.encoding)
         else:
             raise ValueError(f"Unsupported topological dimension {tdim}")
 
-        # Bounding box from the geometry samples (using the first three
-        # entries of each Bezier_trig_points array would round-trip
-        # base64; cheaper to derive it directly from coordinates here).
-        cdata = mesh.coordinates.dat.data_ro
-        if cdata.ndim == 1:
-            cdata = cdata.reshape(-1, 1)
-        gdim = cdata.shape[1]
-        vmin = np.zeros(3, dtype=np.float64)
-        vmax = np.zeros(3, dtype=np.float64)
-        vmin[:gdim] = cdata.min(axis=0)
-        vmax[:gdim] = cdata.max(axis=0)
-        center = ((vmin + vmax) / 2.0).tolist()
-        radius = float(np.linalg.norm(vmax - vmin) / 2.0)
+        vmin = verts3d.min(axis=0) if len(verts3d) else np.zeros(3)
+        vmax = verts3d.max(axis=0) if len(verts3d) else np.ones(3)
+        center = ((vmin + vmax) / 2).tolist()
+        radius = float(np.linalg.norm(vmax - vmin) / 2)
 
         funcmin, funcmax = _func_minmax(func)
 
         d = {
-            "ngsolve_version": "firedrake_webgui",
-            "mesh_dim": int(tdim),
+            "vertices": encodeData(verts3d, np.float32, self.encoding),
+            "nodal_function_values": encodeData(
+                vals if vals.size else np.zeros(1, dtype=np.float32),
+                np.float32, self.encoding),
+            "trigs": encodeData(tris, np.int32, self.encoding),
+            "segs": segs_enc,
+            "edges": [],
+            "mesh_dim": tdim,
             "mesh_center": center,
             "mesh_radius": radius,
-            "order2d": int(og2),
-            "order3d": int(order3d) if tdim == 3 else 0,
+            "funcdim": funcdim,
+            "order2d": 1,
+            "order3d": 1,
             "draw_surf": True,
-            "draw_vol": bool(points3d is not None),
+            "draw_vol": False,
             "show_wireframe": True,
             "show_mesh": True,
-            "Bezier_trig_points": bez_trigs,
-            "edges": edges,
-            "funcdim": int(funcdim),
             "is_complex": False,
-            "autoscale": bool(set_minmax),
-            "funcmin": float(funcmin),
-            "funcmax": float(funcmax),
+            "autoscale": set_minmax,
+            "funcmin": funcmin,
+            "funcmax": funcmax,
         }
-        if points3d is not None:
-            d["points3d"] = points3d
+
+        if tdim == 3:
+            cnm = mesh.coordinates.cell_node_map().values.astype(np.int32)
+            d["tets"] = encodeData(cnm, np.int32, self.encoding)
 
         colors = _sample_colormap(self.colormap)
         if colors is not None:
             d["colors"] = colors
 
-        clip_extras = _normalize_clipping(self.clipping)
-        pnt = clip_extras.pop("_clipping_pnt", None)
-        if pnt is not None:
-            d["mesh_center"] = pnt
-        d.update(clip_extras)
-
         d.update({k: v for k, v in self.kwargs.items()
                   if k in ("settings", "autoscale", "min", "max",
-                           "draw_vol", "draw_surf",
-                           "show_wireframe", "show_mesh")})
+                           "draw_vol", "draw_surf", "show_wireframe")})
         return d
 
     def Redraw(self, obj=None):
@@ -983,18 +685,11 @@ class FiredrakeScene(BaseWebGuiScene):
         super().Redraw()
 
 
-def Draw(obj, mesh=None, order=None,
-         colormap=_DEFAULT_COLORMAP,
-         clipping=None,
-         draw_vol=True,
-         **kwargs):
+def Draw(obj, mesh=None, subdivision=None, colormap=_DEFAULT_COLORMAP, **kwargs):
     """Draw a Firedrake Mesh or Function in Jupyter."""
     width = kwargs.pop("width", None)
     height = kwargs.pop("height", None)
-    if order is None and "subdivision" in kwargs:
-        order = kwargs.pop("subdivision")
-    scene = FiredrakeScene(obj, mesh=mesh, order=order,
-                           colormap=colormap, clipping=clipping,
-                           draw_vol=draw_vol, **kwargs)
+    scene = FiredrakeScene(obj, mesh=mesh, subdivision=subdivision,
+                           colormap=colormap, **kwargs)
     scene.Draw(width=width, height=height)
     return scene
