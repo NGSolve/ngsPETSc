@@ -73,61 +73,55 @@ _MANA_STOPS = [
     (1.00000, (0.400000, 0.000000, 0.121569)),
 ]
 
-_COOL_TO_WARM_STOPS = [
-    (0.00000, (0.000000, 0.000000, 0.349020)),
-    (0.03125, (0.039216, 0.062745, 0.380392)),
-    (0.06250, (0.062745, 0.117647, 0.411765)),
-    (0.09375, (0.090196, 0.184314, 0.450980)),
-    (0.12500, (0.125490, 0.262745, 0.501961)),
-    (0.15625, (0.160784, 0.337255, 0.541176)),
-    (0.18750, (0.200000, 0.396078, 0.568627)),
-    (0.21875, (0.239216, 0.454902, 0.600000)),
-    (0.25000, (0.286275, 0.521569, 0.650980)),
-    (0.28125, (0.337255, 0.592157, 0.701961)),
-    (0.31250, (0.388235, 0.654902, 0.749020)),
-    (0.34375, (0.466667, 0.737255, 0.819608)),
-    (0.37500, (0.572549, 0.819608, 0.878431)),
-    (0.40625, (0.654902, 0.866667, 0.909804)),
-    (0.43750, (0.752941, 0.917647, 0.941176)),
-    (0.46875, (0.823529, 0.956863, 0.968627)),
-    (0.50000, (0.988235, 0.960784, 0.901961)),
-    (0.51562, (0.941176, 0.984314, 0.988235)),
-    (0.53125, (0.988235, 0.945098, 0.850980)),
-    (0.56250, (0.980392, 0.898039, 0.784314)),
-    (0.59375, (0.968627, 0.835294, 0.698039)),
-    (0.62500, (0.949020, 0.733333, 0.588235)),
-    (0.65625, (0.929412, 0.650980, 0.509804)),
-    (0.68750, (0.909804, 0.564706, 0.435294)),
-    (0.71875, (0.878431, 0.458824, 0.352941)),
-    (0.75000, (0.839216, 0.388235, 0.286275)),
-    (0.78125, (0.760784, 0.294118, 0.211765)),
-    (0.81250, (0.701961, 0.211765, 0.168627)),
-    (0.84375, (0.650980, 0.156863, 0.129412)),
-    (0.87500, (0.600000, 0.094118, 0.094118)),
-    (0.90625, (0.549020, 0.066667, 0.098039)),
-    (0.93750, (0.501961, 0.050980, 0.125490)),
-    (0.96875, (0.450000, 0.054902, 0.172549)),
-    (1.00000, (0.400000, 0.000000, 0.121569)),
-]
-
-# NGSolve webgui's built-in rainbow: piecewise-linear blue-cyan-green-yellow-red.
-_NGS_STOPS = [
-    (0.00, (0.0, 0.0, 1.0)),
-    (0.25, (0.0, 1.0, 1.0)),
-    (0.50, (0.0, 1.0, 0.0)),
-    (0.75, (1.0, 1.0, 0.0)),
-    (1.00, (1.0, 0.0, 0.0)),
-]
-
 _NAMED_COLORMAPS = {
     "mana": _MANA_STOPS,
-    "cool_to_warm": _COOL_TO_WARM_STOPS,
-    "ngs": _NGS_STOPS,
 }
 
 _DEFAULT_COLORMAP = "mana"
 _COLORMAP_RESOLUTION = 256
 
+
+def _make_trig(N, x0=0, y0=0, dx=1, dy=1):
+    return [(x0+i*dx/N,y0+j*dy/N) for j in range(N+1) for i in range(N+1-j)]
+
+def _make_quad(N,  x0=0, y0=0, dx=1, dy=1):
+    return [(x0+i*dx/N,y0+j*dy/N) for j in range(N+1) for i in range(N+1-j)] + [(x0+dx-i*dx/N,1-(y0+j*dy/N)) for j in range(N+1) for i in range(N+1-j)]
+
+_intrules = {}
+def get_intrules(dim:int, order: int):
+    if (dim,order) in _intrules:
+        return _intrules[(dim, order)][3] # return trig rule
+
+    rules = {}
+    if dim == 2:
+        if order > 3:
+            n = (order+2)//3
+
+            trig_points = []
+            h = 1/n
+            for i in range(n):
+                for j in range(n-i):
+                    trig_points += _make_trig(3, i*h, j*h, h, h)
+
+            for i in range(n-1):
+                for j in range(n-i-1):
+                    trig_points += _make_trig(3, (i+1)*h, (j+1)*h, -h, -h)
+
+            quad_points = []
+            for i in range(n):
+                for j in range(n):
+                    quad_points += _make_quad(3, i*h, j*h, h, h)
+
+        else:
+            trig_points =  _make_trig(order)
+            quad_points =  _make_quad(order)
+
+        rules[3] = trig_points
+        rules[4] = trig_points
+    elif dim == 3:
+        raise RuntimeError("3D not supported")
+    _intrules[(dim, order)] = rules
+    return rules[3]
 
 def _sample_colormap(spec, n=_COLORMAP_RESOLUTION):
     """Resample a ParaView-style stop list into ``n`` RGB triples.
@@ -335,6 +329,9 @@ def _flatten_funcvals(vals):
 def _build_2d(mesh, func, n, encoding):
     """Build vertex / triangle / value arrays for a 2D mesh."""
     ref_pts, ref_tris = _ref_lattice_tri(n)
+    print(n)
+    print(ref_pts, ref_tris)
+    print(get_intrules(2, 1))
     npts = ref_pts.shape[0]
 
     cell_coords = _per_cell_coords(mesh, ref_pts)        # (ncells, npts, gdim)
