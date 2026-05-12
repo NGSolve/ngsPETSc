@@ -11,7 +11,7 @@ Supports:
 
 import numpy as np
 from webgui_jupyter_widgets import BaseWebGuiScene, encodeData
-
+import firedrake
 
 # Families whose dofs are point evaluations: we can sample directly via FIAT
 # tabulation without an intermediate interpolation step.
@@ -294,38 +294,26 @@ def _per_cell_eval(func, ref_pts):
     Returns array of shape ``(ncells, npts)`` for scalar or
     ``(ncells, npts, vdim)`` for vector functions.
     """
-    # phi = _tabulate(func, ref_pts)
-    # print("phi shape", phi.shape)
-    print("func", func.ufl_shape)
-    # print(dir(func))
-    # cnm = func.cell_node_map().values
-    # print('cnm1 shape', cnm.shape)
-    cnm = func.at(ref_pts)
-    print('cnm2 shape', len(cnm))
-    print(cnm)
-
-    
 
     mesh = func.function_space().mesh() 
     dim = mesh.geometric_dimension
     order = func.function_space().finat_element.degree
     ncell = mesh.num_cells()
 
-    # physical_points = np.zeros( (ncell, ref_pts.shape[0], dim) )
     curved_points = np.zeros( (ncell, ref_pts.shape[0], dim) )
-
     netgen_mesh = mesh.netgen_mesh
     
-    # netgen_mesh.Curve(1)
-    # netgen_mesh.CalcElementMapping(ref_pts, physical_points)
     netgen_mesh.Curve(order)
     netgen_mesh.CalcElementMapping(ref_pts, curved_points)
-    # curved = netgen_mesh.Elements2D().NumPy()["curved"]
 
-    print('curved points', curved_points)
-    values = np.array(func.at(curved_points.reshape(-1, dim))).reshape(ncell, ref_pts.shape[0], -1)
-    print("values", values)
-    return values
+    import time
+    t0 = time.time()
+    evaluator = firedrake.PointEvaluator(mesh, curved_points.reshape(-1, dim))
+    t1 = time.time()
+    data = np.array(evaluator.evaluate(func).reshape(ncell, ref_pts.shape[0], -1))
+    t2 = time.time()
+    print("Curved points:", t1 - t0, "s; evaluation:", t2 - t1, "s")
+    return data
 
 
 
@@ -358,23 +346,50 @@ def _flatten_funcvals(vals):
         return vals.astype(np.float32).reshape(-1)
     return vals.astype(np.float32).reshape(-1, vals.shape[-1])
 
+def _build_2d_wireframe(data, mesh, func, n, encoding):
+    ref_pts = np.array([(i/n,0) for i in range(n+1)] + [(0, i/n) for i in range(n+1)] + [(i/n,1.0-i/n) for i in range(n+1)])
+    npts = ref_pts.shape[0]//3
+    ncells = mesh.num_cells
+
+    def bernstein_segment(n):
+        from math import factorial
+        def b(x, i):
+            return factorial(n) / (factorial(i) * factorial(n - i)) * x**i * (1 - x)**(n - i)
+    
+        M = np.array([[b(i / n, j) for j in range(n + 1)] for i in range(n + 1)])
+        return np.linalg.inv(M)
+
+    if func is not None:
+        vals = _per_cell_eval(func, ref_pts)
+        funcdim = 4
+        
+        ibvals = bernstein_segment(n)
+        vals = vals.reshape(-1, npts, funcdim)
+        vals = vals.transpose(1, 0, 2)
+
+        BezierPnts = np.zeros( vals.shape )
+        for i in range(4):
+            BezierPnts[:,:,i] = ibvals @ vals[:, :, i]
+
+    else:
+        vals = np.zeros(ncells * npts, dtype=np.float32)
+        funcdim = 0
+
+    BezierPnts.transpose(1, 0, 2)
+        
+    data_wireframe = []    
+    for i in range(npts):
+        data_wireframe.append(encodeData(np.array(BezierPnts[i].flatten(), dtype=np.float32), np.float32, encoding))
+
+    data["Bezier_points"]= data_wireframe
 
 def _build_2d(data, mesh, func, n, encoding):
     """Build vertex / triangle / value arrays for a 2D mesh."""
-    ref_pts, ref_tris = _ref_lattice_tri(n)
     ref_pts = np.array(get_intrules(2, n))
-    
-    npts = ref_pts.shape[0]
+    n = min(n, 3)
+    npts = (n+1)*(n+2)//2
+    ncells = mesh.num_cells
 
-    cell_coords = _per_cell_coords(mesh, ref_pts)        # (ncells, npts, gdim)
-    ncells, _, gdim = cell_coords.shape
-
-    verts3d = np.zeros((ncells * npts, 3), dtype=np.float32)
-    verts3d[:, :gdim] = cell_coords.reshape(-1, gdim).astype(np.float32)
-
-    base = (np.arange(ncells, dtype=np.int32) * npts)[:, None, None]
-    tris = (base + [[0,1,2]]).reshape(-1, 3)
-    
     def bernstein_triangle(n):
         from math import factorial
         def b(x, y, i, j):
@@ -413,18 +428,16 @@ def _build_2d(data, mesh, func, n, encoding):
     data_2d = []    
     for i in range(npts):
         data_2d.append(encodeData(np.array(BezierPnts[i].flatten(), dtype=np.float32), np.float32, encoding))
-    print('data2d')
 
-    # data["vertices"]=  encodeData(verts3d, np.float32, self.encoding)
     data["Bezier_trig_points"]= data_2d
-    data["Bezier_points"]= data_2d
     data["funcmin"] = funcmin
     data["funcmax"] = funcmax
     data["mesh_center"]= center
     data["mesh_radius"]= radius
 
+    _build_2d_wireframe(data, mesh, func, n, encoding)
     # Geometry edges = mesh boundary segments, sub-divided.
-    segs = _build_2d_boundary_segments(mesh, n, npts, encoding)
+    # segs = _build_2d_boundary_segments(mesh, n, npts, encoding)
     # return verts3d, tris, data_2d, funcdim, segs
 
 
@@ -684,11 +697,11 @@ class FiredrakeScene(BaseWebGuiScene):
             "edges": [],
             "mesh_dim": tdim,
             "funcdim": funcdim,
-            "order2d": self.order,
-            "order3d": self.order,
+            "order2d": min(self.order, 3),
+            "order3d": min(self.order, 2),
             "draw_surf": True,
             "draw_vol": False,
-            "show_wireframe": False,
+            "show_wireframe": True,
             "show_mesh": True,
             "is_complex": False,
             "autoscale": set_minmax,
@@ -696,9 +709,9 @@ class FiredrakeScene(BaseWebGuiScene):
 
         if tdim == 2:
             _build_2d(d, mesh, func, self.order, self.encoding)
-        elif tdim == 3:
-            verts3d, tris, vals, funcdim, segs_enc = _build_3d_boundary(
-                mesh, func, self.order, self.encoding)
+        # elif tdim == 3:
+        #     verts3d, tris, vals, funcdim, segs_enc = _build_3d_boundary(
+        #         mesh, func, self.order, self.encoding)
         else:
             raise ValueError(f"Unsupported topological dimension {tdim}")
 
