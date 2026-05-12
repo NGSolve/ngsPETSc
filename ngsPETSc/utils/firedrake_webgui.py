@@ -159,13 +159,33 @@ def _sample_colormap(spec, n=_COLORMAP_RESOLUTION):
     return out.tolist()
 
 
-def _get_mesh_and_func(obj):
+def _get_mesh_and_func(obj, order):
     import firedrake
+
+    func = None
     if isinstance(obj, firedrake.Function):
-        return obj.function_space().mesh(), obj
-    if isinstance(obj, firedrake.MeshGeometry):
-        return obj, None
-    raise TypeError(f"Cannot draw object of type {type(obj)}")
+        mesh = obj.function_space().mesh()
+        func = obj
+        funcdim = 1
+    elif isinstance(obj, firedrake.MeshGeometry):
+        mesh = obj
+        funcdim = 0
+        func = firedrake.Constant(0)
+    else:
+        raise TypeError(f"Cannot draw object of type {type(obj)}")
+
+    dim = mesh.geometric_dimension
+
+    x = firedrake.SpatialCoordinate(mesh)
+    if dim == 2:
+        x = [x[0], x[1], 0]
+        
+    V = firedrake.VectorFunctionSpace(mesh, "DG", order, dim=4)
+    target = firedrake.Function(V)
+    func = firedrake.as_vector([*x, func])
+    target.interpolate(func)
+
+    return mesh, target, funcdim
 
 
 def _value_shape(func_or_space):
@@ -249,20 +269,12 @@ def _interp_for_vis(func, mesh, n):
     family = elem.family()
     shape = _value_shape(func)
 
-    if family in _POINTEVAL_FAMILIES:
-        return func, len(shape)
-
-    if shape == ():
-        V = firedrake.FunctionSpace(mesh, "DG", n)
-    else:
-        vdim = int(np.prod(shape))
-        V = firedrake.VectorFunctionSpace(mesh, "DG", n, dim=vdim)
+    V = firedrake.VectorFunctionSpace(mesh, "DG", n, dim=4)
 
     target = firedrake.Function(V)
-    try:
-        target.interpolate(func)
-    except Exception:
-        target.project(func)
+    x, y = firedrake.SpatialCoordinate(mesh)
+    func = firedrake.as_vector([x, y, 0, func])
+    target.interpolate(func)
     return target, 1 if shape else 0
 
 
@@ -282,18 +294,39 @@ def _per_cell_eval(func, ref_pts):
     Returns array of shape ``(ncells, npts)`` for scalar or
     ``(ncells, npts, vdim)`` for vector functions.
     """
-    phi = _tabulate(func, ref_pts)
-    cnm = func.cell_node_map().values
-    dofs = func.dat.data_ro[cnm]
-    if phi.ndim == 2:                  # (ndof, npts)
-        if dofs.ndim == 2:
-            return np.einsum('cd,dn->cn', dofs, phi)
-        return np.einsum('cdv,dn->cnv', dofs, phi)
-    # vector basis (ndof, vdim, npts) — Piola is already baked in via
-    # interpolation to CG, so this branch is only hit when the user
-    # supplied a function in such a space directly. We still do a plain
-    # einsum and warn about possible inaccuracy.
-    return np.einsum('cd,dvn->cnv', dofs, phi)
+    # phi = _tabulate(func, ref_pts)
+    # print("phi shape", phi.shape)
+    print("func", func.ufl_shape)
+    # print(dir(func))
+    # cnm = func.cell_node_map().values
+    # print('cnm1 shape', cnm.shape)
+    cnm = func.at(ref_pts)
+    print('cnm2 shape', len(cnm))
+    print(cnm)
+
+    
+
+    mesh = func.function_space().mesh() 
+    dim = mesh.geometric_dimension
+    order = func.function_space().finat_element.degree
+    ncell = mesh.num_cells()
+
+    # physical_points = np.zeros( (ncell, ref_pts.shape[0], dim) )
+    curved_points = np.zeros( (ncell, ref_pts.shape[0], dim) )
+
+    netgen_mesh = mesh.netgen_mesh
+    
+    # netgen_mesh.Curve(1)
+    # netgen_mesh.CalcElementMapping(ref_pts, physical_points)
+    netgen_mesh.Curve(order)
+    netgen_mesh.CalcElementMapping(ref_pts, curved_points)
+    # curved = netgen_mesh.Elements2D().NumPy()["curved"]
+
+    print('curved points', curved_points)
+    values = np.array(func.at(curved_points.reshape(-1, dim))).reshape(ncell, ref_pts.shape[0], -1)
+    print("values", values)
+    return values
+
 
 
 def _per_cell_coords(mesh, ref_pts):
@@ -326,12 +359,11 @@ def _flatten_funcvals(vals):
     return vals.astype(np.float32).reshape(-1, vals.shape[-1])
 
 
-def _build_2d(mesh, func, n, encoding):
+def _build_2d(data, mesh, func, n, encoding):
     """Build vertex / triangle / value arrays for a 2D mesh."""
     ref_pts, ref_tris = _ref_lattice_tri(n)
-    print(n)
-    print(ref_pts, ref_tris)
-    print(get_intrules(2, 1))
+    ref_pts = np.array(get_intrules(2, n))
+    
     npts = ref_pts.shape[0]
 
     cell_coords = _per_cell_coords(mesh, ref_pts)        # (ncells, npts, gdim)
@@ -341,21 +373,59 @@ def _build_2d(mesh, func, n, encoding):
     verts3d[:, :gdim] = cell_coords.reshape(-1, gdim).astype(np.float32)
 
     base = (np.arange(ncells, dtype=np.int32) * npts)[:, None, None]
-    tris = (base + ref_tris[None, :, :]).reshape(-1, 3)
-    _orient_tris_2d(verts3d, tris)
+    tris = (base + [[0,1,2]]).reshape(-1, 3)
+    
+    def bernstein_triangle(n):
+        from math import factorial
+        def b(x, y, i, j):
+            return (factorial(n) / (factorial(i) * factorial(j) * factorial(n - i - j))
+                    * x**i * y**j * (1 - x - y)**(n - i - j))
+    
+        idx = [(i, j) for i in range(n + 1) for j in range(n + 1 - i)]
+        M = np.array([[b(px / n, py / n, qx, qy) for qx, qy in idx] for px, py in idx])
+        return np.linalg.inv(M)
 
     if func is not None:
-        f_vis, _ = _interp_for_vis(func, mesh, n)
-        cell_vals = _per_cell_eval(f_vis, ref_pts)
-        funcdim = 1 if cell_vals.ndim == 2 else cell_vals.shape[-1]
-        vals = _flatten_funcvals(cell_vals)
+        vals = _per_cell_eval(func, ref_pts)
+        funcdim = 4
+        
+        ibvals = bernstein_triangle(n)
+        vals = vals.reshape(-1, npts, funcdim)
+        vals = vals.transpose(1, 0, 2)
+
+        BezierPnts = np.zeros( vals.shape )
+        for i in range(4):
+            BezierPnts[:,:,i] = ibvals @ vals[:, :, i]
+
+        funcmin = np.min(BezierPnts[:,:,3])
+        funcmax = np.max(BezierPnts[:,:,3])
+
+        pmin = [np.min(BezierPnts[:,:,i]) for i in range(3)]
+        pmax = [np.max(BezierPnts[:,:,i]) for i in range(3)]
+        center = [(pmin[i] + pmax[i]) / 2 for i in range(3)]
+        radius = np.linalg.norm([pmax[i] - pmin[i] for i in range(3)]) / 2
     else:
         vals = np.zeros(ncells * npts, dtype=np.float32)
         funcdim = 0
 
+    BezierPnts.transpose(1, 0, 2)
+        
+    data_2d = []    
+    for i in range(npts):
+        data_2d.append(encodeData(np.array(BezierPnts[i].flatten(), dtype=np.float32), np.float32, encoding))
+    print('data2d')
+
+    # data["vertices"]=  encodeData(verts3d, np.float32, self.encoding)
+    data["Bezier_trig_points"]= data_2d
+    data["Bezier_points"]= data_2d
+    data["funcmin"] = funcmin
+    data["funcmax"] = funcmax
+    data["mesh_center"]= center
+    data["mesh_radius"]= radius
+
     # Geometry edges = mesh boundary segments, sub-divided.
     segs = _build_2d_boundary_segments(mesh, n, npts, encoding)
-    return verts3d, tris, vals, funcdim, segs
+    # return verts3d, tris, data_2d, funcdim, segs
 
 
 def _build_2d_boundary_segments(mesh, n, npts, encoding):
@@ -552,9 +622,9 @@ def _build_3d_boundary_edges(mesh, ef, parent_verts, local_facets,
 def _func_minmax(func):
     if func is None:
         return 0.0, 0.0
-    vals = func.dat.data_ro
-    if vals.ndim > 1:
-        vals = np.linalg.norm(vals, axis=1)
+    vals = func.sub(3).dat.data_ro
+    # if vals.ndim > 1:
+        # vals = np.linalg.norm(vals, axis=1)
     return float(vals.min()), float(vals.max())
 
 
@@ -596,65 +666,41 @@ class FiredrakeScene(BaseWebGuiScene):
     """
 
     def __init__(self, obj, mesh=None, subdivision=None,
-                 colormap=_DEFAULT_COLORMAP, **kwargs):
+                 colormap=_DEFAULT_COLORMAP, order=1, **kwargs):
         self.obj = obj
         self._mesh_override = mesh
         self.subdivision = subdivision
         self.colormap = colormap
         self.kwargs = kwargs
         self.encoding = 'b64'
-
-    def _resolve(self):
-        mesh, func = _get_mesh_and_func(self.obj)
-        if self._mesh_override is not None:
-            mesh = self._mesh_override
-        n = self.subdivision or _default_subdivision(func, mesh)
-        n = max(1, min(_MAX_SUBDIVISION, int(n)))
-        return mesh, func, n
+        self.order = order
 
     def GetData(self, set_minmax=True):
-        mesh, func, n = self._resolve()
+        mesh, func, funcdim = _get_mesh_and_func(self.obj, self.order)
+        
         tdim = mesh.topological_dimension
 
-        if tdim == 2:
-            verts3d, tris, vals, funcdim, segs_enc = _build_2d(
-                mesh, func, n, self.encoding)
-        elif tdim == 3:
-            verts3d, tris, vals, funcdim, segs_enc = _build_3d_boundary(
-                mesh, func, n, self.encoding)
-        else:
-            raise ValueError(f"Unsupported topological dimension {tdim}")
-
-        vmin = verts3d.min(axis=0) if len(verts3d) else np.zeros(3)
-        vmax = verts3d.max(axis=0) if len(verts3d) else np.ones(3)
-        center = ((vmin + vmax) / 2).tolist()
-        radius = float(np.linalg.norm(vmax - vmin) / 2)
-
-        funcmin, funcmax = _func_minmax(func)
-
         d = {
-            "vertices": encodeData(verts3d, np.float32, self.encoding),
-            "nodal_function_values": encodeData(
-                vals if vals.size else np.zeros(1, dtype=np.float32),
-                np.float32, self.encoding),
-            "trigs": encodeData(tris, np.int32, self.encoding),
-            "segs": segs_enc,
             "edges": [],
             "mesh_dim": tdim,
-            "mesh_center": center,
-            "mesh_radius": radius,
             "funcdim": funcdim,
-            "order2d": 1,
-            "order3d": 1,
+            "order2d": self.order,
+            "order3d": self.order,
             "draw_surf": True,
             "draw_vol": False,
-            "show_wireframe": True,
+            "show_wireframe": False,
             "show_mesh": True,
             "is_complex": False,
             "autoscale": set_minmax,
-            "funcmin": funcmin,
-            "funcmax": funcmax,
         }
+
+        if tdim == 2:
+            _build_2d(d, mesh, func, self.order, self.encoding)
+        elif tdim == 3:
+            verts3d, tris, vals, funcdim, segs_enc = _build_3d_boundary(
+                mesh, func, self.order, self.encoding)
+        else:
+            raise ValueError(f"Unsupported topological dimension {tdim}")
 
         if tdim == 3:
             cnm = mesh.coordinates.cell_node_map().values.astype(np.int32)
@@ -682,11 +728,11 @@ class FiredrakeScene(BaseWebGuiScene):
         super().Redraw()
 
 
-def Draw(obj, mesh=None, subdivision=None, colormap=_DEFAULT_COLORMAP, **kwargs):
+def Draw(obj, mesh=None, subdivision=None, colormap=_DEFAULT_COLORMAP, order=1, **kwargs):
     """Draw a Firedrake Mesh or Function in Jupyter."""
     width = kwargs.pop("width", None)
     height = kwargs.pop("height", None)
     scene = FiredrakeScene(obj, mesh=mesh, subdivision=subdivision,
-                           colormap=colormap, **kwargs)
+            colormap=colormap, order=order, **kwargs)
     scene.Draw(width=width, height=height)
     return scene
