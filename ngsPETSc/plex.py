@@ -72,7 +72,7 @@ def buildSimplices(plex, points=None):
     return np.array(T, dtype=PETSc.IntType)
 
 
-def addSimplices(ngMesh, dim, index, data, project_geometry, isoccgeom, edgenr_mapping):
+def addSimplices(ngMesh, dim, index, data, project_geometry, isoccgeom):
     """
     Add simplices to a Netgen mesh
 
@@ -82,24 +82,21 @@ def addSimplices(ngMesh, dim, index, data, project_geometry, isoccgeom, edgenr_m
     :arg data: a numpy.array with the vertices of each simplex
     :project_geometry: whether to project points to the geometry
     :isoccgeom: whether we have an OCCGeometry, required to decide index conventions
-    :edgenr_mapping: a dict mapping from region index to edgenr
 
     """
     if len(data) == 0:
         return
     if dim == 1:
         edgenr = index-1 if isoccgeom else index
-        if edgenr_mapping is not None:
-            edgenr = edgenr_mapping.get(index, edgenr)
-        for edge in data:
-            ngMesh.Add(ngm.Element1D(list(edge+1), index=index, edgenr=edgenr),
-                       project_geominfo=project_geometry)
-    else:
-        if dim == 2:
-            surfnr = index if isoccgeom else index-1
-            index = ngMesh.Add(ngm.FaceDescriptor(bc=index, surfnr=surfnr))
-        ngMesh.AddElements(dim=dim, index=index, data=data, base=0,
-                           project_geometry=project_geometry)
+        d = ngm.EdgeDescriptor()
+        d.index = index
+        d.edgenr = edgenr
+        index = ngMesh.Add(d)
+    elif dim == 2:
+        surfnr = index if isoccgeom else index-1
+        index = ngMesh.Add(ngm.FaceDescriptor(bc=index, surfnr=surfnr))
+    ngMesh.AddElements(dim=dim, index=index, data=data, base=0,
+                       project_geometry=project_geometry)
 
 
 def createNetgenMesh(plex, geo):
@@ -114,10 +111,8 @@ def createNetgenMesh(plex, geo):
     tdim = plex.getDimension()
     gdim = plex.getCoordinateDim()
     ngMesh = ngm.Mesh(dim=gdim)
-    edgenr_mapping = None
     if geo is not None:
         if isinstance(geo, ngm.Mesh):
-            edgenr_mapping = {e.index: e.edgenr for e in geo.Elements1D()}
             geo = geo.GetGeometry()
         ngMesh.SetGeometry(geo)
         geoInfo = True
@@ -153,7 +148,7 @@ def createNetgenMesh(plex, geo):
             points = plex.getStratumIS(labelName, index).indices
             points = points[np.logical_and(pStart <= points, points < pEnd)]
             T = buildSimplices(plex, points=points)
-            addSimplices(ngMesh, depth, index, T, geoInfo, isoccgeom, edgenr_mapping)
+            addSimplices(ngMesh, depth, index, T, geoInfo, isoccgeom)
 
     # Add unlabeled cells
     labelName = codim_label[0]
@@ -166,7 +161,7 @@ def createNetgenMesh(plex, geo):
         points = None
     index = plex.getLabelSize(labelName) + 1
     T = buildSimplices(plex, points=points)
-    addSimplices(ngMesh, tdim, index, T, geoInfo, isoccgeom, edgenr_mapping)
+    addSimplices(ngMesh, tdim, index, T, geoInfo, isoccgeom)
 
     plex.setBasicAdjacency(*adjacency)
     return ngMesh
