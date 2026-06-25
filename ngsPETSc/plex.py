@@ -2,7 +2,6 @@
 This module contains all the functions related to wrapping NGSolve meshes to
 PETSc DMPlex using the petsc4py interface.
 '''
-import warnings
 import numpy as np
 from petsc4py import PETSc
 from mpi4py import MPI
@@ -172,17 +171,73 @@ def createNetgenMesh(plex, geo):
     return ngMesh
 
 
+def buildPeriodicVertexMap(ngMesh):
+    """
+    Build the vertex renumbering that collapses periodically identified vertices.
+
+    Netgen stores a periodic mesh as an ordinary (non-periodic) mesh of the domain
+    plus a list of identification pairs ``(p1, p2)`` of vertices on opposite
+    periodic boundaries. To obtain a topologically periodic DMPlex, every set of
+    identified vertices must be merged into a single representative vertex. All
+    identifications are treated as periodic (Netgen's Python ``Mesh`` does not
+    expose the identification type).
+
+    :arg ngMesh: the serial Netgen mesh object
+
+    :returns: a tuple ``(old_to_new, survivors, identified)`` where
+        ``old_to_new`` maps each 0-based Netgen vertex index to a dense 0-based
+        index in the merged vertex numbering, ``survivors`` is the sorted array of
+        original 0-based indices of the surviving (representative) vertices, and
+        ``identified`` is the set of 0-based vertex indices that participate in an
+        identification (used to drop the periodic seam from the boundary labels).
+    """
+    nv = len(ngMesh.Coordinates())
+    # Union-find over the identified vertices, keeping the smallest index in each
+    # group as its representative for a deterministic numbering.
+    parent = np.arange(nv, dtype=np.int64)
+
+    def find(i):
+        root = i
+        while parent[root] != root:
+            root = parent[root]
+        while parent[i] != root:
+            parent[i], i = root, parent[i]
+        return root
+
+    identified = set()
+    for p1, p2 in ngMesh.GetIdentifications():
+        # GetIdentifications returns pairs of PointId objects whose .nr is 1-based.
+        a, b = p1.nr - 1, p2.nr - 1
+        identified.add(a)
+        identified.add(b)
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+
+    roots = np.array([find(i) for i in range(nv)], dtype=np.int64)
+    survivors = np.unique(roots)
+    compact = np.empty(nv, dtype=PETSc.IntType)
+    compact[survivors] = np.arange(survivors.size, dtype=PETSc.IntType)
+    old_to_new = compact[roots]
+    return old_to_new, survivors, identified
+
+
 def createPETScDMPlex(ngMesh, comm, name):
     """
     Create a PETSc DMPlex from a Netgen/NGSolve mesh object
+
+    Periodic Netgen meshes are supported: vertices that Netgen identifies across
+    periodic boundaries are merged so that the resulting DMPlex is topologically
+    periodic. The geometry is left "wrapped" at this stage (only the representative
+    vertex coordinates are stored); a discontinuous coordinate field carrying the
+    un-wrapped per-cell coordinates is attached downstream (e.g. by Firedrake).
 
     :arg ngMesh: the serial Netgen mesh object to be converted
     :arg comm: the MPI.Comm object
 
     :returns: a tuple of Netgen mesh and DMPlex
     """
-    if len(ngMesh.GetIdentifications()) > 0:
-        warnings.warn("Periodic meshes are not supported by ngsPETSc" , RuntimeWarning)
+    periodic = len(ngMesh.GetIdentifications()) > 0
     els = {
         0: ngMesh.Elements0D,
         1: ngMesh.Elements1D,
@@ -205,6 +260,20 @@ def createPETScDMPlex(ngMesh, comm, name):
         # its empty coordinate array with PETSc.RealType for the same reason).
         V = ngMesh.Coordinates().astype(PETSc.RealType, copy=False)
         T = trim_util(cells_np["nodes"])
+        if periodic:
+            # Merge periodically identified vertices to obtain a periodic topology.
+            old_to_new, survivors, identified = buildPeriodicVertexMap(ngMesh)
+            V = V[survivors]
+            T = old_to_new[T]
+            # A cell that contains an identified vertex pair spans a full period and
+            # collapses to a degenerate cell once the vertices are merged. This only
+            # happens when the mesh is too coarse along the periodic direction.
+            degenerate = np.array([len(np.unique(row)) < T.shape[1] for row in T])
+            if degenerate.any():
+                raise ValueError(
+                    f"{int(degenerate.sum())} cell(s) span a full period and become "
+                    "degenerate when the periodic vertices are merged. Refine the "
+                    "mesh along the periodic direction(s).")
         plex = PETSc.DMPlex().createFromCellList(tdim, T, V, comm=comm)
         vStart, _ = plex.getDepthStratum(0)
         codim_label = {0: CELL_SETS_LABEL, 1: FACE_SETS_LABEL, 2: EDGE_SETS_LABEL}
@@ -212,7 +281,16 @@ def createPETScDMPlex(ngMesh, comm, name):
             if codim == 0 and (1 == cells_np["index"]).all():
                 continue
             for e in els[tdim - codim]():
-                join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
+                vnums = [v.nr-1 for v in e.vertices]
+                if periodic and codim > 0:
+                    # A boundary entity all of whose vertices are identified lies on
+                    # the periodic seam: after merging it becomes interior, so it must
+                    # not be labelled as a boundary (mirrors Firedrake's periodic
+                    # meshes, which leave the periodic boundary ids empty).
+                    if all(vn in identified for vn in vnums):
+                        continue
+                    vnums = [old_to_new[vn] for vn in vnums]
+                join = plex.getFullJoin([vStart+vn for vn in vnums])
                 plex.setLabelValue(codim_label[codim], join[0], int(e.index))
     else:
         T = np.empty((0, tdim + 1), dtype=PETSc.IntType)
