@@ -85,8 +85,6 @@ def addSimplices(ngMesh, dim, index, descriptor, data, project_geometry, is_occg
     :arg is_occgeom: whether we have an OCCGeometry, required to decide index conventions
 
     """
-    if len(data) == 0:
-        return
     if descriptor is not None:
         index = ngMesh.Add(descriptor)
     elif dim == 1:
@@ -98,7 +96,8 @@ def addSimplices(ngMesh, dim, index, descriptor, data, project_geometry, is_occg
     elif dim == 2:
         surfnr = index if is_occgeom else index-1
         index = ngMesh.Add(ngm.FaceDescriptor(bc=index, surfnr=surfnr))
-
+    if len(data) == 0:
+        return
     ngMesh.AddElements(dim=dim, index=index, data=data, base=0,
                        project_geometry=project_geometry)
 
@@ -142,19 +141,16 @@ def createNetgenMesh(plex, geo):
 
     # Add labeled entities
     codim_label = {0: CELL_SETS_LABEL, 1: FACE_SETS_LABEL, 2: EDGE_SETS_LABEL}
-    for depth in range(1, tdim+1):
-        codim = tdim - depth
+    for codim in range(tdim):
+        depth = tdim - codim
         pStart, pEnd = plex.getHeightStratum(codim)
 
         labelName = codim_label[codim]
         labelIds = plex.getLabelIdIS(labelName).indices
-        for i, index in enumerate(labelIds):
-            if plex.getStratumSize(labelName, index) == 0:
-                continue
+        for index in sorted(labelIds):
+            descr = None
             if depth in descriptors:
-                descr = descriptors[depth][i]
-            else:
-                descr = None
+                descr = descriptors[depth][index-1]
             points = plex.getStratumIS(labelName, index).indices
             points = points[np.logical_and(pStart <= points, points < pEnd)]
             T = buildSimplices(plex, points=points)
