@@ -408,7 +408,10 @@ class GeometricModel:
             # All function spaces (per cell type) shares the same index map.
             # We use the first one
             if hasattr(first_space, "dofmaps"):
-                space_dm = first_space.dofmaps[0]
+                if callable(first_space.dofmaps):
+                    space_dm = first_space.dofmaps(0)
+                else:
+                    space_dm = first_space.dofmaps[0]
             else:
                 space_dm = first_space._cpp_object.dofmaps(0)
             space_im = space_dm.index_map
