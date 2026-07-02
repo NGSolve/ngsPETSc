@@ -578,7 +578,10 @@ class GeometricModel:
             ]
             X_space = function_spaces[0]
             if hasattr(X_space, "dofmaps"):
-                geom_imap = X_space.dofmaps[0].index_map
+                if callable(X_space.dofmaps):
+                    geom_imap = X_space.dofmaps(0).index_map
+                else:
+                    geom_imap = X_space.dofmaps[0].index_map
             else:
                 geom_imap = X_space._cpp_object.dofmaps(0).index_map
             local_node_indices = np.arange(
@@ -590,7 +593,10 @@ class GeometricModel:
             _xdofs = []
             for i in range(len(cells)):
                 if hasattr(X_space, "dofmaps"):
-                    space_dm = X_space.dofmaps[i]
+                    if callable(X_space.dofmaps):
+                        space_dm = X_space.dofmaps(i)
+                    else:
+                        space_dm = X_space.dofmaps[i]
                     _xdofs.append(space_dm.list.flatten())
                 else:
                     space_dm = X_space._cpp_object.dofmaps(i)
