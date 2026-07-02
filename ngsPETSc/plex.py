@@ -72,29 +72,33 @@ def buildSimplices(plex, points=None):
     return np.array(T, dtype=PETSc.IntType)
 
 
-def addSimplices(ngMesh, dim, index, data, project_geometry, isoccgeom):
+def addSimplices(ngMesh, dim, index, descriptor, data, project_geometry, is_occgeom):
     """
     Add simplices to a Netgen mesh
 
     :arg ngMesh: the Netgen Mesh
     :arg dim: the simplex dimension
     :arg index: the region index
+    :arg descriptor: the region descriptor
     :arg data: a numpy.array with the vertices of each simplex
-    :project_geometry: whether to project points to the geometry
-    :isoccgeom: whether we have an OCCGeometry, required to decide index conventions
+    :arg project_geometry: whether to project points to the geometry
+    :arg is_occgeom: whether we have an OCCGeometry, required to decide index conventions
 
     """
     if len(data) == 0:
         return
-    if dim == 1:
-        edgenr = index-1 if isoccgeom else index
+    if descriptor is not None:
+        index = ngMesh.Add(descriptor)
+    elif dim == 1:
+        edgenr = index-1 if is_occgeom else index
         d = ngm.EdgeDescriptor()
         d.index = index
         d.edgenr = edgenr
         index = ngMesh.Add(d)
     elif dim == 2:
-        surfnr = index if isoccgeom else index-1
+        surfnr = index if is_occgeom else index-1
         index = ngMesh.Add(ngm.FaceDescriptor(bc=index, surfnr=surfnr))
+
     ngMesh.AddElements(dim=dim, index=index, data=data, base=0,
                        project_geometry=project_geometry)
 
@@ -111,14 +115,17 @@ def createNetgenMesh(plex, geo):
     tdim = plex.getDimension()
     gdim = plex.getCoordinateDim()
     ngMesh = ngm.Mesh(dim=gdim)
+    descriptors = {}
     if geo is not None:
         if isinstance(geo, ngm.Mesh):
+            descriptors[1] = geo.EdgeDescriptors()
+            descriptors[2] = geo.FaceDescriptors()
             geo = geo.GetGeometry()
         ngMesh.SetGeometry(geo)
         geoInfo = True
     else:
         geoInfo = False
-    isoccgeom = isinstance(geo, OCCGeometry)
+    is_occgeom = isinstance(geo, OCCGeometry)
 
     # Add vertices
     vStart, vEnd = plex.getDepthStratum(0)
@@ -141,14 +148,17 @@ def createNetgenMesh(plex, geo):
 
         labelName = codim_label[codim]
         labelIds = plex.getLabelIdIS(labelName).indices
-        for index in labelIds:
+        for i, index in enumerate(labelIds):
             if plex.getStratumSize(labelName, index) == 0:
                 continue
-
+            if depth in descriptors:
+                descr = descriptors[depth][i]
+            else:
+                descr = None
             points = plex.getStratumIS(labelName, index).indices
             points = points[np.logical_and(pStart <= points, points < pEnd)]
             T = buildSimplices(plex, points=points)
-            addSimplices(ngMesh, depth, index, T, geoInfo, isoccgeom)
+            addSimplices(ngMesh, depth, index, descr, T, geoInfo, is_occgeom)
 
     # Add unlabeled cells
     labelName = codim_label[0]
@@ -161,7 +171,7 @@ def createNetgenMesh(plex, geo):
         points = None
     index = plex.getLabelSize(labelName) + 1
     T = buildSimplices(plex, points=points)
-    addSimplices(ngMesh, tdim, index, T, geoInfo, isoccgeom)
+    addSimplices(ngMesh, tdim, index, None, T, geoInfo, is_occgeom)
 
     plex.setBasicAdjacency(*adjacency)
     return ngMesh
