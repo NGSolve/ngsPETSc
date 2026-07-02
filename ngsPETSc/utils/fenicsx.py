@@ -347,14 +347,20 @@ class GeometricModel:
             for cell in cells
         ]
         if is_mixed_mesh:
-            if hasattr(self._mesh.geometry._cpp_object, "cmaps"):
-                _cmap = self._mesh.geometry._cpp_object.cmaps
+            if hasattr(self._mesh.geometry, "cmaps"):
+                _cmap = self._mesh.geometry.cmaps
+                orders = [
+                    cmap.degree for cmap in _cmap
+                ]
             else:
-                _cmap = self._mesh.geometry._cpp_object.cmap
-            orders = [
-                _cmap(i).degree
-                for i in range(num_index_maps)
-            ]
+                if hasattr(self._mesh.geometry._cpp_object, "cmaps"):
+                    _cmap = self._mesh.geometry._cpp_object.cmaps
+                else:
+                    _cmap = self._mesh.geometry._cpp_object.cmap
+                orders = [
+                    _cmap(i).degree
+                    for i in range(num_index_maps)
+                ]
             assert len(np.unique(orders)) == 1
             if orders[0] == order:
                 return self._mesh
@@ -387,23 +393,33 @@ class GeometricModel:
                 for element, domain in zip(elements, domains)
             ]
         else:
-            _cmap = self._mesh.geometry.cmap
+            if hasattr(self._mesh.geometry, "cmaps"):
+                _cmap = self._mesh.geometry.cmaps[0]
+            else:
+                _cmap = self._mesh.geometry.cmap
             cmap = _cmap if not callable(_cmap) else _cmap()
             if cmap.degree == order:
                 return self._mesh
             function_spaces = [dolfinx.fem.functionspace(self._mesh, elements[0])]
 
         # Prepare array that will host the coordinates of the curved mesh
+        first_space = function_spaces[0]
         if is_mixed_mesh:
             # All function spaces (per cell type) shares the same index map.
             # We use the first one
-            space_dm = function_spaces[0]._cpp_object.dofmaps(0)
+            if hasattr(first_space, "dofmaps"):
+                if callable(first_space.dofmaps):
+                    space_dm = first_space.dofmaps(0)
+                else:
+                    space_dm = first_space.dofmaps[0]
+            else:
+                space_dm = first_space._cpp_object.dofmaps(0)
             space_im = space_dm.index_map
             x = np.zeros(
                 (space_im.size_local + space_im.num_ghosts, geom_dim), dtype=np.float64
             )
         else:
-            x = function_spaces[0].tabulate_dof_coordinates()[:, :geom_dim]
+            x = first_space.tabulate_dof_coordinates()[:, :geom_dim]
 
         # Extract global number of cells in the NetGen mesh
         dim_to_element_getter = _dim_to_element_wrapper(self.ngmesh)
@@ -469,14 +485,21 @@ class GeometricModel:
             # Get coordinates of higher order space on linarized geometry
             if is_mixed_mesh:
                 # Use reference space points here to push forward in FEniCSx
-                if hasattr(self._mesh.geometry._cpp_object, "cmaps"):
-                    cmap = self._mesh.geometry._cpp_object.cmaps(i)
+                if hasattr(self._mesh.geometry, "cmaps"):
+                    cmap = self._mesh.geometry.cmaps[i]
+                    dofmap = self._mesh.geometry.dofmaps[i]
+                    space_dm = X_space.dofmaps[i]
+                    cell_node_map = space_dm.list
                 else:
-                    cmap = self._mesh.geometry._cpp_object.cmap(i)
-                dofmap = self._mesh.geometry._cpp_object.dofmaps(i)
+                    if hasattr(self._mesh.geometry._cpp_object, "cmaps"):
+                        cmap = self._mesh.geometry._cpp_object.cmaps(i)
+                    else:
+                        cmap = self._mesh.geometry._cpp_object.cmap(i)
+                    dofmap = self._mesh.geometry._cpp_object.dofmaps(i)
+                    space_dm = X_space._cpp_object.dofmaps(i)
+                    cell_node_map = space_dm.map()
+
                 coords = self._mesh.geometry.x[dofmap][:, :, :geom_dim].copy()
-                space_dm = X_space._cpp_object.dofmaps(i)
-                cell_node_map = space_dm.map()
                 num_cells_local = imap.size_local + imap.num_ghosts
                 assert num_cells_local == coords.shape[0]
                 assert element.basix_element.interpolation_is_identity
@@ -554,7 +577,13 @@ class GeometricModel:
                 for c in cells
             ]
             X_space = function_spaces[0]
-            geom_imap = X_space._cpp_object.dofmaps(0).index_map
+            if hasattr(X_space, "dofmaps"):
+                if callable(X_space.dofmaps):
+                    geom_imap = X_space.dofmaps(0).index_map
+                else:
+                    geom_imap = X_space.dofmaps[0].index_map
+            else:
+                geom_imap = X_space._cpp_object.dofmaps(0).index_map
             local_node_indices = np.arange(
                 geom_imap.size_local + geom_imap.num_ghosts, dtype=np.int32
             )
@@ -563,8 +592,15 @@ class GeometricModel:
 
             _xdofs = []
             for i in range(len(cells)):
-                space_dm = X_space._cpp_object.dofmaps(i)
-                _xdofs.append(space_dm.map().flatten())
+                if hasattr(X_space, "dofmaps"):
+                    if callable(X_space.dofmaps):
+                        space_dm = X_space.dofmaps(i)
+                    else:
+                        space_dm = X_space.dofmaps[i]
+                    _xdofs.append(space_dm.list.flatten())
+                else:
+                    space_dm = X_space._cpp_object.dofmaps(i)
+                    _xdofs.append(space_dm.map().flatten())
             xdofs = geom_imap.local_to_global(np.hstack(_xdofs).astype(np.int32))
 
             # Sort geometry in the same order as the sorted global dof indices
@@ -674,7 +710,10 @@ def extract_element_tags(
 
     tdim = dolfinx_mesh.topology.dim
     assert 0 <= dim <= tdim
-    _cmap = dolfinx_mesh.geometry.cmap
+    if hasattr(dolfinx_mesh.geometry, "cmaps"):
+        _cmap = dolfinx_mesh.geometry.cmaps[0]
+    else:
+        _cmap = dolfinx_mesh.geometry.cmap
     cmap = _cmap if not callable(_cmap) else _cmap()
     assert cmap.degree == 1, (
         "Can only extract element tags from linear grids"
