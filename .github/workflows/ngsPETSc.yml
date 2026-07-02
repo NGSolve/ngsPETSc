@@ -192,12 +192,15 @@ jobs:
 
   fenicsx-stable:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ["v0.10.0-r1", "stable"]
     container:
-      image: ghcr.io/fenics/dolfinx/dolfinx:stable
+      image: ghcr.io/fenics/dolfinx/dolfinx:${{ matrix.version }}
     timeout-minutes: 10 # FIXME: Reduce this once we don't need to install petsc4py
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Install Netgen and ngsPETSc
         run: |
