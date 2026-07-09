@@ -1,27 +1,86 @@
 name: Publish release
 
-# Reusable workflow. It is not triggered directly: the "Tag on version bump"
-# workflow creates the release tag from a merged version bump and then calls
-# this workflow (workflow_call) to build, publish to PyPI and create the
-# GitHub release for that tag.
+# A release happens when the version in pyproject.toml ([tool.poetry] version)
+# changes on main: this workflow tags it vX.Y.Z, builds the distributions,
+# publishes them to PyPI and creates the GitHub release. It can also be run
+# manually (workflow_dispatch) to (re)publish whatever version pyproject.toml
+# currently declares -- useful to recover a release whose upload failed.
+#
+# IMPORTANT: every job lives in THIS single workflow on purpose. PyPI Trusted
+# Publishing does NOT support reusable workflows, so the PyPI upload job must
+# run in the same workflow file that PyPI is configured to trust (release.yml).
 on:
-  workflow_call:
-    inputs:
-      ref:
-        description: The tag (vX.Y.Z) to build and release.
-        required: true
-        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - pyproject.toml
+  workflow_dispatch:
 
 jobs:
+  check:
+    name: Resolve release version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      release: ${{ steps.resolve.outputs.release }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve version and decide whether to release
+        id: resolve
+        run: |
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['tool']['poetry']['version'])")
+          TAG="v${VERSION}"
+          echo "Release version in pyproject.toml is $VERSION (tag $TAG)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            EXISTS=true
+          else
+            EXISTS=false
+          fi
+          # Release when the tag is new (a version bump), or always on a manual run.
+          if [ "$EXISTS" = "false" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already exists and this is not a manual run -- nothing to release."
+          fi
+
+      - name: Create and push tag if needed
+        if: steps.resolve.outputs.release == 'true'
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, reusing it."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+            echo "Created and pushed $TAG."
+          fi
+
   build:
+    name: Build distributions
+    needs: check
+    if: needs.check.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
-          # Build the tagged commit created by the caller.
-          ref: ${{ inputs.ref }}
-          # Full history and tags are required for poetry-dynamic-versioning
-          # to derive the package version from the git tag.
+          # Build the release tag so poetry-dynamic-versioning derives the
+          # correct version from it.
+          ref: ${{ needs.check.outputs.tag }}
           fetch-depth: 0
 
       - name: Set up Python
@@ -41,7 +100,8 @@ jobs:
 
   pypi_publish:
     name: Upload release to PyPI
-    needs: build
+    needs: [check, build]
+    if: needs.check.outputs.release == 'true'
     runs-on: ubuntu-latest
     environment:
       name: release
@@ -59,14 +119,15 @@ jobs:
 
   github_release:
     name: Create GitHub Release
-    needs: build
+    needs: [check, build]
+    if: needs.check.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.check.outputs.tag }}
           fetch-depth: 0
 
       - uses: actions/download-artifact@v4
@@ -74,8 +135,14 @@ jobs:
           name: dist
           path: dist/
 
-      - name: Create GitHub release and upload dist files
+      - name: Create GitHub release (or upload to an existing one)
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.ref }}
-        run: gh release create --title "$TAG" --generate-notes "$TAG" dist/*
+          TAG: ${{ needs.check.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists -- uploading dist files."
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create --title "$TAG" --generate-notes "$TAG" dist/*
+          fi
