@@ -1,18 +1,28 @@
 name: Publish release
 
+# Reusable workflow. It is not triggered directly: the "Tag on version bump"
+# workflow creates the release tag from a merged version bump and then calls
+# this workflow (workflow_call) to build, publish to PyPI and create the
+# GitHub release for that tag.
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      version:
-        description: The version number to release, this should include the 'v' prefix
-        type: string
+      ref:
+        description: The tag (vX.Y.Z) to build and release.
         required: true
+        type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Build the tagged commit created by the caller.
+          ref: ${{ inputs.ref }}
+          # Full history and tags are required for poetry-dynamic-versioning
+          # to derive the package version from the git tag.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -21,8 +31,8 @@ jobs:
 
       - name: Build source and wheel distributions
         run: |
-          pip install poetry
-          poetry build
+          pip install build
+          python -m build
 
       - uses: actions/upload-artifact@v4
         with:
@@ -56,6 +66,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
 
       - uses: actions/download-artifact@v4
@@ -66,4 +77,5 @@ jobs:
       - name: Create GitHub release and upload dist files
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create --title ${{ inputs.version }} --generate-notes ${{ inputs.version }} dist/*
+          TAG: ${{ inputs.ref }}
+        run: gh release create --title "$TAG" --generate-notes "$TAG" dist/*

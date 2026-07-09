@@ -1,10 +1,12 @@
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=2.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+build-backend = "poetry_dynamic_versioning.backend"
 
 [project]
 name = "ngsPETSc"
-version = "0.2.0"
+# Version is derived from the git tag at build time by poetry-dynamic-versioning.
+# The placeholder below is only used for local checkouts without tags.
+dynamic = ["version"]
 description = "NGSolve/Netgen interface to PETSc"
 authors = [
   { name = "Umberto Zerbinati", email = "umberto.zerbinati@maths.ox.ac.uk" },
@@ -41,7 +43,24 @@ Repository = "https://github.com/NGSolve/ngsPETSc"
 firedrake = ["firedrake"]
 
 [tool.poetry]
+# ---------------------------------------------------------------------------
+# RELEASE VERSION -- this is the single source of truth for releases.
+# Bump this in a PR; when it merges to main the "Tag on version bump" workflow
+# creates the matching git tag (vX.Y.Z), which triggers the PyPI release.
+# At build time poetry-dynamic-versioning derives the actual package version
+# from that git tag, so the wheel version and the tag can never disagree.
+# ---------------------------------------------------------------------------
 packages = [{ include = "ngsPETSc" }]
+version = "0.2.0"
+
+[tool.poetry-dynamic-versioning]
+enable = true
+vcs = "git"
+style = "pep440"
+# When building from a checkout without any matching tag (e.g. a shallow clone
+# or an untagged dev build), fall back to this version instead of failing.
+# Keep it in step with [tool.poetry] version above.
+fallback-version = "0.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3"
