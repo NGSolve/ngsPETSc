@@ -13,6 +13,14 @@ on:
 
     workflow_dispatch:
 
+# The package version is derived from git tags at build time by
+# poetry-dynamic-versioning. CI checkouts are shallow, tag-less and run inside
+# containers where git refuses the working tree ("dubious ownership"), so a
+# plain `pip install .` would fail version detection. Bypass it here: the
+# version is irrelevant for linting and testing.
+env:
+  POETRY_DYNAMIC_VERSIONING_BYPASS: "0.0.0"
+
 jobs:
   lint:
     runs-on: ubuntu-latest
