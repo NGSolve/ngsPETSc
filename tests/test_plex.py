@@ -78,6 +78,51 @@ def test_plex_ngs_3d():
     assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
 
 @pytest.mark.mpi_skip
+def test_ngs_plex_periodic_2d():
+    '''
+    Testing the conversion of a periodic Netgen mesh: the identified vertices
+    must be merged so that the resulting DMPlex is topologically periodic.
+    '''
+    from netgen.occ import Rectangle, OCCGeometry, X, gp_Trsf, gp_Vec
+    from netgen.meshing import IdentificationType
+    shape = Rectangle(1, 1).Face()
+    shape.edges.Min(X).Identify(shape.edges.Max(X), "periodic",
+                                IdentificationType.PERIODIC,
+                                gp_Trsf.Translation(gp_Vec(1, 0, 0)))
+    ngmesh = OCCGeometry(shape, dim=2).GenerateMesh(maxh=0.3)
+    nverts = len(ngmesh.Coordinates())
+    npairs = len(ngmesh.GetIdentifications())
+    assert npairs > 0
+    plex = MeshMapping(ngmesh).petscPlex
+    vStart, vEnd = plex.getDepthStratum(0)
+    # Each identified pair collapses to a single vertex.
+    assert (vEnd - vStart) == nverts - npairs
+    # The number of cells is unchanged by the merge.
+    cStart, cEnd = plex.getHeightStratum(0)
+    assert (cEnd - cStart) == len(ngmesh.Elements2D())
+
+@pytest.mark.mpi_skip
+def test_ngs_plex_periodic_3d():
+    '''
+    Testing the conversion of a periodic Netgen mesh in three dimensions.
+    '''
+    from netgen.occ import Box, OCCGeometry, X, gp_Trsf, gp_Vec, Pnt
+    from netgen.meshing import IdentificationType
+    box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
+    box.faces.Min(X).Identify(box.faces.Max(X), "periodic",
+                              IdentificationType.PERIODIC,
+                              gp_Trsf.Translation(gp_Vec(1, 0, 0)))
+    ngmesh = OCCGeometry(box).GenerateMesh(maxh=0.2)
+    nverts = len(ngmesh.Coordinates())
+    npairs = len(ngmesh.GetIdentifications())
+    assert npairs > 0
+    plex = MeshMapping(ngmesh).petscPlex
+    vStart, vEnd = plex.getDepthStratum(0)
+    assert (vEnd - vStart) == nverts - npairs
+    cStart, cEnd = plex.getHeightStratum(0)
+    assert (cEnd - cStart) == len(ngmesh.Elements3D())
+
+@pytest.mark.mpi_skip
 def test_plex_transform_alfeld_2d():
     '''
     Testing the use of the PETSc Alfeld transform
@@ -116,5 +161,7 @@ if __name__ == '__main__':
     test_plex_ngs_2d()
     test_ngs_plex_3d()
     test_plex_ngs_3d()
+    test_ngs_plex_periodic_2d()
+    test_ngs_plex_periodic_3d()
     test_plex_transform_alfeld_2d()
     test_plex_transform_alfeld_3d()
