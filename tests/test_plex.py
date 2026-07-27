@@ -7,6 +7,7 @@ from netgen.geom2d import unit_square
 from netgen.csg import unit_cube
 
 from petsc4py import PETSc
+from mpi4py import MPI
 import pytest
 
 from ngsPETSc import MeshMapping
@@ -17,6 +18,23 @@ def _plex_number_of_points(plex, h=0, local=False):
     if not local:
         np = plex.getComm().tompi4py().allreduce(np)
     return np
+
+
+def test_ngs_plex_root_only():
+    """Construct and refine an interpolated DMPlex from rank-zero Netgen data."""
+    comm = MPI.COMM_WORLD
+    mesh = unit_square.GenerateMesh(maxh=1.) if comm.rank == 0 else None
+    plex = MeshMapping(mesh, comm=comm).petscPlex
+
+    assert plex.getDimension() == 2
+    assert _plex_number_of_points(plex, h=0) > 0
+    assert _plex_number_of_points(plex, h=1) > 0
+
+    coarse_cells = _plex_number_of_points(plex, h=0)
+    plex.setRefinementUniform(True)
+    refined = plex.refine()
+    assert _plex_number_of_points(refined, h=0) == 4 * coarse_cells
+
 
 @pytest.mark.mpi_skip
 def test_ngs_plex_2d():

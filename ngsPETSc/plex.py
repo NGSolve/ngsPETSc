@@ -16,7 +16,7 @@ except ImportError:
         "dummy class"
         class comp:
             "dummy class"
-            Mesh = type(None)
+            Mesh = type("_MissingNGSolveMesh", (), {})
 
 FACE_SETS_LABEL = "Face Sets"
 CELL_SETS_LABEL = "Cell Sets"
@@ -38,13 +38,20 @@ class MeshMapping:
         elif isinstance(comm, PETSc.Comm):
             comm = comm.tompi4py()
 
+        source_type = None
         if isinstance(mesh, ngs.comp.Mesh):
             mesh = mesh.ngmesh
+        if comm.rank == 0:
+            if isinstance(mesh, ngm.Mesh):
+                source_type = "netgen"
+            elif isinstance(mesh, PETSc.DMPlex):
+                source_type = "plex"
+        source_type = comm.bcast(source_type, root=0)
 
-        if isinstance(mesh, ngm.Mesh):
+        if source_type == "netgen":
             ngmesh = mesh
             plex = createPETScDMPlex(ngmesh, comm, name)
-        elif isinstance(mesh, PETSc.DMPlex):
+        elif source_type == "plex":
             plex = mesh
             ngmesh = createNetgenMesh(plex, geo)
         else:
@@ -52,7 +59,10 @@ class MeshMapping:
         self.petscPlex = plex
         self.ngMesh = ngmesh
         self.comm = comm
-        self.geo = self.ngMesh.GetGeometry()
+        self.geo = (
+            self.ngMesh.GetGeometry()
+            if source_type == "plex" or comm.rank == 0 else None
+        )
         self.geoInfo = bool(self.geo)
 
 
@@ -180,23 +190,28 @@ def createPETScDMPlex(ngMesh, comm, name):
     :arg ngMesh: the serial Netgen mesh object to be converted
     :arg comm: the MPI.Comm object
 
-    :returns: a tuple of Netgen mesh and DMPlex
+    :returns: the interpolated PETSc DMPlex
     """
-    if len(ngMesh.GetIdentifications()) > 0:
-        warnings.warn("Periodic meshes are not supported by ngsPETSc" , RuntimeWarning)
-    els = {
-        0: ngMesh.Elements0D,
-        1: ngMesh.Elements1D,
-        2: ngMesh.Elements2D,
-        3: ngMesh.Elements3D,
-    }
-    gdim = ngMesh.dim
-    tdim = gdim
-    cells = els[tdim]()
-    while len(cells) == 0 and tdim > 0:
-        tdim -= 1
+    if comm.rank == 0:
+        els = {
+            0: ngMesh.Elements0D,
+            1: ngMesh.Elements1D,
+            2: ngMesh.Elements2D,
+            3: ngMesh.Elements3D,
+        }
+        if len(ngMesh.GetIdentifications()) > 0:
+            warnings.warn("Periodic meshes are not supported by ngsPETSc", RuntimeWarning)
+        gdim = ngMesh.dim
+        tdim = gdim
         cells = els[tdim]()
-    tdim = comm.bcast(tdim, root=0)
+        while len(cells) == 0 and tdim > 0:
+            tdim -= 1
+            cells = els[tdim]()
+    else:
+        gdim = None
+        tdim = None
+        cells = None
+    gdim, tdim = comm.bcast((gdim, tdim), root=0)
     if comm.rank == 0:
         cells_np = cells.NumPy()
         # Netgen always stores coordinates as float64. createFromCellList performs
