@@ -266,15 +266,25 @@ class GeometricModel:
             ]
             T = [Ti.flatten().copy() for Ti in T]
             V = V[:, :gdim].copy()
-
-            cpp_mesh = dolfinx.cpp.mesh.create_mesh(
-                self.comm,
-                T,
-                c_els,
-                V,
-                partitioner,
-                2  # Maximum number of cells connected to any facet
-            )
+            try:
+                cpp_mesh = dolfinx.cpp.mesh.create_mesh(
+                    self.comm,
+                    T,
+                    c_els,
+                    V,
+                    partitioner,
+                    2  # Maximum number of cells connected to any facet
+                )
+            except TypeError:
+                cpp_mesh = dolfinx.cpp.mesh.create_mesh(
+                    self.comm,
+                    T,
+                    c_els,
+                    V,
+                    partitioner,
+                    2,  # Maximum number of cells connected to any facet,
+                    1  # Number of threads used in entity permutation creation
+                )
             # Wrap as Python object
             mesh = dolfinx.mesh.Mesh(cpp_mesh, domain=None)
 
