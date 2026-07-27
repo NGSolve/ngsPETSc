@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install ngsPETSc
         run: |
@@ -47,7 +47,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Download ngsPETSc into a subdirectory not called 'ngsPETSc' to make sure
           # that the package installs correctly. Otherwise 'import ngsPETSc' may
@@ -109,7 +109,7 @@ jobs:
           find . -delete
           firedrake-clean
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Download ngsPETSc into a subdirectory not called 'ngsPETSc' to make sure
           # that the package installs correctly. Otherwise 'import ngsPETSc' may
@@ -163,7 +163,7 @@ jobs:
           find . -delete
           firedrake-clean
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Download ngsPETSc into a subdirectory not called 'ngsPETSc' to make sure
           # that the package installs correctly. Otherwise 'import ngsPETSc' may
@@ -212,7 +212,7 @@ jobs:
 
       - name: Install Netgen and ngsPETSc
         run: |
-          python3 -m pip install --no-build-isolation pytest poetry
+          python3 -m pip install --no-build-isolation pytest poetry-core poetry-dynamic-versioning
           python3 -m pip install . --check-build-dependencies --no-build-isolation
 
       - name: Run tests (serial)
@@ -231,11 +231,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Install Netgen and ngsPETSc
         run: |
-          python3 -m pip install --no-build-isolation pytest poetry
+          python3 -m pip install --no-build-isolation pytest poetry-core poetry-dynamic-versioning
           python3 -m pip install . --check-build-dependencies --no-build-isolation
 
       - name: Run tests (serial)
