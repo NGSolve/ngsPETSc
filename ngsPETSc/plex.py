@@ -139,35 +139,46 @@ def createNetgenMesh(plex, geo):
     adjacency = plex.getBasicAdjacency()
     plex.setBasicAdjacency(True, True)
 
-    # Add labeled entities
+    # Add labeled entities. Each region index is the label value, and every
+    # value up to the largest gets a region, because the local part of a
+    # distributed plex may lack some of the values.
     codim_label = {0: CELL_SETS_LABEL, 1: FACE_SETS_LABEL, 2: EDGE_SETS_LABEL}
+    nregions = {}
     for codim in range(tdim):
         depth = tdim - codim
         pStart, pEnd = plex.getHeightStratum(codim)
 
         labelName = codim_label[codim]
         labelIds = plex.getLabelIdIS(labelName).indices
-        for index in sorted(labelIds):
+        ndescriptors = len(descriptors.get(depth, ()))
+        nregions[depth] = max(ndescriptors, *labelIds, 0)
+        for index in range(1, nregions[depth] + 1):
             descr = None
-            if depth in descriptors:
+            if index <= ndescriptors:
                 descr = descriptors[depth][index-1]
-            points = plex.getStratumIS(labelName, index).indices
-            points = points[np.logical_and(pStart <= points, points < pEnd)]
+            points = []
+            if index in labelIds:
+                points = plex.getStratumIS(labelName, index).indices
+                points = points[np.logical_and(pStart <= points, points < pEnd)]
             T = buildSimplices(plex, points=points)
             addSimplices(ngMesh, depth, index, descr, T, geoInfo, is_occgeom)
 
-    # Add unlabeled cells
+    # Add unlabeled cells, to region 1 if no cell is labeled, or else to a new region
     labelName = codim_label[0]
     if plex.getLabelSize(labelName) > 0:
         cStart, cEnd = plex.getHeightStratum(0)
         labelIds = plex.getLabelIdIS(labelName).indices
         points = np.concatenate([plex.getStratumIS(labelName, index).indices for index in labelIds])
         points = np.setdiff1d(np.arange(cStart, cEnd), points)
+        index = nregions[tdim] + 1
     else:
         points = None
-    index = plex.getLabelSize(labelName) + 1
+        index = 1
     T = buildSimplices(plex, points=points)
-    addSimplices(ngMesh, tdim, index, None, T, geoInfo, is_occgeom)
+    if index <= nregions[tdim]:
+        ngMesh.AddElements(dim=tdim, index=index, data=T, base=0, project_geometry=geoInfo)
+    else:
+        addSimplices(ngMesh, tdim, index, None, T, geoInfo, is_occgeom)
 
     plex.setBasicAdjacency(*adjacency)
     return ngMesh
