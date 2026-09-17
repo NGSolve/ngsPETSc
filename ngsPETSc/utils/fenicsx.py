@@ -322,14 +322,24 @@ class GeometricModel:
                 mesh_kwargs["reorder_fn"] = None
             if "max_facet_to_cell_links" in _cm_sig.parameters:
                 mesh_kwargs["max_facet_to_cell_links"] = max_facet_to_cell_links
-            cpp_mesh = dolfinx.cpp.mesh.create_mesh(
-                self.comm,
-                T,
-                c_els,
-                V,
-                partitioner=partitioner,
-                **mesh_kwargs,
-            )
+            if Version(dolfinx.__version__) < Version("0.11.0"):
+                cpp_mesh = dolfinx.cpp.mesh.create_mesh(
+                    self.comm,
+                    T,
+                    c_els,
+                    V,
+                    partitioner,
+                    max_facet_to_cell_links=max_facet_to_cell_links,
+                )
+            else:
+                cpp_mesh = dolfinx.cpp.mesh.create_mesh(
+                    self.comm,
+                    T,
+                    c_els,
+                    V,
+                    partitioner=partitioner,
+                    **mesh_kwargs,
+                )
             # Wrap as Python object
             mesh = dolfinx.mesh.Mesh(cpp_mesh, domain=None)
 

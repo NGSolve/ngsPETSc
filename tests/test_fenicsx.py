@@ -93,7 +93,6 @@ def test_markers(order):
         import ngsPETSc.utils.fenicsx as ngfx
         import dolfinx
         import ufl
-        from dolfinx import __version__ as dfx_version
         from netgen.occ import OCCGeometry, WorkPlane, Glue
         import numpy as np
     except ImportError:
@@ -157,7 +156,6 @@ def test_refine(order):
         import ngsPETSc.utils.fenicsx as ngfx
         import dolfinx
         import ufl
-        from dolfinx import __version__ as dfx_version
         from netgen.csg import Sphere, Pnt, CSGeometry
         import numpy as np
     except ImportError:
@@ -239,7 +237,6 @@ def test_mixed():
     try:
         from mpi4py import MPI
         import dolfinx
-        from dolfinx import __version__ as dfx_version
         import ngsPETSc.utils.fenicsx as ngfx
     except ImportError:
         pytest.skip("DOLFINx unavailable, skipping FENICSx test")
