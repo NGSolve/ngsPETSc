@@ -4,6 +4,8 @@ We adopt the same docstring convention as the FEniCSx project, since this part o
 the package will only be used in combination with FEniCSx.
 """
 
+import inspect
+
 import typing
 import basix.ufl
 import dolfinx
@@ -12,7 +14,6 @@ try:
     from dolfinx.io import gmshio
 except ImportError:
     from dolfinx.io import gmsh as gmshio
-
 import numpy as np
 import numpy.typing as npt
 import ufl
@@ -71,6 +72,25 @@ class GeometricModel:
         self.comm = comm
         self.comm_rank = comm_rank
 
+    @classmethod
+    def create_default_partitioner(
+        cls,
+        ghost_mode: dolfinx.mesh.GhostMode = dolfinx.mesh.GhostMode.shared_facet,
+        max_facet_to_cell_links: int = 2,
+    ):
+        """Create a default partitioner for the mesh based on the DOLFINx version."""
+        if not hasattr(dolfinx.mesh, "create_cell_partitioner"):
+            partitioner = dolfinx.graph.partitioner()
+        else:
+            sig = inspect.signature(dolfinx.mesh.create_cell_partitioner)
+            part_kwargs = {}
+            if "max_facet_to_cell_links" in sig.parameters:
+                part_kwargs["max_facet_to_cell_links"] = max_facet_to_cell_links
+            partitioner = dolfinx.mesh.create_cell_partitioner(
+                ghost_mode, **part_kwargs
+            )
+        return partitioner
+
     def model_to_mesh(
         self,
         hmax: float,
@@ -78,10 +98,14 @@ class GeometricModel:
         partitioner: typing.Callable[
             [_MPI.Comm, int, int, dolfinx.cpp.graph.AdjacencyList_int32],
             dolfinx.cpp.graph.AdjacencyList_int32,
-        ] | None = None,
+        ]
+        | None = None,
         transform: typing.Any = None,
         routine: typing.Any = None,
         meshing_options: dict[str, typing.Any] | None = None,
+        ghost_mode: dolfinx.mesh.GhostMode = dolfinx.mesh.GhostMode.shared_facet,
+        max_facet_to_cell_links: int = 2,
+        num_threads: int = 1,
     ) -> tuple[
         dolfinx.mesh.Mesh,
         tuple[dolfinx.mesh.MeshTags | None, dolfinx.mesh.MeshTags | None],
@@ -100,18 +124,23 @@ class GeometricModel:
             routine: Function to be applied to the mesh after generation
                 takes as plan the mesh and the NetGen model and returns the
                 same objects after the routine has been applied.
+            ghost_mode: The ghost mode to use for the mesh. Default is shared_facet.
+            max_facet_to_cell_links: The maximum number of cells connected to any facet.
+                If you have a T-jointed manifold this should be set to 3. If you have
+                a more complex manifold this should be set to the maximum number of cells
+                connected to any facet.
+            num_threads: The number of threads to use for the loading of the mesh.
 
         Returns:
             A DOLFINx mesh for the given NetGen model. It also extracts cell tags,
             facet tags and a mapping from the NetGen label to the corresponding integer marker(s).
         """
         if partitioner is None:
-            if Version(dolfinx.__version__) >= Version("0.11.0.dev0"):
-                partitioner = dolfinx.mesh.create_cell_partitioner(
-                    dolfinx.mesh.GhostMode.shared_facet, 2)
-            else:
-                partitioner = dolfinx.mesh.create_cell_partitioner(
-                    dolfinx.mesh.GhostMode.shared_facet)
+            partitioner = self.create_default_partitioner(
+                ghost_mode=ghost_mode,
+                max_facet_to_cell_links=max_facet_to_cell_links,
+            )
+
         meshing_options = {} if meshing_options is None else meshing_options
 
         # To be parallel safe, we generate on all processes
@@ -133,7 +162,13 @@ class GeometricModel:
 
         assert ngmesh.dim in (2, 3), "Only 2D and 3D meshes are supported."
         regions = self.extract_regions()
-        ct, ft = self.extract_linear_mesh(gdim=gdim, partitioner=partitioner)
+        ct, ft = self.extract_linear_mesh(
+            gdim=gdim,
+            partitioner=partitioner,
+            max_facet_to_cell_links=max_facet_to_cell_links,
+            num_threads=num_threads,
+            ghost_mode=ghost_mode,
+        )
         return self._mesh, (ct, ft), regions
 
     def extract_regions(self):
@@ -158,7 +193,11 @@ class GeometricModel:
         partitioner: typing.Callable[
             [_MPI.Comm, int, int, dolfinx.cpp.graph.AdjacencyList_int32],
             dolfinx.cpp.graph.AdjacencyList_int32,
-        ] | None = None,
+        ]
+        | None = None,
+        ghost_mode: dolfinx.mesh.GhostMode = dolfinx.mesh.GhostMode.shared_facet,
+        max_facet_to_cell_links: int = 2,
+        num_threads: int = 1,
     ) -> tuple[dolfinx.mesh.MeshTags, dolfinx.mesh.MeshTags]:
         """
         Extract a DOLFINx mesh (and correpsonding cell and facet tags) from the Netgen mesh.
@@ -166,6 +205,12 @@ class GeometricModel:
         Args:
             gdim: Geometric dimension of the mesh
             partitioner: Function that computes the parallel distribution of cells across MPI ranks
+            ghost_mode: The ghost mode to use for the mesh. Default is shared_facet.
+            max_facet_to_cell_links: The maximum number of cells connected to any facet.
+                If you have a T-jointed manifold this should be set to 3. If you have a
+                more complex manifold this should be set to the maximum number of cells
+                connected to any facet.
+            num_threads: The number of threads to use for the mesh generation. Default is 1.
 
         Note:
             This function updates the `self._mesh` to be in sync with the NetGen model.
@@ -174,17 +219,15 @@ class GeometricModel:
             The cell and facet tags of the DOLFINx mesh.
         """
         if partitioner is None:
-            if Version(dolfinx.__version__) >= Version("0.11.0.dev0"):
-                partitioner = dolfinx.mesh.create_cell_partitioner(
-                    dolfinx.mesh.GhostMode.shared_facet, 2)
-            else:
-                partitioner = dolfinx.mesh.create_cell_partitioner(
-                    dolfinx.mesh.GhostMode.shared_facet)
+            partitioner = self.create_default_partitioner(
+                ghost_mode=ghost_mode,
+                max_facet_to_cell_links=max_facet_to_cell_links,
+            )
 
         # Extract the elements from the NetGen mesh
         ngmesh = self.ngmesh
         # Go from geometric dimension and downwards to the first non-zero element
-        for topo_dim in reversed(range(0, gdim+1)):
+        for topo_dim in reversed(range(0, gdim + 1)):
             elements_as_numpy = _dim_to_element_wrapper(ngmesh)[topo_dim]().NumPy()
             T = elements_as_numpy["nodes"]
             if T.shape[0] > 0:
@@ -266,25 +309,27 @@ class GeometricModel:
             ]
             T = [Ti.flatten().copy() for Ti in T]
             V = V[:, :gdim].copy()
-            try:
-                cpp_mesh = dolfinx.cpp.mesh.create_mesh(
-                    self.comm,
-                    T,
-                    c_els,
-                    V,
-                    partitioner,
-                    2  # Maximum number of cells connected to any facet
-                )
-            except TypeError:
-                cpp_mesh = dolfinx.cpp.mesh.create_mesh(
-                    self.comm,
-                    T,
-                    c_els,
-                    V,
-                    partitioner,
-                    2,  # Maximum number of cells connected to any facet,
-                    1  # Number of threads used in entity permutation creation
-                )
+            _cm = dolfinx.mesh.create_mesh
+            _cm_sig = inspect.signature(_cm)
+            mesh_kwargs = {}
+            if "num_threads" in _cm_sig.parameters:
+                mesh_kwargs["num_threads"] = num_threads
+            if "ghost_mode" in _cm_sig.parameters:
+                mesh_kwargs["ghost_mode"] = ghost_mode
+            if hasattr(dolfinx.mesh, "create_geometric_cell_partitioner"):
+                mesh_kwargs["cell_weights"] = None
+            if "reorder_fn" in _cm_sig.parameters:
+                mesh_kwargs["reorder_fn"] = None
+            if "max_facet_to_cell_links" in _cm_sig.parameters:
+                mesh_kwargs["max_facet_to_cell_links"] = max_facet_to_cell_links
+            cpp_mesh = dolfinx.cpp.mesh.create_mesh(
+                self.comm,
+                T,
+                c_els,
+                V,
+                partitioner=partitioner,
+                **mesh_kwargs,
+            )
             # Wrap as Python object
             mesh = dolfinx.mesh.Mesh(cpp_mesh, domain=None)
 
@@ -309,9 +354,13 @@ class GeometricModel:
             ct = None
             ft = None
         else:
-            ct = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=mesh.topology.dim)
+            ct = extract_element_tags(
+                self.comm_rank, ngmesh, mesh, dim=mesh.topology.dim
+            )
             ct.name = "Cell tags"
-            ft = extract_element_tags(self.comm_rank, ngmesh, mesh, dim=mesh.topology.dim - 1)
+            ft = extract_element_tags(
+                self.comm_rank, ngmesh, mesh, dim=mesh.topology.dim - 1
+            )
             ft.name = "Facet tags"
 
         # Attach DOLFINx mesh to the GeometricModel
@@ -359,18 +408,13 @@ class GeometricModel:
         if is_mixed_mesh:
             if hasattr(self._mesh.geometry, "cmaps"):
                 _cmap = self._mesh.geometry.cmaps
-                orders = [
-                    cmap.degree for cmap in _cmap
-                ]
+                orders = [cmap.degree for cmap in _cmap]
             else:
                 if hasattr(self._mesh.geometry._cpp_object, "cmaps"):
                     _cmap = self._mesh.geometry._cpp_object.cmaps
                 else:
                     _cmap = self._mesh.geometry._cpp_object.cmap
-                orders = [
-                    _cmap(i).degree
-                    for i in range(num_index_maps)
-                ]
+                orders = [_cmap(i).degree for i in range(num_index_maps)]
             assert len(np.unique(orders)) == 1
             if orders[0] == order:
                 return self._mesh
@@ -645,12 +689,16 @@ class GeometricModel:
             igi = geom_imap.local_to_global(local_node_indices)
             try:
                 geometry = dolfinx.mesh.create_geometry(
-                    geom_imap, cell_node_map, c_el._cpp_object, x[:, :geom_dim].copy(), igi
+                    geom_imap,
+                    cell_node_map,
+                    c_el._cpp_object,
+                    x[:, :geom_dim].copy(),
+                    igi,
                 )
             except AttributeError:
                 geometry = dolfinx.mesh.create_geometry(
                     geom_imap, cell_node_map, c_el, x[:, :geom_dim].copy(), igi
-            )
+                )
 
             # Create DOLFINx C++ mesh
             if x.dtype == np.float64:
@@ -725,9 +773,7 @@ def extract_element_tags(
     else:
         _cmap = dolfinx_mesh.geometry.cmap
     cmap = _cmap if not callable(_cmap) else _cmap()
-    assert cmap.degree == 1, (
-        "Can only extract element tags from linear grids"
-    )
+    assert cmap.degree == 1, "Can only extract element tags from linear grids"
     comm = dolfinx_mesh.comm
     sub_entities = basix.cell.subentity_types(dolfinx_mesh.basix_cell())[dim]
     assert len(np.unique(sub_entities)) == 1, "Only one subentity type is supported"

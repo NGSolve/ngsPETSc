@@ -1,6 +1,9 @@
 """
 This module test the utils.fenicsx class
 """
+
+import inspect
+
 import pytest
 from packaging.version import Version
 
@@ -105,11 +108,17 @@ def test_markers(order):
     geo = OCCGeometry(shape, dim=2)
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
     gm = dolfinx.mesh.GhostMode.shared_facet
-    if Version(dfx_version) >= Version("0.11.0.dev0"):
-        partitioner = dolfinx.mesh.create_cell_partitioner(gm, 2)
-    else:
-        partitioner = dolfinx.mesh.create_cell_partitioner(gm)
-    _, (ct, _), region_map = geoModel.model_to_mesh(hmax=0.02, partitioner=partitioner)
+    max_facet_to_cell_links = 2
+    partitioner = ngfx.GeometricModel.create_default_partitioner(
+        gm, max_facet_to_cell_links
+    )
+    _, (ct, _), region_map = geoModel.model_to_mesh(
+        hmax=0.02,
+        partitioner=partitioner,
+        ghost_mode=gm,
+        max_facet_to_cell_links=max_facet_to_cell_links,
+        gdim=2,
+    )
     curved_domain = geoModel.curveField(order)
 
     steel_circle = region_map[(2, "circle")]
@@ -170,16 +179,22 @@ def test_refine(order):
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
 
     gm = dolfinx.mesh.GhostMode.shared_facet
-    if Version(dfx_version) >= Version("0.11.0.dev0"):
-        partitioner = dolfinx.mesh.create_cell_partitioner(gm, 2)
-    else:
-        partitioner = dolfinx.mesh.create_cell_partitioner(gm)
+    max_facet_to_cell_links = 2
+    num_threads = 1
+    partitioner = ngfx.GeometricModel.create_default_partitioner(
+        gm, max_facet_to_cell_links=max_facet_to_cell_links
+    )
     if order == 1:
         hmax = 0.08
     else:
         hmax = 0.1
     mesh, (_, _), region_map = geoModel.model_to_mesh(
-        hmax=hmax, partitioner=partitioner, gdim=3
+        hmax=hmax,
+        partitioner=partitioner,
+        gdim=3,
+        num_threads=num_threads,
+        ghost_mode=gm,
+        max_facet_to_cell_links=max_facet_to_cell_links,
     )
     mesh = geoModel.curveField(order)
 
@@ -237,16 +252,25 @@ def test_mixed():
     geo = SplineGeometry()
     geo.AddCircle((1, 1.2), 1)
     geoModel = ngfx.GeometricModel(geo, MPI.COMM_WORLD)
-    if Version(dfx_version) >= Version("0.11.0.dev0"):
-        partitioner = dolfinx.mesh.create_cell_partitioner(
-            dolfinx.graph.partitioner_kahip(), dolfinx.mesh.GhostMode.none, 2
-        )
+    if hasattr(dolfinx.mesh, "create_cell_partitioner"):
+        sig = inspect.signature(dolfinx.mesh.create_cell_partitioner)
+        if "max_facet_to_cell_links" in sig.parameters:
+            partitioner = dolfinx.mesh.create_cell_partitioner(
+                dolfinx.graph.partitioner_kahip(),
+                dolfinx.mesh.GhostMode.none,
+                max_facet_to_cell_links=2,
+            )
+        else:
+            partitioner = dolfinx.mesh.create_cell_partitioner(
+                dolfinx.graph.partitioner_kahip(), dolfinx.mesh.GhostMode.none
+            )
     else:
-        partitioner = dolfinx.mesh.create_cell_partitioner(
-            dolfinx.graph.partitioner_kahip(), dolfinx.mesh.GhostMode.none
-        )
+        partitioner = dolfinx.graph.partitioner_kahip()
     domain, _, _ = geoModel.model_to_mesh(
-        hmax=0.4, meshing_options={"quad_dominated": True}, partitioner=partitioner, gdim=2
+        hmax=0.4,
+        meshing_options={"quad_dominated": True},
+        partitioner=partitioner,
+        gdim=2,
     )
     assert len(domain.topology._cpp_object.cell_types) == 2  # pylint: disable=W0212
     domain = geoModel.curveField(2)
@@ -276,37 +300,40 @@ def test_manifold():
     b = 1.6
 
     def Curve(t):
-        return Pnt(0, R+a*np.cos(t), b*np.sin(t))
+        return Pnt(0, R + a * np.cos(t), b * np.sin(t))
 
     n = 100
-    pnts = [Curve(2*np.pi*t/n) for t in range(n+1)]
+    pnts = [Curve(2 * np.pi * t / n) for t in range(n + 1)]
 
     spline = SplineApproximation(pnts)
     f = Face(Wire(spline))
 
-    torus = f.Revolve(Axis((0,0,0), Z), 360)
+    torus = f.Revolve(Axis((0, 0, 0), Z), 360)
     torus_geo = OCCGeometry(torus)
 
-    meshing_options = {"perfstepsend" : MeshingStep.MESHSURFACE}
+    meshing_options = {"perfstepsend": MeshingStep.MESHSURFACE}
 
     geoModel = ngfx.GeometricModel(torus_geo, MPI.COMM_WORLD)
-    mesh, (_, _), _ = geoModel.model_to_mesh(gdim=3, hmax=0.5, meshing_options=meshing_options)
+    mesh, (_, _), _ = geoModel.model_to_mesh(
+        gdim=3, hmax=0.5, meshing_options=meshing_options
+    )
 
     order = 5
     mesh = geoModel.curveField(order)
 
     # Exact surface area
     path_length = 2 * np.pi * R
-    m = 1 - (min(a, b)/max(a, b))**2
+    m = 1 - (min(a, b) / max(a, b)) ** 2
     ellipse_perimeter = 4 * max(a, b) * ellipe(m)
     area_exact = path_length * ellipse_perimeter
 
     # Approx area
-    surf = dolfinx.fem.form(dolfinx.fem.Constant(mesh, dolfinx.default_scalar_type(1.0))*ufl.dx)
+    surf = dolfinx.fem.form(
+        dolfinx.fem.Constant(mesh, dolfinx.default_scalar_type(1.0)) * ufl.dx
+    )
     surface_area = mesh.comm.allreduce(dolfinx.fem.assemble_scalar(surf), op=MPI.SUM)
-    atol = 10*np.finfo(dolfinx.default_real_type).eps
+    atol = 10 * np.finfo(dolfinx.default_real_type).eps
     assert np.isclose(surface_area, area_exact, atol=atol)
-
 
 
 if __name__ == "__main__":
