@@ -329,7 +329,7 @@ class GeometricModel:
                     c_els,
                     V,
                     partitioner,
-                    max_facet_to_cell_links=max_facet_to_cell_links,
+                    max_facet_to_cell_links,
                 )
             else:
                 cpp_mesh = dolfinx.cpp.mesh.create_mesh(
