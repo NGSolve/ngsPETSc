@@ -21,10 +21,10 @@ from ngsPETSc import MeshMapping
 
 def _plex_number_of_points(plex, h=0, local=False):
     points = plex.getHeightStratum(h)
-    np = points[1] - points[0]
+    npoints = points[1] - points[0]
     if not local:
-        np = plex.getComm().tompi4py().allreduce(np)
-    return np
+        npoints = plex.getComm().tompi4py().allreduce(npoints)
+    return npoints
 
 @pytest.mark.mpi_skip
 @pytest.mark.ngsolve_skip
