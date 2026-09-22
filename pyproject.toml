@@ -69,3 +69,9 @@ pylint = "^3.3"
 [tool.poetry.group.ngsolve.dependencies]
 ngsolve = "^6.2"
 mpi4py = "^4"
+
+[tool.pytest.ini_options]
+markers = [
+  "mpi_skip: mark tests that should be skipped when running under MPI",
+  "ngsolve_skip: mark tests that require NGSolve",
+]

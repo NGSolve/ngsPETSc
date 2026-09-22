@@ -1,15 +1,23 @@
 '''
-This module test the plex class
+This module tests the plex class
 '''
 
-from ngsolve import Mesh, VOL
-from netgen.geom2d import unit_square
-from netgen.csg import unit_cube
+import numpy as np
+from mpi4py import MPI
 
-from petsc4py import PETSc
+try:
+    from netgen.csg import unit_cube
+    from netgen.geom2d import unit_square
+    from ngsolve import VOL, Mesh
+except ImportError:
+    Mesh = None
+    VOL = unit_square = unit_cube = None
+
 import pytest
+from petsc4py import PETSc
 
 from ngsPETSc import MeshMapping
+
 
 def _plex_number_of_points(plex, h=0, local=False):
     points = plex.getHeightStratum(h)
@@ -19,6 +27,7 @@ def _plex_number_of_points(plex, h=0, local=False):
     return np
 
 @pytest.mark.mpi_skip
+@pytest.mark.ngsolve_skip
 def test_ngs_plex_2d():
     '''
     Testing the conversion from NGSolve mesh to PETSc DMPlex
@@ -30,6 +39,7 @@ def test_ngs_plex_2d():
     assert _plex_number_of_points(plex) == 2
 
 @pytest.mark.mpi_skip
+@pytest.mark.ngsolve_skip
 def test_plex_ngs_2d():
     '''
     Testing the conversion from PETSc DMPlex to NGSolve mesh
@@ -47,7 +57,71 @@ def test_plex_ngs_2d():
     meshMap = MeshMapping(plex)
     assert Mesh (meshMap.ngMesh).GetNE(VOL) == nc
 
+
+@pytest.mark.parallel([1, 2])
+def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
+    """Preserve geometry and face-region numbers after DMPlex redistribution."""
+    comm = PETSc.COMM_WORLD
+    if comm.getRank() == 0:
+        cells = [[0, 1, 3], [1, 3, 4], [1, 2, 4], [2, 4, 5],
+                 [3, 4, 6], [4, 6, 7], [4, 5, 7], [5, 7, 8]]
+        coordinates = [[0.0, 0.0], [0.5, 0.0], [1.0, 0.0], [0.0, 0.5],
+                       [0.5, 0.5], [1.0, 0.5], [0.0, 1.0], [0.5, 1.0],
+                       [1.0, 1.0]]
+    else:
+        cells = np.empty((0, 3), dtype=PETSc.IntType)
+        coordinates = np.empty((0, 2), dtype=PETSc.RealType)
+    plex = PETSc.DMPlex().createFromCellList(2, cells, coordinates, comm=comm)
+    plex.createLabel("Face Sets")
+    if comm.getRank() == 0:
+        vStart, vEnd = plex.getDepthStratum(0)
+        coordinates = plex.getCoordinatesLocal().getArray().reshape(-1, 2)
+        for point in range(*plex.getHeightStratum(1)):
+            if len(plex.getSupport(point)) != 1:
+                continue
+            vertices = [v - vStart for v in plex.getCone(point)]
+            midpoint = coordinates[vertices].mean(axis=0)
+            if np.isclose(midpoint[1], 0):
+                region = 1
+            elif np.isclose(midpoint[0], 1):
+                region = 2
+            elif np.isclose(midpoint[1], 1):
+                region = 3
+            else:
+                region = 4
+            plex.setLabelValue("Face Sets", point, region)
+    plex.distribute(overlap=0)
+
+    ngmesh = MeshMapping(plex).ngMesh
+    vStart, vEnd = plex.getDepthStratum(0)
+    local_coordinates = plex.getCoordinatesLocal().getArray().reshape(-1, 2)
+    assert local_coordinates.shape[0] == vEnd - vStart
+    fStart, fEnd = plex.getHeightStratum(1)
+    boundary_faces = [point for point in range(fStart, fEnd)
+                      if plex.getLabelValue("Face Sets", point) >= 0]
+    plex_boundary_coords = sorted(
+        tuple(sorted(tuple(local_coordinates[v - vStart])
+                     for v in plex.getCone(point)))
+        for point in boundary_faces)
+    local_ids = plex.getLabelIdIS("Face Sets").indices
+    local_gap = len(local_ids) > 0 and not np.array_equal(
+        local_ids, np.arange(1, local_ids[-1] + 1))
+    assert comm.tompi4py().allreduce(local_gap, op=MPI.LOR)
+    expected = sorted(plex.getLabelValue("Face Sets", point)
+                      for point in boundary_faces)
+    elements = ngmesh.Elements1D().NumPy()
+    actual = sorted(map(int, elements["index"]))
+    ng_coordinates = np.array([ngmesh.Points()[point].p[:2]
+                               for point in range(1, len(ngmesh.Points()) + 1)])
+    netgen_boundary_coords = sorted(
+        tuple(sorted(tuple(ng_coordinates[vertex - 1])
+                     for vertex in nodes[:2]))
+        for nodes in elements["nodes"])
+    np.testing.assert_allclose(netgen_boundary_coords, plex_boundary_coords)
+    assert actual == expected
+
 @pytest.mark.mpi_skip
+@pytest.mark.ngsolve_skip
 def test_ngs_plex_3d():
     '''
     Testing the conversion from NGSolve mesh to PETSc DMPlex
@@ -59,6 +133,7 @@ def test_ngs_plex_3d():
     assert _plex_number_of_points(plex) == 12
 
 @pytest.mark.mpi_skip
+@pytest.mark.ngsolve_skip
 def test_plex_ngs_3d():
     '''
     Testing the conversion from PETSc DMPlex to NGSolve mesh
@@ -78,6 +153,7 @@ def test_plex_ngs_3d():
     assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
 
 @pytest.mark.mpi_skip
+@pytest.mark.ngsolve_skip
 def test_plex_transform_alfeld_2d():
     '''
     Testing the use of the PETSc Alfeld transform
@@ -95,6 +171,7 @@ def test_plex_transform_alfeld_2d():
     assert Mesh(meshMap.ngMesh).GetNE(VOL) == nc
 
 @pytest.mark.mpi_skip
+@pytest.mark.ngsolve_skip
 def test_plex_transform_alfeld_3d():
     '''
     Testing the use of the PETSc Alfeld transform
