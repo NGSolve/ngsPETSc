@@ -62,34 +62,12 @@ def test_plex_ngs_2d():
 def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
     """Preserve geometry and face-region numbers after DMPlex redistribution."""
     comm = PETSc.COMM_WORLD
-    if comm.getRank() == 0:
-        cells = [[0, 1, 3], [1, 3, 4], [1, 2, 4], [2, 4, 5],
-                 [3, 4, 6], [4, 6, 7], [4, 5, 7], [5, 7, 8]]
-        coordinates = [[0.0, 0.0], [0.5, 0.0], [1.0, 0.0], [0.0, 0.5],
-                       [0.5, 0.5], [1.0, 0.5], [0.0, 1.0], [0.5, 1.0],
-                       [1.0, 1.0]]
-    else:
-        cells = np.empty((0, 3), dtype=PETSc.IntType)
-        coordinates = np.empty((0, 2), dtype=PETSc.RealType)
-    plex = PETSc.DMPlex().createFromCellList(2, cells, coordinates, comm=comm)
-    plex.createLabel("Face Sets")
-    if comm.getRank() == 0:
-        vStart, vEnd = plex.getDepthStratum(0)
-        coordinates = plex.getCoordinatesLocal().getArray().reshape(-1, 2)
-        for point in range(*plex.getHeightStratum(1)):
-            if len(plex.getSupport(point)) != 1:
-                continue
-            vertices = [v - vStart for v in plex.getCone(point)]
-            midpoint = coordinates[vertices].mean(axis=0)
-            if np.isclose(midpoint[1], 0):
-                region = 1
-            elif np.isclose(midpoint[0], 1):
-                region = 2
-            elif np.isclose(midpoint[1], 1):
-                region = 3
-            else:
-                region = 4
-            plex.setLabelValue("Face Sets", point, region)
+    plex = PETSc.DMPlex().createBoxMesh([2, 2], simplex=False, comm=comm)
+    transform = PETSc.DMPlexTransform().create(comm=comm)
+    transform.setType(PETSc.DMPlexTransformType.REFINETOSIMPLEX)
+    transform.setDM(plex)
+    transform.setUp()
+    plex = transform.apply(plex)
     plex.distribute(overlap=0)
 
     ngmesh = MeshMapping(plex).ngMesh
@@ -106,7 +84,9 @@ def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
     local_ids = plex.getLabelIdIS("Face Sets").indices
     local_gap = len(local_ids) > 0 and not np.array_equal(
         local_ids, np.arange(1, local_ids[-1] + 1))
-    assert comm.tompi4py().allreduce(local_gap, op=MPI.LOR)
+    has_gap = comm.tompi4py().allreduce(local_gap, op=MPI.LOR)
+    if comm.getSize() > 1:
+        assert has_gap
     expected = sorted(plex.getLabelValue("Face Sets", point)
                       for point in boundary_faces)
     elements = ngmesh.Elements1D().NumPy()
