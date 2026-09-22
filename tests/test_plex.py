@@ -26,6 +26,14 @@ def _plex_number_of_points(plex, h=0, local=False):
         npoints = plex.getComm().tompi4py().allreduce(npoints)
     return npoints
 
+
+def _boundary_coords(coordinates, edges):
+    return sorted(
+        tuple(sorted(tuple(coordinates[vertex]) for vertex in edge))
+        for edge in edges
+    )
+
+
 @pytest.mark.mpi_skip
 @pytest.mark.ngsolve_skip
 def test_ngs_plex_2d():
@@ -70,35 +78,44 @@ def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
     plex = transform.apply(plex)
     plex.distribute(overlap=0)
 
-    ngmesh = MeshMapping(plex).ngMesh
     vStart, vEnd = plex.getDepthStratum(0)
-    local_coordinates = plex.getCoordinatesLocal().getArray().reshape(-1, 2)
-    assert local_coordinates.shape[0] == vEnd - vStart
+    plex_coordinates = plex.getCoordinatesLocal().getArray()
+    plex_coordinates = plex_coordinates.reshape(vEnd - vStart,
+                                                 plex.getCoordinateDim())
     fStart, fEnd = plex.getHeightStratum(1)
-    boundary_faces = [point for point in range(fStart, fEnd)
-                      if plex.getLabelValue("Face Sets", point) >= 0]
-    plex_boundary_coords = sorted(
-        tuple(sorted(tuple(local_coordinates[v - vStart])
-                     for v in plex.getCone(point)))
-        for point in boundary_faces)
-    local_ids = plex.getLabelIdIS("Face Sets").indices
-    local_gap = len(local_ids) > 0 and not np.array_equal(
-        local_ids, np.arange(1, local_ids[-1] + 1))
+    boundary_faces = [
+        face for face in range(fStart, fEnd)
+        if plex.getLabelValue("Face Sets", face) >= 0
+    ]
+    plex_boundary_edges = [
+        [vertex - vStart for vertex in plex.getCone(face)]
+        for face in boundary_faces
+    ]
+    plex_boundary_coords = _boundary_coords(plex_coordinates,
+                                            plex_boundary_edges)
+    expected_region_ids = sorted(
+        plex.getLabelValue("Face Sets", face) for face in boundary_faces)
+
+    label_ids = plex.getLabelIdIS("Face Sets").indices
+    local_gap = len(label_ids) > 0 and not np.array_equal(
+        label_ids, np.arange(1, label_ids[-1] + 1))
     has_gap = comm.tompi4py().allreduce(local_gap, op=MPI.LOR)
     if comm.getSize() > 1:
         assert has_gap
-    expected = sorted(plex.getLabelValue("Face Sets", point)
-                      for point in boundary_faces)
+
+    ngmesh = MeshMapping(plex).ngMesh
     elements = ngmesh.Elements1D().NumPy()
-    actual = sorted(map(int, elements["index"]))
-    ng_coordinates = np.array([ngmesh.Points()[point].p[:2]
-                               for point in range(1, len(ngmesh.Points()) + 1)])
-    netgen_boundary_coords = sorted(
-        tuple(sorted(tuple(ng_coordinates[vertex - 1])
-                     for vertex in nodes[:2]))
-        for nodes in elements["nodes"])
+    ng_coordinates = np.array([
+        ngmesh.Points()[point].p[:2]
+        for point in range(1, len(ngmesh.Points()) + 1)
+    ])
+    netgen_boundary_edges = [nodes[:2] - 1 for nodes in elements["nodes"]]
+    netgen_boundary_coords = _boundary_coords(ng_coordinates,
+                                              netgen_boundary_edges)
+    actual_region_ids = sorted(map(int, elements["index"]))
+
     np.testing.assert_allclose(netgen_boundary_coords, plex_boundary_coords)
-    assert actual == expected
+    assert actual_region_ids == expected_region_ids
 
 @pytest.mark.mpi_skip
 @pytest.mark.ngsolve_skip
