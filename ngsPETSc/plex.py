@@ -3,12 +3,15 @@ This module contains all the functions related to wrapping NGSolve meshes to
 PETSc DMPlex using the petsc4py interface.
 '''
 import warnings
-import numpy as np
-from petsc4py import PETSc
-from mpi4py import MPI
+
 import netgen.meshing as ngm
+import numpy as np
+from mpi4py import MPI
 from netgen.occ import OCCGeometry
+from petsc4py import PETSc
+
 from .utils.utils import trim_util
+
 try:
     import ngsolve as ngs
 except ImportError:
@@ -139,7 +142,9 @@ def createNetgenMesh(plex, geo):
     adjacency = plex.getBasicAdjacency()
     plex.setBasicAdjacency(True, True)
 
-    # Add labeled entities
+    # Add labeled entities. Each region index is the label value, and every
+    # value up to the largest gets a region, because the local part of a
+    # distributed plex may lack some of the values.
     codim_label = {0: CELL_SETS_LABEL, 1: FACE_SETS_LABEL, 2: EDGE_SETS_LABEL}
     for codim in range(tdim):
         depth = tdim - codim
@@ -147,27 +152,32 @@ def createNetgenMesh(plex, geo):
 
         labelName = codim_label[codim]
         labelIds = plex.getLabelIdIS(labelName).indices
-        for index in sorted(labelIds):
-            descr = None
-            if depth in descriptors:
-                descr = descriptors[depth][index-1]
+        ndescriptors = len(descriptors.get(depth, ()))
+        nregions = max(ndescriptors, *labelIds, 0)
+        points_by_region = {index: [] for index in range(1, nregions + 1)}
+        for index in labelIds:
             points = plex.getStratumIS(labelName, index).indices
-            points = points[np.logical_and(pStart <= points, points < pEnd)]
-            T = buildSimplices(plex, points=points)
-            addSimplices(ngMesh, depth, index, descr, T, geoInfo, is_occgeom)
+            points_by_region[index] = points[np.logical_and(pStart <= points, points < pEnd)]
 
-    # Add unlabeled cells
-    labelName = codim_label[0]
-    if plex.getLabelSize(labelName) > 0:
-        cStart, cEnd = plex.getHeightStratum(0)
-        labelIds = plex.getLabelIdIS(labelName).indices
-        points = np.concatenate([plex.getStratumIS(labelName, index).indices for index in labelIds])
-        points = np.setdiff1d(np.arange(cStart, cEnd), points)
-    else:
-        points = None
-    index = plex.getLabelSize(labelName) + 1
-    T = buildSimplices(plex, points=points)
-    addSimplices(ngMesh, tdim, index, None, T, geoInfo, is_occgeom)
+        # Add unlabeled cells, to region 1 if no cell is labeled, or else to a new region
+        if depth == tdim:
+            if len(labelIds) > 0:
+                cStart, cEnd = plex.getHeightStratum(0)
+                labeled = np.concatenate([plex.getStratumIS(labelName, index).indices
+                                          for index in labelIds])
+                points = np.setdiff1d(np.arange(cStart, cEnd), labeled)
+                nregions += 1
+                points_by_region[nregions] = points
+            else:
+                nregions = max(nregions, 1)
+                points_by_region[1] = None
+
+        for index in range(1, nregions + 1):
+            descr = None
+            if index <= ndescriptors:
+                descr = descriptors[depth][index-1]
+            T = buildSimplices(plex, points=points_by_region[index])
+            addSimplices(ngMesh, depth, index, descr, T, geoInfo, is_occgeom)
 
     plex.setBasicAdjacency(*adjacency)
     return ngMesh

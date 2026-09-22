@@ -241,4 +241,3 @@ jobs:
       - name: Run tests (serial)
         run: |
           mpirun -n 2 python3 -m pytest -vs ./tests/test_fenicsx.py
-
