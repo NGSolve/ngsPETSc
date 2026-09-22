@@ -105,10 +105,7 @@ def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
 
     ngmesh = MeshMapping(plex).ngMesh
     elements = ngmesh.Elements1D().NumPy()
-    ng_coordinates = np.array([
-        ngmesh.Points()[point].p[:2]
-        for point in range(1, len(ngmesh.Points()) + 1)
-    ])
+    ng_coordinates = ngmesh.Coordinates()
     netgen_boundary_edges = [nodes[:2] - 1 for nodes in elements["nodes"]]
     netgen_boundary_coords = _boundary_coords(ng_coordinates,
                                               netgen_boundary_edges)
