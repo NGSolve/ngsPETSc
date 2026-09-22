@@ -81,7 +81,7 @@ def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
     vStart, vEnd = plex.getDepthStratum(0)
     plex_coordinates = plex.getCoordinatesLocal().getArray()
     plex_coordinates = plex_coordinates.reshape(vEnd - vStart,
-                                                 plex.getCoordinateDim())
+                                                plex.getCoordinateDim())
     fStart, fEnd = plex.getHeightStratum(1)
     boundary_faces = [
         face for face in range(fStart, fEnd)
