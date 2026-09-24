@@ -148,22 +148,33 @@ def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
     assert actual_region_ids == expected_region_ids
 
 
-@pytest.mark.mpi_skip
+@pytest.mark.parallel([1, 2])
 def test_plex_to_netgen_preserves_sparse_geometry_descriptors():
     """Keep descriptor indices when labels identify a supplied Netgen mesh."""
-    plex = PETSc.DMPlex().createFromCellList(
-        2,
-        [[0, 1, 2], [1, 3, 2]],
-        [[0., 0.], [1., 0.], [0., 1.], [1., 1.]],
-    )
-    plex.createLabel("Face Sets")
+    comm = PETSc.COMM_WORLD
+    plex = PETSc.DMPlex().createBoxMesh([2, 2], simplex=False, comm=comm)
+    transform = PETSc.DMPlexTransform().create(comm=comm)
+    transform.setType(PETSc.DMPlexTransformType.REFINETOSIMPLEX)
+    transform.setDM(plex)
+    transform.setUp()
+    plex = transform.apply(plex)
+    plex.distribute(overlap=0)
+
+    # In parallel, labels 1 and 3 live on different ranks, so every rank must
+    # see the global labels to agree on keeping the descriptor indices.
     fStart, fEnd = plex.getHeightStratum(1)
-    boundary_faces = [
-        face for face in range(fStart, fEnd)
-        if len(plex.getSupport(face)) == 1
-    ]
-    plex.setLabelValue("Face Sets", boundary_faces[0], 1)
-    plex.setLabelValue("Face Sets", boundary_faces[1], 3)
+    interior_faces = [face for face in range(fStart, fEnd)
+                      if len(plex.getSupport(face)) == 2]
+    if comm.getSize() > 1:
+        assert interior_faces
+        local_labels = [1 if comm.getRank() == 0 else 3]
+    else:
+        assert len(interior_faces) >= 2
+        local_labels = [1, 3]
+    plex.removeLabel("Face Sets")
+    plex.createLabel("Face Sets")
+    for face, label in zip(interior_faces, local_labels):
+        plex.setLabelValue("Face Sets", face, label)
 
     geo = ngm.Mesh(dim=2)
     for index in range(1, 4):
@@ -172,10 +183,15 @@ def test_plex_to_netgen_preserves_sparse_geometry_descriptors():
         descriptor.edgenr = index
         geo.Add(descriptor)
 
+    _, global_label_ids, _ = getGlobalLabelToRegionMap(plex, "Face Sets", 3)
+    assert global_label_ids == [1, 3]
+
     ngmesh = MeshMapping(plex, geo=geo).ngMesh
     actual_region_ids = sorted(int(element.index)
                                for element in ngmesh.Elements1D())
-    assert actual_region_ids == [1, 3]
+    assert actual_region_ids == local_labels
+    assert len(ngmesh.EdgeDescriptors()) == 3
+
 
 @pytest.mark.mpi_skip
 @pytest.mark.ngsolve_skip
