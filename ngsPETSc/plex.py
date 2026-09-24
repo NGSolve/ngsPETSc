@@ -76,16 +76,16 @@ def buildSimplices(plex, points=None):
 
 
 def getGlobalLabelToRegionMap(plex, labelName, ndescriptors=0):
-    """Return local labels, global labels, and their Netgen region numbers.
+    """Return sorted local and global labels, and their Netgen region numbers.
 
     When descriptors come from an existing Netgen mesh, preserve label values
     that identify descriptors. Otherwise, number the global labels densely.
     """
     label_is = plex.getLabelIdIS(labelName)
-    labelIds = set(label_is.indices) if label_is is not None else set()
+    labelIds = sorted(set(label_is.indices)) if label_is is not None else []
     comm = plex.getComm().tompi4py()
     gathered_labels = comm.allgather(labelIds)
-    allLabelIds = set().union(*gathered_labels)
+    allLabelIds = sorted(set().union(*gathered_labels))
 
     labelsMatchDescriptors = ndescriptors > 0 and all(
         1 <= label <= ndescriptors for label in allLabelIds
@@ -94,7 +94,7 @@ def getGlobalLabelToRegionMap(plex, labelName, ndescriptors=0):
         regionByLabel = {label: label for label in allLabelIds}
     else:
         regionByLabel = {
-            label: index for index, label in enumerate(sorted(allLabelIds), 1)
+            label: index for index, label in enumerate(allLabelIds, 1)
         }
     return labelIds, allLabelIds, regionByLabel
 

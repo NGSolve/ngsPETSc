@@ -134,7 +134,7 @@ def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
     _, global_cell_label_ids, _ = getGlobalLabelToRegionMap(
         plex, "Cell Sets"
     )
-    assert global_cell_label_ids == {5, 6}
+    assert global_cell_label_ids == [5, 6]
     assert len(ngmesh.FaceDescriptors()) == len(global_cell_label_ids) + 1
 
     elements = ngmesh.Elements1D().NumPy()
