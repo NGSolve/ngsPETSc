@@ -148,6 +148,7 @@ def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
     assert actual_region_ids == expected_region_ids
 
 
+@pytest.mark.mpi_skip
 def test_plex_to_netgen_preserves_sparse_geometry_descriptors():
     """Keep descriptor indices when labels identify a supplied Netgen mesh."""
     plex = PETSc.DMPlex().createFromCellList(
