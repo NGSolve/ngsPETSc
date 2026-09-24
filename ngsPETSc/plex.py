@@ -81,16 +81,11 @@ def getGlobalLabelToRegionMap(plex, labelName, ndescriptors=0):
     When descriptors come from an existing Netgen mesh, preserve label values
     that identify descriptors. Otherwise, number the global labels densely.
     """
-    labelIds = set(plex.getLabelIdIS(labelName).indices)
-
-    def mergeIds(x, y, _datatype):
-        return x.union(y)
-
-    op = MPI.Op.Create(mergeIds, commute=True)
-    try:
-        allLabelIds = plex.getComm().tompi4py().allreduce(labelIds, op=op)
-    finally:
-        op.Free()
+    label_is = plex.getLabelIdIS(labelName)
+    labelIds = set(label_is.indices) if label_is is not None else set()
+    comm = plex.getComm().tompi4py()
+    gathered_labels = comm.allgather(labelIds)
+    allLabelIds = set().union(*gathered_labels)
 
     labelsMatchDescriptors = ndescriptors > 0 and all(
         1 <= label <= ndescriptors for label in allLabelIds
