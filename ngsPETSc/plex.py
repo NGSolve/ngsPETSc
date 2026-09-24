@@ -75,6 +75,35 @@ def buildSimplices(plex, points=None):
     return np.array(T, dtype=PETSc.IntType)
 
 
+def getGlobalLabelToRegionMap(plex, labelName, ndescriptors=0):
+    """Return local labels, global labels, and their Netgen region numbers.
+
+    When descriptors come from an existing Netgen mesh, preserve label values
+    that identify descriptors. Otherwise, number the global labels densely.
+    """
+    labelIds = set(plex.getLabelIdIS(labelName).indices)
+
+    def mergeIds(x, y, _datatype):
+        return x.union(y)
+
+    op = MPI.Op.Create(mergeIds, commute=True)
+    try:
+        allLabelIds = plex.getComm().tompi4py().allreduce(labelIds, op=op)
+    finally:
+        op.Free()
+
+    labelsMatchDescriptors = ndescriptors > 0 and all(
+        1 <= label <= ndescriptors for label in allLabelIds
+    )
+    if labelsMatchDescriptors:
+        regionByLabel = {label: label for label in allLabelIds}
+    else:
+        regionByLabel = {
+            label: index for index, label in enumerate(sorted(allLabelIds), 1)
+        }
+    return labelIds, allLabelIds, regionByLabel
+
+
 def addSimplices(ngMesh, dim, index, descriptor, data, project_geometry, is_occgeom):
     """
     Add simplices to a Netgen mesh
@@ -145,23 +174,15 @@ def createNetgenMesh(plex, geo):
     # Add labeled entities. All ranks need the same region numbering, even
     # when a label value occurs only on one rank.
     codim_label = {0: CELL_SETS_LABEL, 1: FACE_SETS_LABEL, 2: EDGE_SETS_LABEL}
-    comm = plex.getComm().tompi4py()
     for codim in range(tdim):
         depth = tdim - codim
         pStart, pEnd = plex.getHeightStratum(codim)
 
         labelName = codim_label[codim]
-        labelIds = set(plex.getLabelIdIS(labelName).indices)
-        def merge_ids(x, y, _datatype):
-            return x.union(y)
-
-        op = MPI.Op.Create(merge_ids, commute=True)
-        try:
-            allLabelIds = comm.allreduce(labelIds, op=op)
-        finally:
-            op.Free()
-        regionByLabel = {label: index for index, label in enumerate(sorted(allLabelIds), 1)}
         ndescriptors = len(descriptors.get(depth, ()))
+        labelIds, allLabelIds, regionByLabel = getGlobalLabelToRegionMap(
+            plex, labelName, ndescriptors
+        )
         nregions = max(ndescriptors, len(allLabelIds))
         points_by_region = {index: [] for index in range(1, nregions + 1)}
         for label in labelIds:

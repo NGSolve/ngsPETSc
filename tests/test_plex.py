@@ -3,6 +3,7 @@ This module tests the plex class
 '''
 
 import numpy as np
+import netgen.meshing as ngm
 from mpi4py import MPI
 
 try:
@@ -17,6 +18,7 @@ import pytest
 from petsc4py import PETSc
 
 from ngsPETSc import MeshMapping
+from ngsPETSc.plex import getGlobalLabelToRegionMap
 
 
 def _plex_number_of_points(plex, h=0, local=False):
@@ -80,7 +82,10 @@ def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
 
     plex.createLabel("Cell Sets")
     cStart, cEnd = plex.getHeightStratum(0)
-    if comm.getRank() == 0:
+    assert cEnd - cStart >= 1
+    if comm.getSize() > 1:
+        plex.setLabelValue("Cell Sets", cStart, 5 + comm.getRank())
+    elif comm.getRank() == 0:
         assert cEnd - cStart >= 2
         plex.setLabelValue("Cell Sets", cStart, 5)
         plex.setLabelValue("Cell Sets", cStart + 1, 6)
@@ -112,14 +117,9 @@ def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
     ]
     plex_boundary_coords = _boundary_coords(plex_coordinates,
                                             plex_boundary_edges)
-    label_ids = set(np.asarray(plex.getLabelIdIS("Face Sets").indices,
-                              dtype=int))
-    all_label_ids = set()
-    for ids in comm.tompi4py().allgather(label_ids):
-        all_label_ids.update(ids)
-    region_by_label = {
-        label: index for index, label in enumerate(sorted(all_label_ids), 1)
-    }
+    label_ids, _, region_by_label = getGlobalLabelToRegionMap(
+        plex, "Face Sets"
+    )
     expected_region_ids = sorted(
         region_by_label[plex.getLabelValue("Face Sets", face)]
         for face in boundary_faces)
@@ -131,9 +131,9 @@ def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
         assert has_gap
 
     ngmesh = MeshMapping(plex).ngMesh
-    cell_label_ids = set(np.asarray(plex.getLabelIdIS("Cell Sets").indices,
-                                   dtype=int))
-    global_cell_label_ids = set().union(*comm.tompi4py().allgather(cell_label_ids))
+    _, global_cell_label_ids, _ = getGlobalLabelToRegionMap(
+        plex, "Cell Sets"
+    )
     assert global_cell_label_ids == {5, 6}
     assert len(ngmesh.FaceDescriptors()) == len(global_cell_label_ids) + 1
 
@@ -146,6 +146,35 @@ def test_plex_to_netgen_preserves_geometry_and_face_region_numbers():
 
     np.testing.assert_allclose(netgen_boundary_coords, plex_boundary_coords)
     assert actual_region_ids == expected_region_ids
+
+
+def test_plex_to_netgen_preserves_sparse_geometry_descriptors():
+    """Keep descriptor indices when labels identify a supplied Netgen mesh."""
+    plex = PETSc.DMPlex().createFromCellList(
+        2,
+        [[0, 1, 2], [1, 3, 2]],
+        [[0., 0.], [1., 0.], [0., 1.], [1., 1.]],
+    )
+    plex.createLabel("Face Sets")
+    fStart, fEnd = plex.getHeightStratum(1)
+    boundary_faces = [
+        face for face in range(fStart, fEnd)
+        if len(plex.getSupport(face)) == 1
+    ]
+    plex.setLabelValue("Face Sets", boundary_faces[0], 1)
+    plex.setLabelValue("Face Sets", boundary_faces[1], 3)
+
+    geo = ngm.Mesh(dim=2)
+    for index in range(1, 4):
+        descriptor = ngm.EdgeDescriptor()
+        descriptor.index = index
+        descriptor.edgenr = index
+        geo.Add(descriptor)
+
+    ngmesh = MeshMapping(plex, geo=geo).ngMesh
+    actual_region_ids = sorted(int(element.index)
+                               for element in ngmesh.Elements1D())
+    assert actual_region_ids == [1, 3]
 
 @pytest.mark.mpi_skip
 @pytest.mark.ngsolve_skip
