@@ -73,5 +73,5 @@ mpi4py = "^4"
 [tool.pytest.ini_options]
 markers = [
   "mpi_skip: mark tests that should be skipped when running under MPI",
-  "ngsolve_skip: mark tests that require NGSolve",
+  "ngsolve_skip: skip tests that require NGSolve when it is not installed",
 ]
