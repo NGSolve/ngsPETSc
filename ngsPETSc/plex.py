@@ -142,30 +142,43 @@ def createNetgenMesh(plex, geo):
     adjacency = plex.getBasicAdjacency()
     plex.setBasicAdjacency(True, True)
 
-    # Add labeled entities. Each region index is the label value, and every
-    # value up to the largest gets a region, because the local part of a
-    # distributed plex may lack some of the values.
+    # Add labeled entities. All ranks need the same region numbering, even
+    # when a label value occurs only on one rank.
     codim_label = {0: CELL_SETS_LABEL, 1: FACE_SETS_LABEL, 2: EDGE_SETS_LABEL}
+    comm = plex.getComm().tompi4py()
     for codim in range(tdim):
         depth = tdim - codim
         pStart, pEnd = plex.getHeightStratum(codim)
 
         labelName = codim_label[codim]
-        labelIds = plex.getLabelIdIS(labelName).indices
+        labelIds = set(plex.getLabelIdIS(labelName).indices)
+        def merge_ids(x, y, _datatype):
+            return x.union(y)
+
+        op = MPI.Op.Create(merge_ids, commute=True)
+        try:
+            allLabelIds = comm.allreduce(labelIds, op=op)
+        finally:
+            op.Free()
+        regionByLabel = {label: index for index, label in enumerate(sorted(allLabelIds), 1)}
         ndescriptors = len(descriptors.get(depth, ()))
-        nregions = max(ndescriptors, *labelIds, 0)
+        nregions = max(ndescriptors, len(allLabelIds))
         points_by_region = {index: [] for index in range(1, nregions + 1)}
-        for index in labelIds:
-            points = plex.getStratumIS(labelName, index).indices
+        for label in labelIds:
+            index = regionByLabel[label]
+            points = plex.getStratumIS(labelName, label).indices
             points_by_region[index] = points[np.logical_and(pStart <= points, points < pEnd)]
 
         # Add unlabeled cells, to region 1 if no cell is labeled, or else to a new region
         if depth == tdim:
-            if len(labelIds) > 0:
+            if allLabelIds:
                 cStart, cEnd = plex.getHeightStratum(0)
-                labeled = np.concatenate([plex.getStratumIS(labelName, index).indices
-                                          for index in labelIds])
-                points = np.setdiff1d(np.arange(cStart, cEnd), labeled)
+                labeled = np.zeros(cEnd - cStart, dtype=bool)
+                for label in labelIds:
+                    points = plex.getStratumIS(labelName, label).indices
+                    points = points[np.logical_and(cStart <= points, points < cEnd)]
+                    labeled[points - cStart] = True
+                points = np.arange(cStart, cEnd)[~labeled]
                 nregions += 1
                 points_by_region[nregions] = points
             else:
