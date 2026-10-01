@@ -46,6 +46,8 @@ RUN cd ~/slepc \
     --with-slepc4py=1 \
     && make 
 #Building ngsolve
+#USE_NATIVE_ARCH=OFF: the image is built and run on different GitHub runners,
+#so -march=native (e.g. AVX-512) would crash with SIGILL on other CPUs
 ENV LD_LIBRARY_PATH /root/petsc/linux_debug/lib
 RUN pip install netgen-occt-devel netgen-occt
 RUN mkdir -p ~/ngsuite \
@@ -56,7 +58,7 @@ RUN mkdir -p ~/ngsuite \
            && mkdir ~/ngsuite/ngsolve-build \
            && mkdir ~/ngsuite/ngsolve-install \
            && cd ~/ngsuite/ngsolve-build \
-           && cmake -DCMAKE_INSTALL_PREFIX=~/ngsuite/ngsolve-install ~/ngsuite/ngsolve-src -DUSE_MPI=ON -DBUILD_OCC=OFF\
+           && cmake -DCMAKE_INSTALL_PREFIX=~/ngsuite/ngsolve-install ~/ngsuite/ngsolve-src -DUSE_MPI=ON -DBUILD_OCC=OFF -DUSE_NATIVE_ARCH=OFF \
            && make && make install
 #Adding NGS to PYTHONPATH
 ENV PYTHONPATH /root/petsc/linux_debug/lib:/root/slepc/linux_debug/lib:/root/ngsuite/ngsolve-install/lib/python3.10/site-packages
