@@ -233,8 +233,10 @@ class GeometricModel:
             if T.shape[0] > 0:
                 break
 
-        # Sort elements by number of vertices, i.e. group them by cell type
-        number_of_vertices = elements_as_numpy["np"]
+        # Sort elements by number of vertices, i.e. group them by cell type.
+        # Count the (1-based, zero-padded) nodes since Netgen >= 6.2.2608 no
+        # longer provides an "np" field.
+        number_of_vertices = np.count_nonzero(T, axis=1)
         sorted_index = np.argsort(number_of_vertices)
         self._sorted_mapping = (
             sorted_index  # Store the mapping from ngsolve to DOLFINx ordering
