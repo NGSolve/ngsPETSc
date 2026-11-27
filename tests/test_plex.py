@@ -70,6 +70,21 @@ def test_netgen_plex_has_region_name_labels(geometric_dim):
 
 
 @pytest.mark.mpi_skip
+def test_netgen_plex_labels_cells_of_one_named_region():
+    """Mark the cells of a mesh with one named region in Cell Sets and in its label."""
+    face = WorkPlane().Rectangle(1, 2).Face()
+    face.faces.name = "fluid"
+    ngmesh = OCCGeometry(face, dim=2).GenerateMesh(maxh=0.5)
+    plex = MeshMapping(ngmesh).petscPlex
+
+    cStart, cEnd = plex.getHeightStratum(0)
+    cells = np.arange(cStart, cEnd)
+    for name in ("Cell Sets", "fluid"):
+        assert plex.hasLabel(name)
+        np.testing.assert_array_equal(plex.getStratumIS(name, 1).indices, cells)
+
+
+@pytest.mark.mpi_skip
 @pytest.mark.ngsolve_skip
 def test_plex_ngs_2d():
     '''

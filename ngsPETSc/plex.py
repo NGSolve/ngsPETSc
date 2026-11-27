@@ -249,11 +249,12 @@ def createPETScDMPlex(ngMesh, comm, name):
         vStart, _ = plex.getDepthStratum(0)
         codim_label = {0: CELL_SETS_LABEL, 1: FACE_SETS_LABEL, 2: EDGE_SETS_LABEL}
         for codim in range(tdim):
-            if codim == 0 and (1 == cells_np["index"]).all():
-                continue
             # As the Gmsh reader does with -dm_plex_gmsh_use_regions, also mark
             # each entity in the label named after its region, with the same value.
             region_names = ngMesh.GetRegionNames(dim=tdim - codim)
+            # Cells need no labels if they all belong to one region without a name.
+            if codim == 0 and (1 == cells_np["index"]).all() and not any(region_names):
+                continue
             for e in els[tdim - codim]():
                 join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
                 plex.setLabelValue(codim_label[codim], join[0], int(e.index))
