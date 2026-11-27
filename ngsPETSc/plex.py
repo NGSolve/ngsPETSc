@@ -251,9 +251,15 @@ def createPETScDMPlex(ngMesh, comm, name):
         for codim in range(tdim):
             if codim == 0 and (1 == cells_np["index"]).all():
                 continue
+            # As the Gmsh reader does with -dm_plex_gmsh_use_regions, also mark
+            # each entity in the label named after its region, with the same value.
+            region_names = ngMesh.GetRegionNames(dim=tdim - codim)
             for e in els[tdim - codim]():
                 join = plex.getFullJoin([vStart+v.nr-1 for v in e.vertices])
                 plex.setLabelValue(codim_label[codim], join[0], int(e.index))
+                region_name = region_names[e.index - 1]
+                if region_name:
+                    plex.setLabelValue(region_name, join[0], int(e.index))
     else:
         T = np.empty((0, tdim + 1), dtype=PETSc.IntType)
         V = np.empty((0, gdim), dtype=PETSc.RealType)

@@ -5,6 +5,7 @@ This module tests the plex class
 import numpy as np
 import netgen.meshing as ngm
 from mpi4py import MPI
+from netgen.occ import X, OCCGeometry, WorkPlane
 
 try:
     from netgen.csg import unit_cube
@@ -47,6 +48,26 @@ def test_ngs_plex_2d():
     meshMap = MeshMapping(mesh)
     plex = meshMap.petscPlex
     assert _plex_number_of_points(plex) == 2
+
+@pytest.mark.mpi_skip
+@pytest.mark.parametrize("geometric_dim", [2, 3])
+def test_netgen_plex_has_region_name_labels(geometric_dim):
+    """Mark the facets of each named region in a label with that name."""
+    face = WorkPlane().Rectangle(1, 2).Face()
+    face.edges.Min(X).name = "left"
+    face.edges.Max(X).name = "right"
+    ngmesh = OCCGeometry(face, dim=geometric_dim).GenerateMesh(maxh=0.5)
+    plex = MeshMapping(ngmesh).petscPlex
+
+    region_names = ngmesh.GetRegionNames(dim=1)
+    for name in ("left", "right"):
+        region = region_names.index(name) + 1
+        assert list(plex.getLabelIdIS(name).indices) == [region]
+        named_facets = plex.getStratumIS(name, region).indices
+        face_sets_facets = plex.getStratumIS("Face Sets", region).indices
+        assert len(named_facets) > 0
+        np.testing.assert_array_equal(named_facets, face_sets_facets)
+
 
 @pytest.mark.mpi_skip
 @pytest.mark.ngsolve_skip
