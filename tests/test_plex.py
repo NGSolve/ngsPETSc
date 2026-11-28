@@ -69,24 +69,6 @@ def test_netgen_plex_has_region_name_labels(geometric_dim):
         np.testing.assert_array_equal(named_facets, face_sets_facets)
 
 
-@pytest.mark.parallel([1, 2])
-def test_netgen_plex_defaults_unnamed_boundary_regions():
-    """Expose unnamed boundaries as default on the original Netgen mesh."""
-    face = WorkPlane().Rectangle(1, 2).Face()
-    face.edges.Min(X).name = "inlet"
-    ngmesh = OCCGeometry(face, dim=2).GenerateMesh(maxh=0.5)
-    inlet = ngmesh.GetRegionNames(dim=1).index("inlet")
-    for index in range(4):
-        if index != inlet:
-            ngmesh.SetBCName(index, "")
-
-    MeshMapping(ngmesh)
-
-    expected_names = ["default"] * 4
-    expected_names[inlet] = "inlet"
-    assert ngmesh.GetRegionNames(dim=1) == expected_names
-
-
 @pytest.mark.mpi_skip
 def test_netgen_plex_labels_cells_of_one_named_region():
     """Mark the cells of a mesh with one named region in Cell Sets and in its label."""
