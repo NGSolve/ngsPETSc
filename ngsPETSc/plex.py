@@ -30,6 +30,9 @@ class MeshMapping:
     """
     A mapping between a Netgen/NGSolve mesh and a PETSc DMPlex
 
+    When converting a full-dimensional Netgen mesh, name its unnamed boundary
+    regions ``default`` on the input mesh.
+
     :arg mesh: the source mesh, either a Netgen/NGSolve mesh or a PETSc DMPlex
     :kwarg comm: an optional MPI.Comm
     :kwarg geo: the underlying Netgen geometry, ignored if mesh is a Netgen mesh
@@ -236,6 +239,13 @@ def createPETScDMPlex(ngMesh, comm, name):
         tdim -= 1
         cells = els[tdim]()
     tdim = comm.bcast(tdim, root=0)
+    # SetBCName addresses boundaries of codimension one in Netgen's mesh
+    # dimension. Keep the default name available to callers of GetRegionNames.
+    if tdim == gdim and tdim > 1:
+        for index, regionName in enumerate(ngMesh.GetRegionNames(codim=1)):
+            if not regionName:
+                ngMesh.SetBCName(index, "default")
+
     if comm.rank == 0:
         cells_np = cells.NumPy()
         # Netgen always stores coordinates as float64. createFromCellList performs
